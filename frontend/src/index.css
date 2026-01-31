@@ -1,0 +1,52 @@
+@import "tailwindcss";
+
+:root {
+  /* Core Colors */
+  --bg-dark: #09090b;
+  /* Zinc 950 */
+  --bg-card: #18181b;
+  /* Zinc 900 */
+  --bg-card-hover: #27272a;
+  /* Zinc 800 */
+
+  /* Brand Colors */
+  --primary: #B9FF66;
+  /* Neon Green */
+  --primary-fg: #000000;
+
+  --accent-blue: #38bdf8;
+  --accent-purple: #c084fc;
+  --accent-rose: #fb7185;
+  --accent-orange: #fb923c;
+
+  /* Typography */
+  --text-primary: #ffffff;
+  --text-muted: #a1a1aa;
+  /* Zinc 400 */
+}
+
+body {
+  background-color: var(--bg-dark);
+  color: var(--text-primary);
+  font-family: 'Outfit', sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--bg-card-hover);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-muted);
+}

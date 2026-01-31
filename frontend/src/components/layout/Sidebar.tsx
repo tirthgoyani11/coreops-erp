@@ -1,0 +1,183 @@
+import { NavLink, useLocation } from 'react-router-dom';
+import {
+    LayoutDashboard,
+    Package,
+    Building2,
+    Users,
+    LogOut,
+    Layers,
+    ChevronLeft,
+    ChevronRight,
+    Wrench,
+    X,
+    Home
+} from 'lucide-react';
+import { useAuthStore } from '../../stores/authStore';
+import { useUIStore } from '../../stores/uiStore';
+import { cn } from '../../lib/utils';
+import { motion, AnimatePresence } from 'framer-motion';
+
+export function Sidebar() {
+    const { user, logout } = useAuthStore();
+    const { isSidebarCollapsed, toggleSidebar, isMobileSidebarOpen, setMobileSidebarOpen } = useUIStore();
+    const location = useLocation();
+
+    const navItems = [
+        { label: 'Dashboard', path: '/', icon: Home },
+        { label: 'Assets', path: '/assets', icon: LayoutDashboard },
+        { label: 'Inventory', path: '/inventory', icon: Package },
+        { label: 'Maintenance', path: '/maintenance', icon: Wrench },
+        { label: 'Offices', path: '/offices', icon: Building2, adminOnly: true },
+        { label: 'Team', path: '/users', icon: Users, adminOnly: true },
+    ];
+
+    const SidebarContent = () => (
+        <>
+            {/* Brand Header */}
+            <div className={cn("h-20 flex items-center border-b border-white/5", isSidebarCollapsed && !isMobileSidebarOpen ? "justify-center px-0" : "px-8 justify-between")}>
+                <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-lg bg-[var(--primary)] flex items-center justify-center shadow-[0_0_15px_rgba(185,255,102,0.3)] shrink-0">
+                        <Layers className="w-4 h-4 text-black" />
+                    </div>
+                    {(!isSidebarCollapsed || isMobileSidebarOpen) && (
+                        <motion.span
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            className="text-xl font-bold tracking-tight truncate"
+                        >
+                            CoreOps
+                        </motion.span>
+                    )}
+                </div>
+
+                {/* Mobile Close Button */}
+                {isMobileSidebarOpen && (
+                    <button
+                        onClick={() => setMobileSidebarOpen(false)}
+                        className="lg:hidden p-2 hover:bg-white/5 rounded-lg text-[var(--text-muted)]"
+                    >
+                        <X className="w-5 h-5" />
+                    </button>
+                )}
+            </div>
+
+            {/* Navigation */}
+            <nav className="flex-1 py-6 px-3 space-y-1 overflow-y-auto">
+                {(!isSidebarCollapsed || isMobileSidebarOpen) && (
+                    <p className="px-4 text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-wider mb-4 truncate">
+                        Main Menu
+                    </p>
+                )}
+
+                {navItems.map((item) => {
+                    if (item.adminOnly && user?.role !== 'SUPER_ADMIN') return null;
+                    const isActive = location.pathname === item.path;
+
+                    return (
+                        <NavLink
+                            key={item.path}
+                            to={item.path}
+                            onClick={() => setMobileSidebarOpen(false)}
+                            className={cn(
+                                "flex items-center rounded-xl transition-all group relative overflow-hidden",
+                                isSidebarCollapsed && !isMobileSidebarOpen ? "justify-center w-12 h-12 mx-auto" : "px-4 py-3 gap-3",
+                                isActive
+                                    ? "bg-white/5 text-white"
+                                    : "text-[var(--text-muted)] hover:text-white hover:bg-white/5"
+                            )}
+                            title={isSidebarCollapsed && !isMobileSidebarOpen ? item.label : undefined}
+                        >
+                            <item.icon className={cn("w-5 h-5 shrink-0", isActive ? "text-[var(--primary)]" : "group-hover:text-white")} />
+
+                            {(!isSidebarCollapsed || isMobileSidebarOpen) && (
+                                <span className="font-medium text-sm truncate">{item.label}</span>
+                            )}
+
+                            {isActive && (
+                                <div className={cn(
+                                    "absolute bg-[var(--primary)] rounded-full shadow-[0_0_10px_var(--primary)]",
+                                    isSidebarCollapsed && !isMobileSidebarOpen ? "bottom-1 w-1 h-1 left-1/2 -translate-x-1/2" : "right-0 top-0 h-full w-1 rounded-l-full"
+                                )} />
+                            )}
+                        </NavLink>
+                    );
+                })}
+            </nav>
+
+            {/* User Footer */}
+            <div className="p-4 border-t border-white/5">
+                <div className={cn(
+                    "bg-white/5 rounded-2xl flex items-center transition-colors group relative cursor-pointer",
+                    isSidebarCollapsed && !isMobileSidebarOpen ? "justify-center p-2 w-12 h-12 mx-auto" : "p-4 gap-3 hover:bg-white/10"
+                )}>
+                    <div className="w-8 h-8 shrink-0 rounded-full bg-gradient-to-br from-indigo-500 to-purple-500 flex items-center justify-center text-[10px] font-bold">
+                        {user?.name?.charAt(0)}
+                    </div>
+
+                    {(!isSidebarCollapsed || isMobileSidebarOpen) && (
+                        <>
+                            <div className="flex-1 min-w-0">
+                                <p className="text-sm font-semibold truncate text-white">{user?.name}</p>
+                                <p className="text-xs text-[var(--text-muted)] truncate capitalize">{user?.role?.toLowerCase().replace('_', ' ')}</p>
+                            </div>
+                            <button
+                                onClick={logout}
+                                className="p-2 -mr-2 text-[var(--text-muted)] hover:text-red-400 transition-colors"
+                            >
+                                <LogOut className="w-4 h-4" />
+                            </button>
+                        </>
+                    )}
+                </div>
+            </div>
+        </>
+    );
+
+    return (
+        <>
+            {/* Desktop Sidebar */}
+            <motion.aside
+                initial={false}
+                animate={{ width: isSidebarCollapsed ? 80 : 280 }}
+                className="hidden lg:flex fixed left-0 top-0 h-screen bg-[#0c0c0e] border-r border-white/5 flex-col z-50 transition-all duration-300 ease-in-out"
+            >
+                <SidebarContent />
+
+                {/* Toggle Button */}
+                <button
+                    onClick={toggleSidebar}
+                    className="absolute -right-3 top-24 w-6 h-6 bg-[var(--bg-card)] border border-white/10 rounded-full flex items-center justify-center text-[var(--text-muted)] hover:text-white transition-colors z-50 shadow-lg"
+                >
+                    {isSidebarCollapsed ? <ChevronRight className="w-3 h-3" /> : <ChevronLeft className="w-3 h-3" />}
+                </button>
+            </motion.aside>
+
+            {/* Mobile Sidebar Drawer */}
+            <AnimatePresence>
+                {isMobileSidebarOpen && (
+                    <>
+                        {/* Backdrop */}
+                        <motion.div
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            onClick={() => setMobileSidebarOpen(false)}
+                            className="lg:hidden fixed inset-0 bg-black/60 backdrop-blur-sm z-50"
+                        />
+
+                        {/* Drawer */}
+                        <motion.aside
+                            initial={{ x: -280 }}
+                            animate={{ x: 0 }}
+                            exit={{ x: -280 }}
+                            transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+                            className="lg:hidden fixed left-0 top-0 h-screen w-[280px] bg-[#0c0c0e] border-r border-white/5 flex flex-col z-50"
+                        >
+                            <SidebarContent />
+                        </motion.aside>
+                    </>
+                )}
+            </AnimatePresence>
+        </>
+    );
+}
