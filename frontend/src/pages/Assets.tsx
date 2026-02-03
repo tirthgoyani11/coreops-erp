@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Laptop, Armchair, Car, Package, Plus, X, Loader2 } from 'lucide-react';
+import { Laptop, Armchair, Car, Package, Plus, X, Loader2, Building2 } from 'lucide-react';
 import api from '../lib/api';
 import { formatCurrency } from '../lib/utils';
-import type { Asset } from '../types';
+import type { Asset, Office } from '../types';
+import { useAuthStore } from '../stores/authStore';
 
-const categoryIcons: any = {
+const categoryIcons: Record<string, any> = {
     laptop: Laptop,
     furniture: Armchair,
     vehicle: Car,
@@ -15,28 +16,36 @@ const categoryIcons: any = {
 const CATEGORIES = ['Laptop', 'Furniture', 'Vehicle', 'Equipment', 'Other'];
 
 export function Assets() {
+    const { user } = useAuthStore();
     const [assets, setAssets] = useState<Asset[]>([]);
+    const [offices, setOffices] = useState<Office[]>([]);
     const [loading, setLoading] = useState(true);
     const [showModal, setShowModal] = useState(false);
     const [formLoading, setFormLoading] = useState(false);
+    const [error, setError] = useState<string | null>(null);
 
     const [formData, setFormData] = useState({
         name: '',
         category: 'Laptop',
-        purchaseCost: 0,
-        currency: 'INR'
+        purchaseCost: '',
+        currency: 'INR',
+        officeId: ''
     });
 
     useEffect(() => {
-        fetchAssets();
+        fetchData();
     }, []);
 
-    const fetchAssets = async () => {
+    const fetchData = async () => {
         try {
-            const res = await api.get('/assets');
-            setAssets(res.data.data || []);
-        } catch (error) {
-            console.error(error);
+            const [assetsRes, officesRes] = await Promise.all([
+                api.get('/assets'),
+                user?.role === 'SUPER_ADMIN' ? api.get('/offices') : Promise.resolve({ data: { data: [] } })
+            ]);
+            setAssets(assetsRes.data.data || []);
+            setOffices(officesRes.data.data || []);
+        } catch (err) {
+            console.error(err);
         } finally {
             setLoading(false);
         }
@@ -45,19 +54,36 @@ export function Assets() {
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setFormLoading(true);
+        setError(null);
+
         try {
-            await api.post('/assets', formData);
+            const payload = {
+                name: formData.name,
+                category: formData.category,
+                purchaseCost: parseFloat(formData.purchaseCost) || 0,
+                currency: formData.currency,
+                ...(formData.officeId && { officeId: formData.officeId })
+            };
+
+            await api.post('/assets', payload);
             setShowModal(false);
-            setFormData({ name: '', category: 'Laptop', purchaseCost: 0, currency: 'INR' });
-            fetchAssets();
-        } catch (error: any) {
-            alert(error.response?.data?.message || 'Failed to create asset');
+            setFormData({ name: '', category: 'Laptop', purchaseCost: '', currency: 'INR', officeId: '' });
+            fetchData();
+        } catch (err: any) {
+            setError(err.response?.data?.message || 'Failed to create asset');
         } finally {
             setFormLoading(false);
         }
     };
 
-    const totalValue = assets.reduce((sum, a) => sum + a.purchaseCost, 0);
+    const handleNumberChange = (value: string, field: 'purchaseCost') => {
+        // Allow empty string or valid numbers only
+        if (value === '' || /^\d*\.?\d*$/.test(value)) {
+            setFormData({ ...formData, [field]: value });
+        }
+    };
+
+    const totalValue = assets.reduce((sum, a) => sum + (a.purchaseInfo?.purchasePrice || 0), 0);
 
     if (loading) {
         return (
@@ -119,7 +145,7 @@ export function Assets() {
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                         {assets.map((asset, i) => {
                             const Icon = categoryIcons[asset.category.toLowerCase()] || categoryIcons.default;
-                            const statusColors: any = {
+                            const statusColors: Record<string, string> = {
                                 'ACTIVE': 'bg-emerald-500',
                                 'MAINTENANCE': 'bg-amber-500',
                                 'RETIRED': 'bg-zinc-500'
@@ -151,7 +177,7 @@ export function Assets() {
                                     </div>
 
                                     <div className="flex items-center justify-between pt-6 border-t border-white/5 relative z-10">
-                                        <span className="text-xl font-bold text-white tracking-tight">{formatCurrency(asset.purchaseCost)}</span>
+                                        <span className="text-xl font-bold text-white tracking-tight">{formatCurrency(asset.purchaseInfo?.purchasePrice || 0)}</span>
                                         <span className="text-xs px-2 py-1 rounded-full bg-white/5 text-[var(--text-muted)]">{asset.status}</span>
                                     </div>
 
@@ -178,6 +204,13 @@ export function Assets() {
                                 <X className="w-5 h-5" />
                             </button>
                             <h2 className="text-2xl font-bold mb-6">Add New Asset</h2>
+
+                            {error && (
+                                <div className="mb-4 p-3 bg-red-500/10 border border-red-500/20 rounded-lg text-red-400 text-sm">
+                                    {error}
+                                </div>
+                            )}
+
                             <form onSubmit={handleSubmit} className="space-y-5">
                                 <div>
                                     <label className="block text-xs font-bold text-[var(--text-muted)] uppercase tracking-wider mb-2">Asset Name</label>
@@ -204,14 +237,38 @@ export function Assets() {
                                     </select>
                                 </div>
 
+                                {/* Office Selection - Only show for SUPER_ADMIN */}
+                                {user?.role === 'SUPER_ADMIN' && offices.length > 0 && (
+                                    <div>
+                                        <label className="block text-xs font-bold text-[var(--text-muted)] uppercase tracking-wider mb-2">
+                                            <Building2 className="w-3 h-3 inline mr-1" />
+                                            Office
+                                        </label>
+                                        <select
+                                            className="w-full bg-[#27272a] border border-white/5 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-[var(--primary)] transition-colors"
+                                            value={formData.officeId}
+                                            onChange={e => setFormData({ ...formData, officeId: e.target.value })}
+                                            required
+                                        >
+                                            <option value="">Select Office</option>
+                                            {offices.map(office => (
+                                                <option key={office._id} value={office._id}>
+                                                    {office.name} ({office.code})
+                                                </option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                )}
+
                                 <div>
                                     <label className="block text-xs font-bold text-[var(--text-muted)] uppercase tracking-wider mb-2">Purchase Cost (INR)</label>
                                     <input
-                                        type="number"
-                                        min="0"
+                                        type="text"
+                                        inputMode="decimal"
                                         className="w-full bg-[#27272a] border border-white/5 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-[var(--primary)] transition-colors"
+                                        placeholder="Enter amount"
                                         value={formData.purchaseCost}
-                                        onChange={e => setFormData({ ...formData, purchaseCost: Number(e.target.value) })}
+                                        onChange={e => handleNumberChange(e.target.value, 'purchaseCost')}
                                         required
                                     />
                                 </div>

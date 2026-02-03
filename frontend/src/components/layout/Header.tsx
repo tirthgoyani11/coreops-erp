@@ -1,15 +1,40 @@
+import { useState, useEffect } from 'react';
+import { Link, useLocation } from 'react-router-dom';
 import { Search, Bell, Plus, Menu } from 'lucide-react';
-import { useLocation } from 'react-router-dom';
 import { useUIStore } from '../../stores/uiStore';
+import api from '../../lib/api';
 
 export function Header() {
     const location = useLocation();
     const { setMobileSidebarOpen } = useUIStore();
+    const [unreadCount, setUnreadCount] = useState(0);
+
+    // Fetch unread notification count
+    useEffect(() => {
+        const fetchUnreadCount = async () => {
+            try {
+                const res = await api.get('/notifications/unread-count');
+                setUnreadCount(res.data.data?.count || 0);
+            } catch {
+                // Silently fail - not critical
+            }
+        };
+
+        fetchUnreadCount();
+
+        // Poll every 30 seconds for new notifications
+        const interval = setInterval(fetchUnreadCount, 30000);
+        return () => clearInterval(interval);
+    }, []);
 
     const getTitle = () => {
         const path = location.pathname.substring(1);
         if (!path) return 'Dashboard';
-        return path.charAt(0).toUpperCase() + path.slice(1);
+        // Handle multi-word routes like purchase-orders
+        return path
+            .split('-')
+            .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+            .join(' ');
     };
 
     return (
@@ -37,11 +62,18 @@ export function Header() {
                     />
                 </div>
 
-                {/* Notifs */}
-                <button className="w-10 h-10 rounded-full border border-white/10 flex items-center justify-center hover:bg-white/5 transition-colors text-[var(--text-muted)] hover:text-white relative group">
+                {/* Notifications Link */}
+                <Link
+                    to="/notifications"
+                    className="w-10 h-10 rounded-full border border-white/10 flex items-center justify-center hover:bg-white/5 transition-colors text-[var(--text-muted)] hover:text-white relative group"
+                >
                     <Bell className="w-4 h-4" />
-                    <span className="absolute top-2.5 right-2.5 w-2 h-2 bg-[var(--primary)] rounded-full border-2 border-[#09090b]" />
-                </button>
+                    {unreadCount > 0 && (
+                        <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center px-1 border-2 border-[#09090b]">
+                            {unreadCount > 99 ? '99+' : unreadCount}
+                        </span>
+                    )}
+                </Link>
 
                 {/* Global Action - Text hidden on mobile */}
                 <button className="h-10 px-3 md:px-5 bg-[var(--primary)] text-black rounded-full text-sm font-bold flex items-center gap-2 hover:shadow-[0_0_20px_rgba(185,255,102,0.4)] transition-all active:scale-95">

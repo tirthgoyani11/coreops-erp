@@ -3,6 +3,7 @@ const Asset = require('../models/Asset');
 const Inventory = require('../models/Inventory');
 const FinanceLog = require('../models/FinanceLog');
 const { asyncHandler, AppError } = require('../utils/errorHandler');
+const { paginateQuery } = require('../utils/pagination');
 
 // Exchange Rates (Static for Phase 2)
 const EXCHANGE_RATES = {
@@ -34,10 +35,11 @@ exports.createRequest = asyncHandler(async (req, res, next) => {
     // Normalize costs to INR for comparison if needed, assuming asset cost is same currency for simplicity or using normalized.
     // Ideally, we normalize both.
 
-    const assetRate = EXCHANGE_RATES[asset.currency] || 1;
+    const assetCurrency = asset.purchaseInfo?.currency || 'INR';
+    const assetRate = EXCHANGE_RATES[assetCurrency] || 1;
     const repairRate = EXCHANGE_RATES[currency] || 1;
 
-    const assetValueNormalized = asset.purchaseCost * assetRate;
+    const assetValueNormalized = (asset.purchaseInfo?.purchasePrice || 0) * assetRate;
     const repairCostNormalized = repairCost * repairRate;
 
     let decision = 'REPAIR';
@@ -149,6 +151,7 @@ exports.closeMaintenance = asyncHandler(async (req, res, next) => {
     const normalizedAmount = maintenance.repairCost * rate;
 
     await FinanceLog.create({
+        type: 'maintenance',
         source: 'MAINTENANCE',
         sourceId: maintenance._id,
         amount: maintenance.repairCost,
@@ -172,26 +175,37 @@ exports.closeMaintenance = asyncHandler(async (req, res, next) => {
 });
 
 /**
- * @desc    Get All Maintenance Requests
- * @route   GET /api/maintenance
+ * @desc    Get All Maintenance Requests (with pagination)
+ * @route   GET /api/maintenance?page=1&limit=20
  * @access  ALL (Filtered)
  */
 exports.getMaintenance = asyncHandler(async (req, res, next) => {
-    let query = {};
+    let filter = {};
 
     // Filter by Office
     if (req.user.role !== 'SUPER_ADMIN') {
-        query.officeId = req.user.officeId;
+        filter.officeId = req.user.officeId;
     }
 
-    const requests = await Maintenance.find(query)
-        .populate('assetId', 'name guai')
-        .populate('requestedBy', 'name')
-        .sort('-createdAt');
+    // Optional status filter
+    if (req.query.status) {
+        filter.status = req.query.status;
+    }
+
+    const { data, pagination } = await paginateQuery(
+        Maintenance,
+        filter,
+        req,
+        [
+            { path: 'assetId', select: 'name guai' },
+            { path: 'requestedBy', select: 'name' }
+        ]
+    );
 
     res.status(200).json({
         success: true,
-        count: requests.length,
-        data: requests
+        count: data.length,
+        pagination,
+        data
     });
 });

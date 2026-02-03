@@ -1,6 +1,6 @@
 import { useState, useRef, useMemo, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Loader2, ArrowRight, Layers, Zap, Globe as GlobeIcon, Activity, Eye, EyeOff } from 'lucide-react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { Loader2, ArrowRight, Layers, Zap, Activity, Eye, EyeOff } from 'lucide-react';
 import { useAuthStore } from '../stores/authStore';
 import { motion } from 'framer-motion';
 import { Canvas, useFrame } from '@react-three/fiber';
@@ -130,17 +130,30 @@ const LINE_LOOP = ({ radius, opacity }: { radius: number, opacity: number }) => 
 
 export function Login() {
     const navigate = useNavigate();
-    const { login, isLoading, error, clearError } = useAuthStore();
+    const [searchParams] = useSearchParams();
+    const { login, isLoading, error, clearError, isAuthenticated } = useAuthStore();
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [showPassword, setShowPassword] = useState(false);
     const [activeField, setActiveField] = useState<string | null>(null);
 
+    // Redirect if already authenticated
+    useEffect(() => {
+        if (isAuthenticated) {
+            const redirectTo = searchParams.get('redirect') || '/';
+            navigate(redirectTo, { replace: true });
+        }
+    }, [isAuthenticated, navigate, searchParams]);
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         clearError();
         const success = await login({ email, password });
-        if (success) navigate('/assets');
+        if (success) {
+            // Redirect to requested page or dashboard
+            const redirectTo = searchParams.get('redirect') || '/';
+            navigate(redirectTo, { replace: true });
+        }
     };
 
     return (
@@ -261,7 +274,7 @@ export function Login() {
 
                     <div className="mt-8 text-center pt-8 border-t border-zinc-900">
                         <p className="text-zinc-600 text-xs font-mono">
-                            admin@coreops.io
+                            Enterprise Access Portal
                         </p>
                     </div>
                 </div>

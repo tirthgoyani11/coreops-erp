@@ -1,36 +1,45 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Package, Search, Plus, X, Loader2, Wrench } from 'lucide-react';
+import { Package, Search, Plus, X, Loader2, Wrench, Building2 } from 'lucide-react';
 import api from '../lib/api';
 import { formatCurrency, cn } from '../lib/utils';
-import type { InventoryItem } from '../types';
+import type { InventoryItem, Office } from '../types';
+import { useAuthStore } from '../stores/authStore';
 
 export function Inventory() {
+    const { user } = useAuthStore();
     const [items, setItems] = useState<InventoryItem[]>([]);
+    const [offices, setOffices] = useState<Office[]>([]);
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
     const [filterType, setFilterType] = useState<'ALL' | 'PRODUCT' | 'SPARE'>('ALL');
     const [showModal, setShowModal] = useState(false);
     const [formLoading, setFormLoading] = useState(false);
+    const [error, setError] = useState<string | null>(null);
 
     const [formData, setFormData] = useState({
         name: '',
         type: 'PRODUCT' as 'PRODUCT' | 'SPARE',
         sku: '',
-        quantity: 0,
-        unitCost: 0
+        quantity: '',
+        unitCost: '',
+        officeId: ''
     });
 
     useEffect(() => {
-        fetchInventory();
+        fetchData();
     }, []);
 
-    const fetchInventory = async () => {
+    const fetchData = async () => {
         try {
-            const { data } = await api.get('/inventory');
-            setItems(data.data || []);
-        } catch (error) {
-            console.error(error);
+            const [itemsRes, officesRes] = await Promise.all([
+                api.get('/inventory'),
+                user?.role === 'SUPER_ADMIN' ? api.get('/offices') : Promise.resolve({ data: { data: [] } })
+            ]);
+            setItems(itemsRes.data.data || []);
+            setOffices(officesRes.data.data || []);
+        } catch (err) {
+            console.error(err);
         } finally {
             setLoading(false);
         }
@@ -39,15 +48,41 @@ export function Inventory() {
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setFormLoading(true);
+        setError(null);
+
         try {
-            await api.post('/inventory', formData);
+            const payload = {
+                name: formData.name,
+                type: formData.type,
+                sku: formData.sku || undefined,
+                quantity: parseInt(formData.quantity) || 0,
+                unitCost: parseFloat(formData.unitCost) || 0,
+                ...(formData.officeId && { officeId: formData.officeId })
+            };
+
+            await api.post('/inventory', payload);
             setShowModal(false);
-            setFormData({ name: '', type: 'PRODUCT', sku: '', quantity: 0, unitCost: 0 });
-            fetchInventory();
-        } catch (error: any) {
-            alert(error.response?.data?.message || 'Failed to add item');
+            setFormData({ name: '', type: 'PRODUCT', sku: '', quantity: '', unitCost: '', officeId: '' });
+            fetchData();
+        } catch (err: any) {
+            setError(err.response?.data?.message || 'Failed to add item');
         } finally {
             setFormLoading(false);
+        }
+    };
+
+    const handleNumberChange = (value: string, field: 'quantity' | 'unitCost') => {
+        // Allow empty string or valid numbers only
+        if (field === 'quantity') {
+            // Integer only for quantity
+            if (value === '' || /^\d*$/.test(value)) {
+                setFormData({ ...formData, [field]: value });
+            }
+        } else {
+            // Allow decimals for unitCost
+            if (value === '' || /^\d*\.?\d*$/.test(value)) {
+                setFormData({ ...formData, [field]: value });
+            }
         }
     };
 
@@ -98,10 +133,10 @@ export function Inventory() {
             {/* Toolbar */}
             <div className="flex flex-col md:flex-row gap-4 justify-between items-center bg-[#18181b] p-4 rounded-2xl border border-white/5">
                 <div className="flex items-center gap-1 bg-[#27272a] p-1 rounded-lg">
-                    {['ALL', 'PRODUCT', 'SPARE'].map((type) => (
+                    {(['ALL', 'PRODUCT', 'SPARE'] as const).map((type) => (
                         <button
                             key={type}
-                            onClick={() => setFilterType(type as any)}
+                            onClick={() => setFilterType(type)}
                             className={cn(
                                 "px-4 py-2 rounded-md text-sm font-semibold transition-all",
                                 filterType === type
@@ -219,6 +254,13 @@ export function Inventory() {
                                 <X className="w-5 h-5" />
                             </button>
                             <h2 className="text-2xl font-bold mb-6">Add Inventory Item</h2>
+
+                            {error && (
+                                <div className="mb-4 p-3 bg-red-500/10 border border-red-500/20 rounded-lg text-red-400 text-sm">
+                                    {error}
+                                </div>
+                            )}
+
                             <form onSubmit={handleSubmit} className="space-y-5">
                                 <div>
                                     <label className="block text-xs font-bold text-[var(--text-muted)] uppercase tracking-wider mb-2">Item Name</label>
@@ -238,7 +280,7 @@ export function Inventory() {
                                         <select
                                             className="w-full bg-[#27272a] border border-white/5 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-[var(--primary)]"
                                             value={formData.type}
-                                            onChange={e => setFormData({ ...formData, type: e.target.value as any })}
+                                            onChange={e => setFormData({ ...formData, type: e.target.value as 'PRODUCT' | 'SPARE' })}
                                         >
                                             <option value="PRODUCT">Product</option>
                                             <option value="SPARE">Spare Part</option>
@@ -249,33 +291,58 @@ export function Inventory() {
                                         <input
                                             type="text"
                                             className="w-full bg-[#27272a] border border-white/5 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-[var(--primary)]"
-                                            placeholder="AUTO or Custom"
+                                            placeholder="Auto-generate"
                                             value={formData.sku}
                                             onChange={e => setFormData({ ...formData, sku: e.target.value })}
                                         />
                                     </div>
                                 </div>
 
+                                {/* Office Selection - Only show for SUPER_ADMIN */}
+                                {user?.role === 'SUPER_ADMIN' && offices.length > 0 && (
+                                    <div>
+                                        <label className="block text-xs font-bold text-[var(--text-muted)] uppercase tracking-wider mb-2">
+                                            <Building2 className="w-3 h-3 inline mr-1" />
+                                            Office
+                                        </label>
+                                        <select
+                                            className="w-full bg-[#27272a] border border-white/5 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-[var(--primary)]"
+                                            value={formData.officeId}
+                                            onChange={e => setFormData({ ...formData, officeId: e.target.value })}
+                                            required
+                                        >
+                                            <option value="">Select Office</option>
+                                            {offices.map(office => (
+                                                <option key={office._id} value={office._id}>
+                                                    {office.name} ({office.code})
+                                                </option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                )}
+
                                 <div className="grid grid-cols-2 gap-4">
                                     <div>
                                         <label className="block text-xs font-bold text-[var(--text-muted)] uppercase tracking-wider mb-2">Quantity</label>
                                         <input
-                                            type="number"
-                                            min="0"
+                                            type="text"
+                                            inputMode="numeric"
                                             className="w-full bg-[#27272a] border border-white/5 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-[var(--primary)]"
+                                            placeholder="Enter quantity"
                                             value={formData.quantity}
-                                            onChange={e => setFormData({ ...formData, quantity: Number(e.target.value) })}
+                                            onChange={e => handleNumberChange(e.target.value, 'quantity')}
                                             required
                                         />
                                     </div>
                                     <div>
                                         <label className="block text-xs font-bold text-[var(--text-muted)] uppercase tracking-wider mb-2">Unit Cost (INR)</label>
                                         <input
-                                            type="number"
-                                            min="0"
+                                            type="text"
+                                            inputMode="decimal"
                                             className="w-full bg-[#27272a] border border-white/5 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-[var(--primary)]"
+                                            placeholder="Enter cost"
                                             value={formData.unitCost}
-                                            onChange={e => setFormData({ ...formData, unitCost: Number(e.target.value) })}
+                                            onChange={e => handleNumberChange(e.target.value, 'unitCost')}
                                             required
                                         />
                                     </div>

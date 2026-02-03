@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Wrench, CheckCircle, XCircle, Plus, Lock, X } from 'lucide-react';
+import { Wrench, CheckCircle, XCircle, Plus, Lock, X, Loader2 } from 'lucide-react';
 import api from '../lib/api';
 import { formatCurrency, cn } from '../lib/utils';
 import { useAuthStore } from '../stores/authStore';
@@ -12,11 +12,13 @@ export function Maintenance() {
     const [loading, setLoading] = useState(true);
     const [showModal, setShowModal] = useState(false);
     const [actionLoading, setActionLoading] = useState<string | null>(null);
+    const [formLoading, setFormLoading] = useState(false);
+    const [error, setError] = useState<string | null>(null);
 
     const [formData, setFormData] = useState({
         assetId: '',
         issueDescription: '',
-        repairCost: 0,
+        repairCost: '',
         currency: 'INR'
     });
 
@@ -32,8 +34,8 @@ export function Maintenance() {
             ]);
             setRequests(reqRes.data.data || []);
             setAssets(assetRes.data.data || []);
-        } catch (error) {
-            console.error("Failed to fetch data", error);
+        } catch (err) {
+            console.error("Failed to fetch data", err);
         } finally {
             setLoading(false);
         }
@@ -41,13 +43,30 @@ export function Maintenance() {
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+        setFormLoading(true);
+        setError(null);
         try {
-            await api.post('/maintenance', formData);
+            const payload = {
+                assetId: formData.assetId,
+                issueDescription: formData.issueDescription,
+                repairCost: parseFloat(formData.repairCost) || 0,
+                currency: formData.currency
+            };
+            await api.post('/maintenance', payload);
             setShowModal(false);
             fetchData();
-            setFormData({ assetId: '', issueDescription: '', repairCost: 0, currency: 'INR' });
-        } catch (error: any) {
-            alert(error.response?.data?.message || 'Failed to create request');
+            setFormData({ assetId: '', issueDescription: '', repairCost: '', currency: 'INR' });
+        } catch (err: any) {
+            setError(err.response?.data?.message || 'Failed to create request');
+        } finally {
+            setFormLoading(false);
+        }
+    };
+
+    const handleNumberChange = (value: string) => {
+        // Allow empty string or valid numbers only
+        if (value === '' || /^\d*\.?\d*$/.test(value)) {
+            setFormData({ ...formData, repairCost: value });
         }
     };
 
@@ -198,6 +217,13 @@ export function Maintenance() {
                                 <X className="w-5 h-5" />
                             </button>
                             <h2 className="text-2xl font-bold mb-6">Request Maintenance</h2>
+
+                            {error && (
+                                <div className="mb-4 p-3 bg-red-500/10 border border-red-500/20 rounded-lg text-red-400 text-sm">
+                                    {error}
+                                </div>
+                            )}
+
                             <form onSubmit={handleSubmit} className="space-y-5">
                                 <div>
                                     <label className="block text-xs font-bold text-[var(--text-muted)] uppercase tracking-wider mb-2">Select Asset</label>
@@ -228,11 +254,12 @@ export function Maintenance() {
                                 <div>
                                     <label className="block text-xs font-bold text-[var(--text-muted)] uppercase tracking-wider mb-2">Estimated Repair Cost (INR)</label>
                                     <input
-                                        type="number"
-                                        min="0"
+                                        type="text"
+                                        inputMode="decimal"
                                         className="w-full bg-[#27272a] border border-white/5 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-[var(--primary)] transition-colors"
+                                        placeholder="Enter amount"
                                         value={formData.repairCost}
-                                        onChange={e => setFormData({ ...formData, repairCost: Number(e.target.value) })}
+                                        onChange={e => handleNumberChange(e.target.value)}
                                         required
                                     />
                                     <p className="text-xs text-[var(--text-muted)] mt-2">
@@ -242,9 +269,10 @@ export function Maintenance() {
 
                                 <button
                                     type="submit"
-                                    className="w-full bg-[var(--primary)] text-black font-bold py-4 rounded-xl mt-2 hover:opacity-90 transition-opacity active:scale-[0.98]"
+                                    disabled={formLoading}
+                                    className="w-full bg-[var(--primary)] text-black font-bold py-4 rounded-xl mt-2 hover:opacity-90 transition-opacity active:scale-[0.98] disabled:opacity-50 flex items-center justify-center gap-2"
                                 >
-                                    Submit Request
+                                    {formLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Submit Request'}
                                 </button>
                             </form>
                         </motion.div>

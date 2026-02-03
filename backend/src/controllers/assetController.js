@@ -1,5 +1,6 @@
 const Asset = require('../models/Asset');
 const { asyncHandler, AppError } = require('../utils/errorHandler');
+const { paginateQuery } = require('../utils/pagination');
 
 /**
  * @desc    Create new asset
@@ -21,9 +22,12 @@ exports.createAsset = asyncHandler(async (req, res, next) => {
 
     const asset = await Asset.create({
         name,
-        category,
-        purchaseCost,
-        currency,
+        category: category.toUpperCase(),
+        purchaseInfo: {
+            purchasePrice: purchaseCost,
+            purchaseDate: new Date(),
+            currency: currency || 'INR',
+        },
         officeId: targetOfficeId,
         status,
         createdBy: req.user._id,
@@ -37,8 +41,8 @@ exports.createAsset = asyncHandler(async (req, res, next) => {
 });
 
 /**
- * @desc    Get all assets (filtered by office)
- * @route   GET /api/assets
+ * @desc    Get all assets (filtered by office, with pagination)
+ * @route   GET /api/assets?page=1&limit=20
  * @access  ALL authenticated
  */
 exports.getAssets = asyncHandler(async (req, res, next) => {
@@ -49,15 +53,21 @@ exports.getAssets = asyncHandler(async (req, res, next) => {
     if (req.query.status) filter.status = req.query.status;
     if (req.query.category) filter.category = new RegExp(req.query.category, 'i');
 
-    const assets = await Asset.find(filter)
-        .populate('officeId', 'name code')
-        .populate('createdBy', 'name email')
-        .sort({ createdAt: -1 });
+    const { data, pagination } = await paginateQuery(
+        Asset,
+        filter,
+        req,
+        [
+            { path: 'officeId', select: 'name code' },
+            { path: 'createdBy', select: 'name email' }
+        ]
+    );
 
     res.status(200).json({
         success: true,
-        count: assets.length,
-        data: assets,
+        count: data.length,
+        pagination,
+        data,
     });
 });
 

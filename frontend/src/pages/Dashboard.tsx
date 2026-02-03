@@ -1,11 +1,6 @@
-import { motion } from 'framer-motion';
 import {
     Bell,
-    Calendar,
-    ChevronDown,
     LayoutGrid,
-    Search,
-    Settings,
     User
 } from 'lucide-react';
 import { ProjectCard } from '../components/dashboard/ProjectCard';

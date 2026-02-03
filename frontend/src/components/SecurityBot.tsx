@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { motion, useAnimation, useMotionValue, useTransform } from 'framer-motion';
+import { motion, useAnimation } from 'framer-motion';
 
 interface SecurityBotProps {
     emailLength?: number;

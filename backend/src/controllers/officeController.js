@@ -1,5 +1,6 @@
 const Office = require('../models/Office');
 const { asyncHandler, AppError } = require('../utils/errorHandler');
+const { paginateQuery } = require('../utils/pagination');
 
 /**
  * @desc    Create new office
@@ -24,17 +25,25 @@ exports.createOffice = asyncHandler(async (req, res, next) => {
 });
 
 /**
- * @desc    Get all offices
- * @route   GET /api/offices
+ * @desc    Get all offices (with pagination)
+ * @route   GET /api/offices?page=1&limit=20
  * @access  SUPER_ADMIN
  */
 exports.getOffices = asyncHandler(async (req, res, next) => {
-    const offices = await Office.find({ isActive: true }).sort({ name: 1 });
+    const filter = { isActive: true };
+
+    const { data, pagination } = await paginateQuery(
+        Office,
+        filter,
+        req,
+        []
+    );
 
     res.status(200).json({
         success: true,
-        count: offices.length,
-        data: offices,
+        count: data.length,
+        pagination,
+        data,
     });
 });
 

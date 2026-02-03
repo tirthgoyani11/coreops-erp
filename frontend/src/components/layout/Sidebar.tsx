@@ -10,7 +10,10 @@ import {
     ChevronRight,
     Wrench,
     X,
-    Home
+    Home,
+    Truck,
+    BarChart3,
+    ShoppingCart
 } from 'lucide-react';
 import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
@@ -27,6 +30,9 @@ export function Sidebar() {
         { label: 'Assets', path: '/assets', icon: LayoutDashboard },
         { label: 'Inventory', path: '/inventory', icon: Package },
         { label: 'Maintenance', path: '/maintenance', icon: Wrench },
+        { label: 'Vendors', path: '/vendors', icon: Truck },
+        { label: 'Purchase Orders', path: '/purchase-orders', icon: ShoppingCart },
+        { label: 'Analytics', path: '/analytics', icon: BarChart3 },
         { label: 'Offices', path: '/offices', icon: Building2, adminOnly: true },
         { label: 'Team', path: '/users', icon: Users, adminOnly: true },
     ];

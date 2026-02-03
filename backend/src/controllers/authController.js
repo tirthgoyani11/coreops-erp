@@ -96,28 +96,52 @@ exports.getMe = asyncHandler(async (req, res, next) => {
  * @desc    Seed initial SUPER_ADMIN (for setup only)
  * @route   POST /api/auth/seed
  * @access  Public (only works if no users exist)
+ * 
+ * SECURITY: In production, set SEED_ADMIN_EMAIL and SEED_ADMIN_PASSWORD env vars
  */
 exports.seedAdmin = asyncHandler(async (req, res, next) => {
+    // Disable seed in production unless explicitly allowed
+    if (process.env.NODE_ENV === 'production' && process.env.ALLOW_SEED !== 'true') {
+        return next(new AppError('Seed endpoint is disabled in production', 403));
+    }
+
     const existingUsers = await User.countDocuments();
 
     if (existingUsers > 0) {
         return next(new AppError('Seed not allowed. Users already exist.', 400));
     }
 
+    // Use environment variables for credentials (with secure defaults for dev only)
+    const seedEmail = process.env.SEED_ADMIN_EMAIL ||
+        (process.env.NODE_ENV !== 'production' ? 'admin@coreops.io' : null);
+    const seedPassword = process.env.SEED_ADMIN_PASSWORD ||
+        (process.env.NODE_ENV !== 'production' ? 'Admin@123' : null);
+
+    if (!seedEmail || !seedPassword) {
+        return next(new AppError('SEED_ADMIN_EMAIL and SEED_ADMIN_PASSWORD environment variables are required', 400));
+    }
+
     const admin = await User.create({
-        name: 'Super Admin',
-        email: 'admin@coreops.io',
-        password: 'Admin@123',
+        name: process.env.SEED_ADMIN_NAME || 'Super Admin',
+        email: seedEmail,
+        password: seedPassword,
         role: 'SUPER_ADMIN',
         officeId: null,
     });
 
+    // Log admin creation (without password)
+    const logger = require('../utils/logger');
+    logger.info(`Initial admin created: ${admin.email}`);
+
     res.status(201).json({
         success: true,
-        message: 'Initial admin created. Please change password immediately.',
+        message: 'Initial admin created. Please login with configured credentials and change password immediately.',
         data: {
+            id: admin._id,
             email: admin.email,
-            password: 'Admin@123 (CHANGE THIS!)',
+            name: admin.name,
+            role: admin.role,
+            // SECURITY: Never expose password in response
         },
     });
 });

@@ -1,4 +1,4 @@
-import { ArrowUpRight, MoreHorizontal, Plus } from 'lucide-react';
+import { ArrowUpRight } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 interface ProjectCardProps {

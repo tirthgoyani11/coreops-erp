@@ -1,5 +1,6 @@
 const Inventory = require('../models/Inventory');
 const { asyncHandler, AppError } = require('../utils/errorHandler');
+const { paginateQuery } = require('../utils/pagination');
 
 /**
  * @desc    Create new inventory item
@@ -37,8 +38,8 @@ exports.createItem = asyncHandler(async (req, res, next) => {
 });
 
 /**
- * @desc    Get all inventory items (filtered by office)
- * @route   GET /api/inventory
+ * @desc    Get all inventory items (filtered by office, with pagination)
+ * @route   GET /api/inventory?page=1&limit=20
  * @access  ALL authenticated
  */
 exports.getItems = asyncHandler(async (req, res, next) => {
@@ -48,15 +49,21 @@ exports.getItems = asyncHandler(async (req, res, next) => {
     if (req.query.type) filter.type = req.query.type;
     if (req.query.name) filter.name = new RegExp(req.query.name, 'i');
 
-    const items = await Inventory.find(filter)
-        .populate('officeId', 'name code')
-        .populate('createdBy', 'name email')
-        .sort({ createdAt: -1 });
+    const { data, pagination } = await paginateQuery(
+        Inventory,
+        filter,
+        req,
+        [
+            { path: 'officeId', select: 'name code' },
+            { path: 'createdBy', select: 'name email' }
+        ]
+    );
 
     res.status(200).json({
         success: true,
-        count: items.length,
-        data: items,
+        count: data.length,
+        pagination,
+        data,
     });
 });
 

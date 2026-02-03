@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion';
-import { ArrowUpRight, Minimize2, MoreHorizontal } from 'lucide-react';
+import { ArrowUpRight, Minimize2 } from 'lucide-react';
 
 export function ProfitChart() {
     const data = [40, 65, 50, 85, 30, 95, 45, 60]; // Mock data percentages
