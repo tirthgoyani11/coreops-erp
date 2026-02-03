@@ -464,7 +464,7 @@ The project includes comprehensive documentation in `docs/phases/`:
 
 ## 👨‍💻 Authors
 
-**Tirth Goyani** & **Arijeetsinh Jadeja**
+**Tirth Goyani**
 
 - Computer Engineering Department
 - G H Patel College of Engineering & Technology
