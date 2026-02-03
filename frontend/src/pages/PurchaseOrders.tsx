@@ -78,10 +78,13 @@ export function PurchaseOrders() {
             const payload = {
                 vendor: formData.vendor,
                 items: formData.items.map(item => ({
+                    itemType: 'product', // Default item type
                     name: item.name,
                     quantity: parseInt(item.quantity) || 1,
                     unitPrice: parseFloat(item.unitPrice) || 0
                 })),
+                totalAmount: formData.items.reduce((sum, item) =>
+                    sum + (parseInt(item.quantity) || 1) * (parseFloat(item.unitPrice) || 0), 0),
                 notes: formData.notes
             };
             await api.post('/purchase-orders', payload);

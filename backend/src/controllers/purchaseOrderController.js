@@ -27,9 +27,11 @@ exports.getPurchaseOrders = async (req, res) => {
             sortOrder = 'desc',
         } = req.query;
 
-        const officeFilter = req.user.role === 'SUPER_ADMIN'
-            ? {}
-            : { officeId: req.user.officeId };
+        // Build office filter - handle null officeId safely
+        let officeFilter = {};
+        if (req.user.role !== 'SUPER_ADMIN' && req.user.officeId) {
+            officeFilter = { officeId: req.user.officeId };
+        }
 
         const query = { ...officeFilter };
 
@@ -48,7 +50,7 @@ exports.getPurchaseOrders = async (req, res) => {
             PurchaseOrder.find(query)
                 .populate('vendor', 'vendorCode name')
                 .populate('requestedBy', 'name email')
-                .populate('approval.approvedBy', 'name')
+                .populate('approvedBy', 'name')
                 .sort(sort)
                 .skip(skip)
                 .limit(parseInt(limit))
@@ -67,6 +69,7 @@ exports.getPurchaseOrders = async (req, res) => {
             },
         });
     } catch (error) {
+        console.error('getPurchaseOrders error:', error.message, error.stack);
         res.status(500).json({
             success: false,
             message: 'Failed to fetch purchase orders',
@@ -85,7 +88,7 @@ exports.getPurchaseOrder = async (req, res) => {
             .populate('vendor', 'vendorCode name contactInfo')
             .populate('officeId', 'name code')
             .populate('requestedBy', 'name email')
-            .populate('approval.approvedBy', 'name email')
+            .populate('approvedBy', 'name email')
             .populate('items.inventoryId', 'name sku')
             .populate('receivedItems.receivedBy', 'name');
 
@@ -115,26 +118,40 @@ exports.getPurchaseOrder = async (req, res) => {
  */
 exports.createPurchaseOrder = async (req, res) => {
     try {
+        console.log('Creating PO with data:', JSON.stringify(req.body, null, 2));
+
+        // Validate user has an office assigned
+        if (!req.user.officeId) {
+            return res.status(400).json({
+                success: false,
+                message: 'User must be assigned to an office to create purchase orders'
+            });
+        }
+
         const poData = {
             ...req.body,
             officeId: req.user.officeId,
             requestedBy: req.user._id,
-            status: 'DRAFT',
+            status: 'draft',
         };
 
         const po = new PurchaseOrder(poData);
         await po.save();
 
-        // Audit log
-        await AuditLog.create({
-            user: req.user._id,
-            action: 'create_purchase_order',
-            resourceType: 'PurchaseOrder',
-            resourceId: po._id,
-            changes: { after: po.toObject() },
-            ipAddress: req.ip,
-            userAgent: req.get('User-Agent'),
-        });
+        // Audit log (non-blocking - don't fail PO creation if audit fails)
+        try {
+            await AuditLog.create({
+                user: req.user._id,
+                action: 'create_purchase_order',
+                resourceType: 'PurchaseOrder',
+                resourceId: po._id,
+                changes: { after: po.toObject() },
+                ipAddress: req.ip,
+                userAgent: req.get('User-Agent'),
+            });
+        } catch (auditError) {
+            console.error('AuditLog error (non-fatal):', auditError.message);
+        }
 
         res.status(201).json({
             success: true,
@@ -142,6 +159,7 @@ exports.createPurchaseOrder = async (req, res) => {
             data: po,
         });
     } catch (error) {
+        console.error('createPurchaseOrder error:', error.message, error.stack);
         res.status(500).json({
             success: false,
             message: 'Failed to create purchase order',
@@ -165,7 +183,7 @@ exports.updatePurchaseOrder = async (req, res) => {
             });
         }
 
-        if (po.status !== 'DRAFT') {
+        if (po.status !== 'draft') {
             return res.status(400).json({
                 success: false,
                 message: 'Only draft orders can be modified',
@@ -226,7 +244,7 @@ exports.submitForApproval = async (req, res) => {
             });
         }
 
-        if (po.status !== 'DRAFT') {
+        if (po.status !== 'draft') {
             return res.status(400).json({
                 success: false,
                 message: 'Only draft orders can be submitted',
@@ -240,7 +258,7 @@ exports.submitForApproval = async (req, res) => {
             });
         }
 
-        po.status = 'PENDING_APPROVAL';
+        po.status = 'pending_approval';
         await po.save();
 
         // TODO: Notify approvers
@@ -275,7 +293,7 @@ exports.approvePurchaseOrder = async (req, res) => {
             });
         }
 
-        if (po.status !== 'PENDING_APPROVAL') {
+        if (po.status !== 'pending_approval') {
             return res.status(400).json({
                 success: false,
                 message: 'Order is not pending approval',
@@ -290,13 +308,11 @@ exports.approvePurchaseOrder = async (req, res) => {
             });
         }
 
-        po.status = 'APPROVED';
-        po.approval = {
-            status: 'approved',
-            approvedBy: req.user._id,
-            approvedDate: new Date(),
-            comments: req.body.comments,
-        };
+        po.status = 'approved';
+        po.approvalStatus = 'approved';
+        po.approvedBy = req.user._id;
+        po.approvalDate = new Date();
+        po.approvalNotes = req.body.comments || '';
         await po.save();
 
         // Notify requester
@@ -345,20 +361,18 @@ exports.rejectPurchaseOrder = async (req, res) => {
             });
         }
 
-        if (po.status !== 'PENDING_APPROVAL') {
+        if (po.status !== 'pending_approval') {
             return res.status(400).json({
                 success: false,
                 message: 'Order is not pending approval',
             });
         }
 
-        po.status = 'REJECTED';
-        po.approval = {
-            status: 'rejected',
-            approvedBy: req.user._id,
-            approvedDate: new Date(),
-            rejectionReason: reason,
-        };
+        po.status = 'rejected';
+        po.approvalStatus = 'rejected';
+        po.approvedBy = req.user._id;
+        po.approvalDate = new Date();
+        po.approvalNotes = reason;
         await po.save();
 
         // Notify requester
@@ -401,7 +415,7 @@ exports.receiveItems = async (req, res) => {
             });
         }
 
-        if (!['APPROVED', 'PARTIALLY_RECEIVED'].includes(po.status)) {
+        if (!['approved', 'partially_received'].includes(po.status)) {
             return res.status(400).json({
                 success: false,
                 message: 'Order must be approved to receive items',
@@ -429,9 +443,9 @@ exports.receiveItems = async (req, res) => {
 
         // Update status
         if (po.isFullyReceived) {
-            po.status = 'RECEIVED';
+            po.status = 'received';
         } else {
-            po.status = 'PARTIALLY_RECEIVED';
+            po.status = 'partially_received';
         }
 
         await po.save();
@@ -467,14 +481,14 @@ exports.cancelPurchaseOrder = async (req, res) => {
             });
         }
 
-        if (['RECEIVED', 'CANCELLED'].includes(po.status)) {
+        if (['received', 'cancelled'].includes(po.status)) {
             return res.status(400).json({
                 success: false,
                 message: 'Cannot cancel this order',
             });
         }
 
-        po.status = 'CANCELLED';
+        po.status = 'cancelled';
         po.notes = (po.notes || '') + `\n[CANCELLED: ${reason}]`;
         await po.save();
 
