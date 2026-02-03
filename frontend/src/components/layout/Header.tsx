@@ -1,12 +1,14 @@
 import { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Search, Bell, Plus, Menu } from 'lucide-react';
+import { Search, Bell, Plus, Menu, Sun, Moon } from 'lucide-react';
 import { useUIStore } from '../../stores/uiStore';
+import { useThemeStore } from '../../stores/themeStore';
 import api from '../../lib/api';
 
 export function Header() {
     const location = useLocation();
     const { setMobileSidebarOpen } = useUIStore();
+    const { isDarkMode, toggleTheme } = useThemeStore();
     const [unreadCount, setUnreadCount] = useState(0);
 
     // Fetch unread notification count
@@ -74,6 +76,15 @@ export function Header() {
                         </span>
                     )}
                 </Link>
+
+                {/* Dark Mode Toggle */}
+                <button
+                    onClick={toggleTheme}
+                    className="w-10 h-10 rounded-full border border-white/10 flex items-center justify-center hover:bg-white/5 transition-colors text-[var(--text-muted)] hover:text-white"
+                    title={isDarkMode ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
+                >
+                    {isDarkMode ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+                </button>
 
                 {/* Global Action - Text hidden on mobile */}
                 <button className="h-10 px-3 md:px-5 bg-[var(--primary)] text-black rounded-full text-sm font-bold flex items-center gap-2 hover:shadow-[0_0_20px_rgba(185,255,102,0.4)] transition-all active:scale-95">

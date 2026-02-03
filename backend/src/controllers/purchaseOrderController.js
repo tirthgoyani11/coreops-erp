@@ -315,13 +315,29 @@ exports.approvePurchaseOrder = async (req, res) => {
         po.approvalNotes = req.body.comments || '';
         await po.save();
 
-        // Notify requester
+        // Notify requester via app
         await Notification.create({
             recipient: po.requestedBy,
             type: 'ticket_approved',
             title: 'Purchase Order Approved',
             message: `PO ${po.poNumber} has been approved`,
         });
+
+        // Notify requester via email
+        try {
+            const requester = await User.findById(po.requestedBy);
+            if (requester && requester.email) {
+                const vendorName = po.vendor && po.vendor.name ? po.vendor.name : 'Unknown Vendor';
+                await emailService.sendPOApprovedEmail(
+                    requester.email,
+                    po.poNumber,
+                    vendorName,
+                    po.totalAmount
+                );
+            }
+        } catch (emailError) {
+            console.error('Failed to send PO approval email:', emailError);
+        }
 
         res.json({
             success: true,
@@ -375,7 +391,7 @@ exports.rejectPurchaseOrder = async (req, res) => {
         po.approvalNotes = reason;
         await po.save();
 
-        // Notify requester
+        // Notify requester via app
         await Notification.create({
             recipient: po.requestedBy,
             type: 'ticket_rejected',
@@ -383,6 +399,22 @@ exports.rejectPurchaseOrder = async (req, res) => {
             message: `PO ${po.poNumber} was rejected: ${reason}`,
             priority: 'high',
         });
+
+        // Notify requester via email
+        try {
+            const requester = await User.findById(po.requestedBy);
+            if (requester && requester.email) {
+                const vendorName = po.vendor && po.vendor.name ? po.vendor.name : 'Unknown Vendor';
+                await emailService.sendTicketRejectedEmail(
+                    requester.email,
+                    po.poNumber,
+                    vendorName, // Reusing assetName field for vendor name in this template
+                    reason
+                );
+            }
+        } catch (emailError) {
+            console.error('Failed to send PO rejection email:', emailError);
+        }
 
         res.json({
             success: true,

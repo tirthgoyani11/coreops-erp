@@ -4,6 +4,8 @@ const Inventory = require('../models/Inventory');
 const FinanceLog = require('../models/FinanceLog');
 const { asyncHandler, AppError } = require('../utils/errorHandler');
 const { paginateQuery } = require('../utils/pagination');
+const emailService = require('../services/emailService');
+const User = require('../models/User');
 
 // Exchange Rates (Static for Phase 2)
 const EXCHANGE_RATES = {
@@ -103,6 +105,23 @@ exports.processDecision = asyncHandler(async (req, res, next) => {
         // Revert Asset Status
         await Asset.findByIdAndUpdate(maintenance.assetId, { status: 'ACTIVE' });
 
+        // Send rejection email
+        try {
+            const requester = await User.findById(maintenance.requestedBy);
+            const assetData = await Asset.findById(maintenance.assetId); // Fetch asset for name
+
+            if (requester && requester.email) {
+                await emailService.sendTicketRejectedEmail(
+                    requester.email,
+                    maintenance.ticketNumber || `TICK-${maintenance._id.toString().substring(18)}`, // Fallback if no ticket number
+                    assetData ? assetData.name : 'Unknown Asset',
+                    'Request rejected by manager' // Default reason if not provided in params
+                );
+            }
+        } catch (emailError) {
+            console.error('Failed to send rejection email:', emailError);
+        }
+
         return res.status(200).json({ success: true, message: 'Request rejected' });
     }
 
@@ -112,6 +131,23 @@ exports.processDecision = asyncHandler(async (req, res, next) => {
     maintenance.status = 'APPROVED';
     maintenance.approvedBy = req.user._id;
     await maintenance.save();
+
+    // Send approval email
+    try {
+        const requester = await User.findById(maintenance.requestedBy);
+        const assetData = await Asset.findById(maintenance.assetId); // Fetch asset for name
+
+        if (requester && requester.email) {
+            await emailService.sendTicketApprovedEmail(
+                requester.email,
+                maintenance.ticketNumber || `TICK-${maintenance._id.toString().substring(18)}`,
+                assetData ? assetData.name : 'Unknown Asset',
+                req.user.name
+            );
+        }
+    } catch (emailError) {
+        console.error('Failed to send approval email:', emailError);
+    }
 
     res.status(200).json({ success: true, data: maintenance });
 });

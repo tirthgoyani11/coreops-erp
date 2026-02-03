@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Laptop, Armchair, Car, Package, Plus, X, Loader2, Building2 } from 'lucide-react';
+import { Laptop, Armchair, Car, Package, Plus, X, Loader2, Building2, Download } from 'lucide-react';
 import api from '../lib/api';
+import { exportAssets } from '../utils/exportUtils';
 import { formatCurrency } from '../lib/utils';
 import type { Asset, Office } from '../types';
 import { useAuthStore } from '../stores/authStore';
@@ -130,10 +131,28 @@ export function Assets() {
 
             {/* Grid */}
             <div>
-                <h3 className="text-lg font-bold mb-6 flex items-center gap-2 text-white">
-                    <div className="w-1.5 h-6 bg-[var(--primary)] rounded-full shadow-[0_0_10px_var(--primary)]" />
-                    All Assets ({assets.length})
-                </h3>
+                <div className="flex justify-between items-center mb-6">
+                    <h3 className="text-lg font-bold flex items-center gap-2 text-white">
+                        <div className="w-1.5 h-6 bg-[var(--primary)] rounded-full shadow-[0_0_10px_var(--primary)]" />
+                        All Assets ({assets.length})
+                    </h3>
+                    <div className="flex gap-2">
+                        <button
+                            onClick={() => exportAssets(assets as any, 'pdf')}
+                            className="px-3 py-1.5 border border-white/10 rounded-lg hover:bg-white/5 flex items-center gap-2 text-white text-sm transition-colors"
+                        >
+                            <Download className="w-3.5 h-3.5" />
+                            PDF
+                        </button>
+                        <button
+                            onClick={() => exportAssets(assets as any, 'excel')}
+                            className="px-3 py-1.5 border border-white/10 rounded-lg hover:bg-white/5 flex items-center gap-2 text-white text-sm transition-colors"
+                        >
+                            <Download className="w-3.5 h-3.5" />
+                            Excel
+                        </button>
+                    </div>
+                </div>
 
                 {assets.length === 0 ? (
                     <div className="text-center py-20 bg-[#18181b] rounded-[2rem] border border-white/5">

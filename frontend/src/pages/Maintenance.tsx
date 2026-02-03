@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Wrench, CheckCircle, XCircle, Plus, Lock, X, Loader2 } from 'lucide-react';
+import { Wrench, CheckCircle, XCircle, Plus, Lock, X, Loader2, Download } from 'lucide-react';
 import api from '../lib/api';
+import { exportMaintenance } from '../utils/exportUtils';
 import { formatCurrency, cn } from '../lib/utils';
 import { useAuthStore } from '../stores/authStore';
 
@@ -118,13 +119,30 @@ export function Maintenance() {
                         {requests.filter(r => r.status === 'REQUESTED').length} pending · {requests.filter(r => r.status === 'APPROVED').length} approved
                     </p>
                 </div>
-                <button
-                    onClick={() => setShowModal(true)}
-                    className="bg-[var(--primary)] text-black font-bold px-6 py-3 rounded-xl flex items-center gap-2 hover:opacity-90 transition-all active:scale-95"
-                >
-                    <Plus className="w-5 h-5" />
-                    New Request
-                </button>
+                <div className="flex gap-2">
+                    <button
+                        onClick={() => exportMaintenance(requests as any, 'pdf')}
+                        className="px-4 py-3 border border-white/10 rounded-xl hover:bg-white/5 flex items-center gap-2 text-white transition-colors"
+                    >
+                        <Download className="w-4 h-4" />
+                        PDF
+                    </button>
+                    <button
+                        onClick={() => exportMaintenance(requests as any, 'excel')}
+                        className="px-4 py-3 border border-white/10 rounded-xl hover:bg-white/5 flex items-center gap-2 text-white transition-colors"
+                    >
+                        <Download className="w-4 h-4" />
+                        Excel
+                    </button>
+                    <button
+                        onClick={() => setShowModal(true)}
+                        className="bg-[var(--primary)] text-black font-bold px-6 py-3 rounded-xl flex items-center gap-2 hover:opacity-90 transition-all active:scale-95"
+                    >
+                        <Plus className="w-4 h-4" />
+                        New Request
+                    </button>
+                </div>
+
             </div>
 
             {/* Requests List */}
@@ -279,6 +297,6 @@ export function Maintenance() {
                     </div>
                 )}
             </AnimatePresence>
-        </div>
+        </div >
     );
 }

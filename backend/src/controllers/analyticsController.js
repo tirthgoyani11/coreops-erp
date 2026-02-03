@@ -46,7 +46,7 @@ exports.getDashboardStats = async (req, res) => {
             Inventory.countDocuments({
                 ...officeFilter,
                 isActive: true,
-                'stock.currentQuantity': { $lte: { $ifNull: ['$stock.reorderPoint', 10] } },
+                'stock.currentQuantity': { $lte: 10 }, // Simple threshold for low stock
             }),
             Maintenance.countDocuments({
                 ...officeFilter,

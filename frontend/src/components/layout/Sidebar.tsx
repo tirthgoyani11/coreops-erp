@@ -13,7 +13,8 @@ import {
     Home,
     Truck,
     BarChart3,
-    ShoppingCart
+    ShoppingCart,
+    Shield
 } from 'lucide-react';
 import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
@@ -33,6 +34,7 @@ export function Sidebar() {
         { label: 'Vendors', path: '/vendors', icon: Truck },
         { label: 'Purchase Orders', path: '/purchase-orders', icon: ShoppingCart },
         { label: 'Analytics', path: '/analytics', icon: BarChart3 },
+        { label: 'Audit Logs', path: '/audit-logs', icon: Shield, adminOnly: true },
         { label: 'Offices', path: '/offices', icon: Building2, adminOnly: true },
         { label: 'Team', path: '/users', icon: Users, adminOnly: true },
     ];

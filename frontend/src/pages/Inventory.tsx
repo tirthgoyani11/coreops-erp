@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Package, Search, Plus, X, Loader2, Wrench, Building2 } from 'lucide-react';
+import { Package, Search, Plus, X, Loader2, Wrench, Building2, Download } from 'lucide-react';
 import api from '../lib/api';
+import { exportInventory } from '../utils/exportUtils';
 import { formatCurrency, cn } from '../lib/utils';
 import type { InventoryItem, Office } from '../types';
 import { useAuthStore } from '../stores/authStore';
@@ -121,13 +122,29 @@ export function Inventory() {
                     <p className="text-xs text-[var(--text-muted)] font-medium mb-1">Low Stock Items</p>
                     <p className="text-2xl font-bold text-amber-400">{lowStockCount}</p>
                 </div>
-                <button
-                    onClick={() => setShowModal(true)}
-                    className="bg-[var(--primary)] text-black p-5 rounded-2xl font-bold hover:opacity-90 transition-all active:scale-95 flex items-center justify-center gap-2"
-                >
-                    <Plus className="w-5 h-5" />
-                    Add Item
-                </button>
+                <div className="flex gap-2">
+                    <button
+                        onClick={() => exportInventory(items as any, 'pdf')}
+                        className="px-4 py-2 border border-white/10 rounded-xl hover:bg-white/5 flex items-center gap-2 text-white transition-colors"
+                    >
+                        <Download className="w-4 h-4" />
+                        PDF
+                    </button>
+                    <button
+                        onClick={() => exportInventory(items as any, 'excel')}
+                        className="px-4 py-2 border border-white/10 rounded-xl hover:bg-white/5 flex items-center gap-2 text-white transition-colors"
+                    >
+                        <Download className="w-4 h-4" />
+                        Excel
+                    </button>
+                    <button
+                        onClick={() => setShowModal(true)}
+                        className="bg-[var(--primary)] text-black p-5 rounded-2xl font-bold hover:opacity-90 transition-all active:scale-95 flex items-center justify-center gap-2"
+                    >
+                        <Plus className="w-5 h-5" />
+                        Add Item
+                    </button>
+                </div>
             </div>
 
             {/* Toolbar */}

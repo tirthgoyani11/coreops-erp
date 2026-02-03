@@ -1,0 +1,289 @@
+# Phase 19: User Workflows
+
+## 19.1 Overview
+This phase documents the key user workflows, showing the step-by-step process for common tasks across different user roles.
+
+---
+
+## 19.2 Workflow 1: Maintenance Request Lifecycle
+
+### Actors
+- Technician (discovers issue)
+- Branch Manager (approves)
+- Regional Manager (escalation)
+
+### Flow Diagram
+```
+┌──────────────────────────────────────────────────────────────────────────────┐
+│                    MAINTENANCE REQUEST LIFECYCLE                              │
+├──────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│   ┌─────────────┐                                                            │
+│   │  Technician │                                                            │
+│   │  discovers  │                                                            │
+│   │   issue     │                                                            │
+│   └──────┬──────┘                                                            │
+│          │                                                                   │
+│          ▼                                                                   │
+│   ┌─────────────┐          ┌─────────────┐         ┌─────────────┐          │
+│   │   Create    │    Yes   │   Est Cost  │   No    │   Auto      │          │
+│   │   Ticket    │────────▶ │   > $500?   │────────▶│  Approved   │          │
+│   └──────┬──────┘          └──────┬──────┘         └──────┬──────┘          │
+│          │                        │                       │                 │
+│          │                        ▼ Yes                   │                 │
+│          │                 ┌─────────────┐                │                 │
+│          │                 │   Branch    │                │                 │
+│          │                 │   Manager   │                │                 │
+│          │                 │   Reviews   │                │                 │
+│          │                 └──────┬──────┘                │                 │
+│          │                        │                       │                 │
+│          │           ┌────────────┼────────────┐          │                 │
+│          │           │            │            │          │                 │
+│          │      ┌────┴────┐ ┌─────┴─────┐ ┌────┴────┐    │                 │
+│          │      │ Approve │ │  Reject   │ │ Escalate│    │                 │
+│          │      │ (≤$500) │ │           │ │ (>$500) │    │                 │
+│          │      └────┬────┘ └─────┬─────┘ └────┬────┘    │                 │
+│          │           │            │            │          │                 │
+│          │           │            │            ▼          │                 │
+│          │           │            │     ┌─────────────┐   │                 │
+│          │           │            │     │  Regional   │   │                 │
+│          │           │            │     │   Manager   │   │                 │
+│          │           │            │     └──────┬──────┘   │                 │
+│          │           │            │            │          │                 │
+│          │           ▼            ▼            ▼          ▼                 │
+│          │    ┌─────────────┐ ┌────────┐ ┌─────────────────────┐           │
+│          └───▶│  Assign to  │ │ Closed │ │      Approved       │           │
+│               │  Technician │ │(reason)│ └──────────┬──────────┘           │
+│               └──────┬──────┘ └────────┘            │                       │
+│                      │                              │                       │
+│                      ▼                              │                       │
+│               ┌─────────────┐                       │                       │
+│               │    Work     │◀──────────────────────┘                       │
+│               │  In Progress│                                               │
+│               └──────┬──────┘                                               │
+│                      │                                                      │
+│                      ▼                                                      │
+│               ┌─────────────┐         ┌─────────────┐                       │
+│               │  Complete   │────────▶│   Ticket    │                       │
+│               │   Work      │         │   Closed    │                       │
+│               └─────────────┘         └─────────────┘                       │
+│                                                                              │
+└──────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Detailed Steps
+
+| Step | Actor | Screen | Action |
+|------|-------|--------|--------|
+| 1 | Technician | Assets / QR Scan | Discover issue, scan asset |
+| 2 | Technician | Create Ticket | Fill details, attach photos |
+| 3 | System | - | Route based on estimated cost |
+| 4 | Manager | Approval Queue | Review, Approve/Reject/Escalate |
+| 5 | Manager | Assignment | Assign to technician |
+| 6 | Technician | Ticket Detail | Start work, update status |
+| 7 | Technician | Ticket Detail | Consume parts, add labor |
+| 8 | Technician | Ticket Detail | Upload after photos, complete |
+| 9 | Manager | Ticket Detail | Verify and close ticket |
+
+---
+
+## 19.3 Workflow 2: Asset Transfer
+
+### Flow Diagram
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                     ASSET TRANSFER                               │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  ┌─────────────┐         ┌─────────────┐        ┌─────────┐    │
+│  │   Branch    │────────▶│  Regional   │───────▶│ Approval│    │
+│  │   Manager   │ Request │   Manager   │ Review │         │    │
+│  │  initiates  │         │   reviews   │        └────┬────┘    │
+│  └─────────────┘         └─────────────┘             │         │
+│                                                      │         │
+│                               ┌──────────────────────┘         │
+│                               │                                │
+│                          ┌────┴────┐                           │
+│                          │Approved?│                           │
+│                          └────┬────┘                           │
+│                     ┌─────────┴─────────┐                      │
+│                    Yes                  No                     │
+│                     │                   │                      │
+│                     ▼                   ▼                      │
+│              ┌─────────────┐     ┌─────────────┐               │
+│              │   Asset     │     │  Request    │               │
+│              │ In Transit  │     │  Rejected   │               │
+│              └──────┬──────┘     └─────────────┘               │
+│                     │                                          │
+│                     ▼                                          │
+│              ┌─────────────┐                                   │
+│              │ Destination │                                   │
+│              │  Receives   │                                   │
+│              └──────┬──────┘                                   │
+│                     │                                          │
+│                     ▼                                          │
+│              ┌─────────────┐                                   │
+│              │    GUAI     │                                   │
+│              │   Updated   │                                   │
+│              └─────────────┘                                   │
+│                                                                │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## 19.4 Workflow 3: Inventory Replenishment
+
+### Steps
+```
+1. TRIGGER
+   └── Stock falls below reorder point
+
+2. ALERT
+   └── Low Stock notification sent to:
+       ├── Branch Manager
+       └── Purchasing Team
+
+3. REVIEW
+   └── Manager reviews alert
+       ├── Check vendor options
+       ├── Compare prices/lead times
+       └── Select preferred vendor
+
+4. CREATE PO
+   └── Generate Purchase Order
+       ├── Item details
+       ├── Quantities
+       ├── Expected delivery
+       └── Vendor contact
+
+5. APPROVAL (if over limit)
+   └── Regional Manager approves
+
+6. SEND TO VENDOR
+   └── Email PO to vendor
+
+7. RECEIVE GOODS
+   └── Stock-In process
+       ├── Quantity verification
+       ├── Quality check
+       ├── OCR invoice scan
+       └── Location assignment
+
+8. COMPLETE
+   └── Inventory updated
+       ├── Stock levels adjusted
+       ├── Alert cleared
+       └── Transaction recorded
+```
+
+---
+
+## 19.5 Workflow 4: Invoice Processing (OCR)
+
+### Flow
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                     OCR INVOICE PROCESSING                       │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  ┌─────────────┐                                               │
+│  │   Upload    │                                               │
+│  │   Invoice   │                                               │
+│  │   (Image)   │                                               │
+│  └──────┬──────┘                                               │
+│         │                                                       │
+│         ▼                                                       │
+│  ┌─────────────┐                                               │
+│  │  Tesseract  │                                               │
+│  │   OCR       │                                               │
+│  │  Processing │                                               │
+│  └──────┬──────┘                                               │
+│         │                                                       │
+│         ▼                                                       │
+│  ┌─────────────────────────────────────────┐                   │
+│  │           EXTRACTED DATA                │                   │
+│  │  ┌────────────────────────────────────┐ │                   │
+│  │  │ Vendor: ABC Supply Co.     [Match] │ │                   │
+│  │  │ Invoice #: INV-00456              │ │                   │
+│  │  │ Date: Feb 1, 2026                 │ │                   │
+│  │  │ Amount: $2,450.00          [Edit] │ │                   │
+│  │  │ Line Items:                       │ │                   │
+│  │  │  - Compressor Belt x10    $450    │ │                   │
+│  │  │  - Refrigerant x20        $700    │ │                   │
+│  │  └────────────────────────────────────┘ │                   │
+│  └──────────────────┬──────────────────────┘                   │
+│                     │                                          │
+│                     ▼                                          │
+│             ┌─────────────┐                                    │
+│             │   User      │                                    │
+│             │  Confirms   │                                    │
+│             └──────┬──────┘                                    │
+│                    │                                           │
+│         ┌──────────┴──────────┐                                │
+│         │                     │                                │
+│         ▼                     ▼                                │
+│  ┌─────────────┐       ┌─────────────┐                         │
+│  │ Transaction │       │  Inventory  │                         │
+│  │  Created    │       │  Stock-In   │                         │
+│  └─────────────┘       └─────────────┘                         │
+│                                                                │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## 19.6 Workflow 5: New User Onboarding
+
+### Steps
+| Step | Actor | Action |
+|------|-------|--------|
+| 1 | Manager | Create user account |
+| 2 | System | Send invitation email |
+| 3 | New User | Click invitation link |
+| 4 | New User | Complete registration form |
+| 5 | New User | Set password |
+| 6 | System | Create account with assigned role |
+| 7 | New User | Receive welcome email |
+| 8 | New User | First login → Dashboard tutorial |
+| 9 | System | Log first login in audit |
+
+---
+
+## 19.7 Workflow 6: End-of-Month Reporting
+
+### Automated Tasks
+```
+Schedule: Last day of month @ 11:59 PM
+
+1. FINANCIAL CLOSE
+   ├── Calculate MTD revenue
+   ├── Calculate MTD expenses
+   └── Generate P&L summary
+
+2. ASSET VALUATION
+   ├── Run depreciation calculations
+   ├── Update book values
+   └── Generate asset register
+
+3. INVENTORY SNAPSHOT
+   ├── Record stock levels
+   ├── Calculate turnover
+   └── Flag slow-moving items
+
+4. MAINTENANCE SUMMARY
+   ├── Count tickets by status
+   ├── Calculate resolution times
+   └── MTBF updates per vendor
+
+5. GENERATE REPORTS
+   ├── Executive Summary (PDF)
+   ├── Detailed Analysis (Excel)
+   └── Archive for compliance
+
+6. DISTRIBUTE
+   └── Email to:
+       ├── Super Admin
+       ├── Regional Managers
+       └── Finance Team
+```

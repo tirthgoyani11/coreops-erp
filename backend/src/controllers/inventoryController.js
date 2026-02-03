@@ -1,6 +1,8 @@
 const Inventory = require('../models/Inventory');
 const { asyncHandler, AppError } = require('../utils/errorHandler');
 const { paginateQuery } = require('../utils/pagination');
+const emailService = require('../services/emailService');
+const User = require('../models/User');
 
 /**
  * @desc    Create new inventory item

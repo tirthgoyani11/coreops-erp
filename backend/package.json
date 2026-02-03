@@ -25,6 +25,9 @@
     "jsonwebtoken": "^9.0.3",
     "mongoose": "^9.1.5",
     "morgan": "^1.10.1",
+    "multer": "^2.0.2",
+    "nodemailer": "^7.0.13",
+    "tesseract.js": "^7.0.0",
     "uuid": "^13.0.0",
     "winston": "^3.19.0"
   },

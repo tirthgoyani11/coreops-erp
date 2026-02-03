@@ -13,6 +13,7 @@ import { Vendors } from './pages/Vendors';
 import { Analytics } from './pages/Analytics';
 import { PurchaseOrders } from './pages/PurchaseOrders';
 import { Notifications } from './pages/Notifications';
+import AuditLogs from './pages/AuditLogs';
 import { useAuthStore } from './stores/authStore';
 import './index.css';
 
@@ -37,6 +38,7 @@ function App() {
           <Route path="/analytics" element={<Analytics />} />
           <Route path="/purchase-orders" element={<PurchaseOrders />} />
           <Route path="/notifications" element={<Notifications />} />
+          <Route path="/audit-logs" element={<AuditLogs />} />
 
           {/* Admin-only routes with RBAC protection */}
           <Route
