@@ -63,9 +63,9 @@ export const ROLE_CONFIG: Record<UserRole, RoleConfig> = {
             'quickActions'
         ]
     },
-    REGIONAL_MANAGER: {
-        label: 'Regional Manager',
-        description: 'Multi-branch access',
+    MANAGER: {
+        label: 'Manager',
+        description: 'Branch/Regional management',
         approvalLimit: 5000,
         scope: 'regional',
         color: '#f97316', // Orange
@@ -80,9 +80,9 @@ export const ROLE_CONFIG: Record<UserRole, RoleConfig> = {
             'regionalExpensesTrend'
         ]
     },
-    BRANCH_MANAGER: {
-        label: 'Branch Manager',
-        description: 'Single branch access',
+    STAFF: {
+        label: 'Staff',
+        description: 'Standard operational access',
         approvalLimit: 500,
         scope: 'branch',
         color: '#eab308', // Yellow
@@ -133,23 +133,23 @@ export const NAV_ITEMS: NavItem[] = [
         label: 'Dashboard',
         path: '/',
         icon: Home,
-        roles: ['SUPER_ADMIN', 'REGIONAL_MANAGER', 'BRANCH_MANAGER', 'TECHNICIAN', 'VIEWER']
+        roles: ['SUPER_ADMIN', 'MANAGER', 'STAFF', 'TECHNICIAN', 'VIEWER']
     },
 
-    // Assets - Managers can CRUD, Tech/Viewer read-only
+    // Assets - Managers/Staff can CRUD, Tech/Viewer read-only
     {
         label: 'Assets',
         path: '/assets',
         icon: LayoutDashboard,
-        roles: ['SUPER_ADMIN', 'REGIONAL_MANAGER', 'BRANCH_MANAGER', 'TECHNICIAN', 'VIEWER']
+        roles: ['SUPER_ADMIN', 'MANAGER', 'STAFF', 'TECHNICIAN', 'VIEWER']
     },
 
-    // Inventory - Managers full, Tech consume only, Viewer read
+    // Inventory - Managers/Staff full, Tech consume only, Viewer read
     {
         label: 'Inventory',
         path: '/inventory',
         icon: Package,
-        roles: ['SUPER_ADMIN', 'REGIONAL_MANAGER', 'BRANCH_MANAGER', 'TECHNICIAN', 'VIEWER']
+        roles: ['SUPER_ADMIN', 'MANAGER', 'STAFF', 'TECHNICIAN', 'VIEWER']
     },
 
     // Maintenance - Everyone except Viewer
@@ -157,7 +157,7 @@ export const NAV_ITEMS: NavItem[] = [
         label: 'Maintenance',
         path: '/maintenance',
         icon: Wrench,
-        roles: ['SUPER_ADMIN', 'REGIONAL_MANAGER', 'BRANCH_MANAGER', 'TECHNICIAN', 'VIEWER']
+        roles: ['SUPER_ADMIN', 'MANAGER', 'STAFF', 'TECHNICIAN', 'VIEWER']
     },
 
     // My Tickets - Technicians only (simplified view)
@@ -168,28 +168,28 @@ export const NAV_ITEMS: NavItem[] = [
         roles: ['TECHNICIAN']
     },
 
-    // Vendors - Managers and above
+    // Vendors - Managers/Staff and above
     {
         label: 'Vendors',
         path: '/vendors',
         icon: Truck,
-        roles: ['SUPER_ADMIN', 'REGIONAL_MANAGER', 'BRANCH_MANAGER', 'VIEWER']
+        roles: ['SUPER_ADMIN', 'MANAGER', 'STAFF', 'VIEWER']
     },
 
-    // Purchase Orders - Managers only
+    // Purchase Orders - Managers/Staff only
     {
         label: 'Purchase Orders',
         path: '/purchase-orders',
         icon: ShoppingCart,
-        roles: ['SUPER_ADMIN', 'REGIONAL_MANAGER', 'BRANCH_MANAGER']
+        roles: ['SUPER_ADMIN', 'MANAGER', 'STAFF']
     },
 
-    // Financial - Managers only (or Viewer read)
+    // Financial - Managers/Staff only (or Viewer read)
     {
         label: 'Financial',
         path: '/financial',
         icon: DollarSign,
-        roles: ['SUPER_ADMIN', 'REGIONAL_MANAGER', 'BRANCH_MANAGER', 'VIEWER']
+        roles: ['SUPER_ADMIN', 'MANAGER', 'STAFF', 'VIEWER']
     },
 
     // Analytics - Not for Technician
@@ -197,7 +197,7 @@ export const NAV_ITEMS: NavItem[] = [
         label: 'Analytics',
         path: '/analytics',
         icon: BarChart3,
-        roles: ['SUPER_ADMIN', 'REGIONAL_MANAGER', 'BRANCH_MANAGER', 'VIEWER']
+        roles: ['SUPER_ADMIN', 'MANAGER', 'STAFF', 'VIEWER']
     },
 
     // Reports - Viewer can export
@@ -205,7 +205,7 @@ export const NAV_ITEMS: NavItem[] = [
         label: 'Reports',
         path: '/reports',
         icon: FileText,
-        roles: ['SUPER_ADMIN', 'REGIONAL_MANAGER', 'BRANCH_MANAGER', 'VIEWER']
+        roles: ['SUPER_ADMIN', 'MANAGER', 'STAFF', 'VIEWER']
     },
 
     // Offices - Admins only
@@ -216,12 +216,12 @@ export const NAV_ITEMS: NavItem[] = [
         roles: ['SUPER_ADMIN']
     },
 
-    // Branches - Regional+ can view
+    // Branches - Managers can view
     {
         label: 'Branches',
         path: '/branches',
         icon: Building2,
-        roles: ['SUPER_ADMIN', 'REGIONAL_MANAGER']
+        roles: ['SUPER_ADMIN', 'MANAGER']
     },
 
     // Users - Varies by role
@@ -229,7 +229,7 @@ export const NAV_ITEMS: NavItem[] = [
         label: 'Users',
         path: '/users',
         icon: Users,
-        roles: ['SUPER_ADMIN', 'REGIONAL_MANAGER', 'BRANCH_MANAGER']
+        roles: ['SUPER_ADMIN', 'MANAGER', 'STAFF']
     },
 
     // Audit Logs - Admin + read for Viewer
@@ -237,7 +237,7 @@ export const NAV_ITEMS: NavItem[] = [
         label: 'Audit Logs',
         path: '/audit-logs',
         icon: Shield,
-        roles: ['SUPER_ADMIN', 'REGIONAL_MANAGER', 'BRANCH_MANAGER', 'VIEWER']
+        roles: ['SUPER_ADMIN', 'MANAGER', 'STAFF', 'VIEWER']
     },
 
     // Notifications - Everyone
@@ -245,7 +245,7 @@ export const NAV_ITEMS: NavItem[] = [
         label: 'Notifications',
         path: '/notifications',
         icon: Bell,
-        roles: ['SUPER_ADMIN', 'REGIONAL_MANAGER', 'BRANCH_MANAGER', 'TECHNICIAN', 'VIEWER'],
+        roles: ['SUPER_ADMIN', 'MANAGER', 'STAFF', 'TECHNICIAN', 'VIEWER'],
         badge: 'notifications'
     },
 
@@ -297,32 +297,32 @@ export function getApprovalLimit(role: UserRole): number | null {
  */
 export function hasPermission(role: UserRole, feature: string): boolean {
     const permissions: Record<string, UserRole[]> = {
-        'assets.create': ['SUPER_ADMIN', 'REGIONAL_MANAGER', 'BRANCH_MANAGER'],
-        'assets.edit': ['SUPER_ADMIN', 'REGIONAL_MANAGER', 'BRANCH_MANAGER'],
-        'assets.delete': ['SUPER_ADMIN', 'REGIONAL_MANAGER'],
-        'assets.transfer': ['SUPER_ADMIN', 'REGIONAL_MANAGER', 'BRANCH_MANAGER'],
+        'assets.create': ['SUPER_ADMIN', 'MANAGER', 'STAFF'],
+        'assets.edit': ['SUPER_ADMIN', 'MANAGER', 'STAFF'],
+        'assets.delete': ['SUPER_ADMIN', 'MANAGER'],
+        'assets.transfer': ['SUPER_ADMIN', 'MANAGER', 'STAFF'],
 
-        'tickets.create': ['SUPER_ADMIN', 'REGIONAL_MANAGER', 'BRANCH_MANAGER', 'TECHNICIAN'],
-        'tickets.approve': ['SUPER_ADMIN', 'REGIONAL_MANAGER', 'BRANCH_MANAGER'],
-        'tickets.assign': ['SUPER_ADMIN', 'REGIONAL_MANAGER', 'BRANCH_MANAGER'],
+        'tickets.create': ['SUPER_ADMIN', 'MANAGER', 'STAFF', 'TECHNICIAN'],
+        'tickets.approve': ['SUPER_ADMIN', 'MANAGER'],
+        'tickets.assign': ['SUPER_ADMIN', 'MANAGER'],
 
-        'inventory.manage': ['SUPER_ADMIN', 'REGIONAL_MANAGER', 'BRANCH_MANAGER'],
-        'inventory.consume': ['SUPER_ADMIN', 'REGIONAL_MANAGER', 'BRANCH_MANAGER', 'TECHNICIAN'],
+        'inventory.manage': ['SUPER_ADMIN', 'MANAGER', 'STAFF'],
+        'inventory.consume': ['SUPER_ADMIN', 'MANAGER', 'STAFF', 'TECHNICIAN'],
 
-        'vendors.create': ['SUPER_ADMIN', 'REGIONAL_MANAGER'],
-        'vendors.edit': ['SUPER_ADMIN', 'REGIONAL_MANAGER'],
+        'vendors.create': ['SUPER_ADMIN', 'MANAGER'],
+        'vendors.edit': ['SUPER_ADMIN', 'MANAGER'],
 
-        'users.create': ['SUPER_ADMIN', 'REGIONAL_MANAGER', 'BRANCH_MANAGER'],
+        'users.create': ['SUPER_ADMIN', 'MANAGER'],
         'users.manage.all': ['SUPER_ADMIN'],
-        'users.manage.regional': ['REGIONAL_MANAGER'],
-        'users.manage.branch': ['BRANCH_MANAGER'],
+        'users.manage.regional': ['MANAGER'],
+        'users.manage.branch': ['STAFF'],
 
         'settings.access': ['SUPER_ADMIN'],
         'audit.full': ['SUPER_ADMIN'],
-        'audit.read': ['SUPER_ADMIN', 'REGIONAL_MANAGER', 'BRANCH_MANAGER', 'VIEWER'],
+        'audit.read': ['SUPER_ADMIN', 'MANAGER', 'STAFF', 'VIEWER'],
 
-        'export.data': ['SUPER_ADMIN', 'REGIONAL_MANAGER', 'BRANCH_MANAGER', 'VIEWER'],
-        'financial.view': ['SUPER_ADMIN', 'REGIONAL_MANAGER', 'BRANCH_MANAGER', 'VIEWER']
+        'export.data': ['SUPER_ADMIN', 'MANAGER', 'STAFF', 'VIEWER'],
+        'financial.view': ['SUPER_ADMIN', 'MANAGER', 'STAFF', 'VIEWER']
     };
 
     return permissions[feature]?.includes(role) ?? false;

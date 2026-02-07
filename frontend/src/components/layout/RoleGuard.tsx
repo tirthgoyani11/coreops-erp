@@ -22,14 +22,14 @@ interface RoleGuardProps {
  * 
  * Supported Roles (Phase 2):
  * - SUPER_ADMIN: Full system access (Level 5)
- * - REGIONAL_MANAGER: Regional scope access (Level 4)
- * - BRANCH_MANAGER: Branch scope access (Level 3)
+ * - MANAGER: Branch management access (Level 4)
+ * - STAFF: General staff access (Level 3)
  * - TECHNICIAN: Assigned tickets only (Level 2)
  * - VIEWER: Read-only access (Level 1)
  * 
  * @example
  * // Route protection
- * <RoleGuard allowedRoles={['SUPER_ADMIN', 'REGIONAL_MANAGER']}>
+ * <RoleGuard allowedRoles={['SUPER_ADMIN', 'MANAGER']}>
  *   <ProtectedComponent />
  * </RoleGuard>
  * 
@@ -114,8 +114,8 @@ export function withRoleGuard<P extends object>(
  */
 export const ROLE_HIERARCHY: Record<UserRole, number> = {
     SUPER_ADMIN: 5,
-    REGIONAL_MANAGER: 4,
-    BRANCH_MANAGER: 3,
+    MANAGER: 4,
+    STAFF: 3,
     TECHNICIAN: 2,
     VIEWER: 1,
 } as const;
@@ -124,8 +124,8 @@ export const ROLE_HIERARCHY: Record<UserRole, number> = {
  * Check if user has at least a certain role level
  * 
  * @example
- * if (hasMinimumRole('BRANCH_MANAGER', 'REGIONAL_MANAGER')) {
- *   // Branch Manager doesn't have Regional Manager level
+ * if (hasMinimumRole('STAFF', 'MANAGER')) {
+ *   // Staff doesn't have Manager level
  * }
  */
 export function hasMinimumRole(userRole: UserRole, minimumRole: UserRole): boolean {
@@ -137,8 +137,8 @@ export function hasMinimumRole(userRole: UserRole, minimumRole: UserRole): boole
  * Useful for building allowedRoles arrays dynamically
  * 
  * @example
- * const managerRoles = getRolesAbove('BRANCH_MANAGER');
- * // ['SUPER_ADMIN', 'REGIONAL_MANAGER', 'BRANCH_MANAGER']
+ * const managerRoles = getRolesAbove('MANAGER');
+ * // ['SUPER_ADMIN', 'MANAGER']
  */
 export function getRolesAbove(minimumRole: UserRole): UserRole[] {
     const minLevel = ROLE_HIERARCHY[minimumRole];
@@ -151,8 +151,8 @@ export function getRolesAbove(minimumRole: UserRole): UserRole[] {
  * Get all roles below a certain level (exclusive)
  * 
  * @example
- * const staffRoles = getRolesBelow('BRANCH_MANAGER');
- * // ['TECHNICIAN', 'VIEWER']
+ * const staffRoles = getRolesBelow('MANAGER');
+ * // ['STAFF', 'TECHNICIAN', 'VIEWER']
  */
 export function getRolesBelow(maxRole: UserRole): UserRole[] {
     const maxLevel = ROLE_HIERARCHY[maxRole];

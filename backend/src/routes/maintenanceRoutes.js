@@ -3,6 +3,8 @@ const router = express.Router();
 const {
     createRequest,
     processDecision,
+    startMaintenance,
+    completeMaintenance,
     closeMaintenance,
     getMaintenance
 } = require('../controllers/maintenanceController');
@@ -35,6 +37,20 @@ router.post('/:id/reject',
         next();
     },
     processDecision
+);
+
+
+
+router.post('/:id/start',
+    authorize('TECHNICIAN', 'MANAGER', 'SUPER_ADMIN'),
+    maintenanceValidation.getById,
+    startMaintenance
+);
+
+router.post('/:id/complete',
+    authorize('TECHNICIAN', 'MANAGER', 'SUPER_ADMIN'),
+    maintenanceValidation.getById,
+    completeMaintenance
 );
 
 router.post('/:id/close',

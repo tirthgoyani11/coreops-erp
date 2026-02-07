@@ -1,6 +1,7 @@
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 const { asyncHandler, AppError } = require('../utils/errorHandler');
+const emailService = require('../services/emailService');
 
 /**
  * @desc    Register new user
@@ -38,6 +39,7 @@ exports.register = asyncHandler(async (req, res, next) => {
 exports.login = asyncHandler(async (req, res, next) => {
     const { email, password } = req.body;
 
+    // Check for email and password
     if (!email || !password) {
         return next(new AppError('Please provide email and password', 400));
     }
@@ -177,13 +179,18 @@ exports.forgotPassword = asyncHandler(async (req, res, next) => {
     user.passwordResetExpires = Date.now() + 60 * 60 * 1000; // 1 hour
     await user.save({ validateBeforeSave: false });
 
-    // In production, send email here
-    const logger = require('../utils/logger');
-    logger.info(`Password reset token generated for: ${email}`);
+    // Send email via service
+    const resetUrl = `${process.env.FRONTEND_URL || 'http://localhost:5173'}/reset-password?token=${resetToken}`;
 
-    // For development, log the token (remove in production)
-    if (process.env.NODE_ENV !== 'production') {
-        logger.debug(`Reset token (dev only): ${resetToken}`);
+    try {
+        await emailService.sendPasswordResetEmail(user.email, resetUrl);
+        const logger = require('../utils/logger');
+        logger.info(`Password reset email sent to: ${email}`);
+    } catch (error) {
+        user.passwordResetToken = undefined;
+        user.passwordResetExpires = undefined;
+        await user.save({ validateBeforeSave: false });
+        return next(new AppError('There was an error sending the email. Try again later!', 500));
     }
 
     res.status(200).json({

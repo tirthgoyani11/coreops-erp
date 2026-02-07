@@ -3,6 +3,8 @@ const Vendor = require('../models/Vendor');
 const Inventory = require('../models/Inventory');
 const Notification = require('../models/Notification');
 const AuditLog = require('../models/AuditLog');
+const User = require('../models/User');
+const emailService = require('../services/emailService');
 
 /**
  * Purchase Order Controller
@@ -118,7 +120,7 @@ exports.getPurchaseOrder = async (req, res) => {
  */
 exports.createPurchaseOrder = async (req, res) => {
     try {
-        console.log('Creating PO with data:', JSON.stringify(req.body, null, 2));
+        // console.log('Creating PO with data:', JSON.stringify(req.body, null, 2)); // Removed for production safety
 
         // Validate user has an office assigned
         if (!req.user.officeId) {
@@ -261,8 +263,32 @@ exports.submitForApproval = async (req, res) => {
         po.status = 'pending_approval';
         await po.save();
 
-        // TODO: Notify approvers
-        // await notifyApprovers(po);
+        // Notify approvers
+        try {
+            // Find managers in the same office
+            const approvers = await User.find({
+                role: { $in: ['MANAGER', 'REGIONAL_MANAGER', 'SUPER_ADMIN'] },
+                officeId: po.officeId
+            });
+
+            // If super admin, they might not have officeId, so include them separately if needed
+            // For now, simpler logic:
+
+            const vendorName = po.vendorName || (po.vendor ? po.vendor.name : 'Unknown Vendor');
+
+            for (const approver of approvers) {
+                if (approver.email) {
+                    await emailService.sendPOApprovalRequestEmail(
+                        approver.email,
+                        po.poNumber,
+                        vendorName,
+                        po.totalAmount
+                    );
+                }
+            }
+        } catch (notifyError) {
+            console.error('Failed to notify approvers:', notifyError);
+        }
 
         res.json({
             success: true,

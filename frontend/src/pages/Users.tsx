@@ -9,10 +9,12 @@ interface UserWithOffice {
     id: string;
     name: string;
     email: string;
-    role: 'SUPER_ADMIN' | 'MANAGER' | 'STAFF';
+    role: 'SUPER_ADMIN' | 'MANAGER' | 'STAFF' | 'TECHNICIAN' | 'VIEWER';
     officeId: Office | null;
     isActive: boolean;
 }
+
+import type { UserRole } from '../types';
 
 export function Users() {
     const [users] = useState<UserWithOffice[]>([]);
@@ -24,7 +26,7 @@ export function Users() {
         name: '',
         email: '',
         password: '',
-        role: 'STAFF' as 'SUPER_ADMIN' | 'MANAGER' | 'STAFF',
+        role: 'STAFF' as UserRole,
         officeId: '',
     });
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -79,6 +81,10 @@ export function Users() {
                 return 'bg-red-500/20 text-red-400';
             case 'MANAGER':
                 return 'bg-blue-500/20 text-blue-400';
+            case 'TECHNICIAN':
+                return 'bg-orange-500/20 text-orange-400';
+            case 'VIEWER':
+                return 'bg-emerald-500/20 text-emerald-400';
             default:
                 return 'bg-zinc-700 text-zinc-300';
         }
@@ -225,9 +231,11 @@ export function Users() {
                                     onChange={(e) => setFormData({ ...formData, role: e.target.value as any })}
                                     className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-white focus:outline-none focus:border-[var(--primary)]"
                                 >
-                                    <option value="STAFF">Staff</option>
-                                    <option value="MANAGER">Manager</option>
                                     <option value="SUPER_ADMIN">Super Admin</option>
+                                    <option value="MANAGER">Manager</option>
+                                    <option value="STAFF">Staff</option>
+                                    <option value="TECHNICIAN">Technician</option>
+                                    <option value="VIEWER">Viewer</option>
                                 </select>
                             </div>
                             {formData.role !== 'SUPER_ADMIN' && (

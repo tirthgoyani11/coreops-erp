@@ -15,6 +15,8 @@ import { ViewerDashboard } from './pages/dashboards/ViewerDashboard';
 import { Assets } from './pages/Assets';
 import { Inventory } from './pages/Inventory';
 import { Maintenance } from './pages/Maintenance';
+import TicketDetails from './pages/TicketDetails';
+import { ScanQR } from './pages/ScanQR';
 import { Offices } from './pages/Offices';
 import { Users } from './pages/Users';
 import { Vendors } from './pages/Vendors';
@@ -76,7 +78,7 @@ function App() {
           <Route
             path="/dashboard/branch"
             element={
-              <RoleGuard allowedRoles={['SUPER_ADMIN', 'REGIONAL_MANAGER', 'BRANCH_MANAGER']}>
+              <RoleGuard allowedRoles={['SUPER_ADMIN', 'MANAGER', 'STAFF']}>
                 <ManagerDashboard />
               </RoleGuard>
             }
@@ -84,7 +86,7 @@ function App() {
           <Route
             path="/dashboard/tech"
             element={
-              <RoleGuard allowedRoles={['SUPER_ADMIN', 'REGIONAL_MANAGER', 'BRANCH_MANAGER', 'TECHNICIAN']}>
+              <RoleGuard allowedRoles={['SUPER_ADMIN', 'MANAGER', 'STAFF', 'TECHNICIAN']}>
                 <TechDashboard />
               </RoleGuard>
             }
@@ -92,7 +94,7 @@ function App() {
           <Route
             path="/dashboard/viewer"
             element={
-              <RoleGuard allowedRoles={['SUPER_ADMIN', 'REGIONAL_MANAGER', 'BRANCH_MANAGER', 'VIEWER']}>
+              <RoleGuard allowedRoles={['SUPER_ADMIN', 'MANAGER', 'STAFF', 'VIEWER']}>
                 <ViewerDashboard />
               </RoleGuard>
             }
@@ -105,13 +107,17 @@ function App() {
           <Route path="/inventory" element={<Inventory />} />
 
           {/* Maintenance - All roles can view (Tech can create, Managers approve) */}
-          <Route path="/maintenance" element={<Maintenance />} />
+          <Route path="/maintenance" element={<RoleGuard allowedRoles={['SUPER_ADMIN', 'MANAGER', 'STAFF', 'TECHNICIAN']}><Maintenance /></RoleGuard>} />
+          <Route path="/maintenance/:id" element={<RoleGuard allowedRoles={['SUPER_ADMIN', 'MANAGER', 'STAFF', 'TECHNICIAN']}><TicketDetails /></RoleGuard>} />
+
+          {/* QR Scan - Tech primarily */}
+          <Route path="/scan" element={<RoleGuard allowedRoles={['SUPER_ADMIN', 'MANAGER', 'STAFF', 'TECHNICIAN']}><ScanQR /></RoleGuard>} />
 
           {/* Vendors - Managers + Viewer (Branch Mgr = view-only for global vendors) */}
           <Route
             path="/vendors"
             element={
-              <RoleGuard allowedRoles={['SUPER_ADMIN', 'REGIONAL_MANAGER', 'BRANCH_MANAGER', 'VIEWER']}>
+              <RoleGuard allowedRoles={['SUPER_ADMIN', 'MANAGER', 'STAFF', 'VIEWER']}>
                 <Vendors />
               </RoleGuard>
             }
@@ -121,7 +127,7 @@ function App() {
           <Route
             path="/purchase-orders"
             element={
-              <RoleGuard allowedRoles={['SUPER_ADMIN', 'REGIONAL_MANAGER', 'BRANCH_MANAGER']}>
+              <RoleGuard allowedRoles={['SUPER_ADMIN', 'MANAGER', 'STAFF']}>
                 <PurchaseOrders />
               </RoleGuard>
             }
@@ -131,7 +137,7 @@ function App() {
           <Route
             path="/analytics"
             element={
-              <RoleGuard allowedRoles={['SUPER_ADMIN', 'REGIONAL_MANAGER', 'BRANCH_MANAGER', 'VIEWER']}>
+              <RoleGuard allowedRoles={['SUPER_ADMIN', 'MANAGER', 'STAFF', 'VIEWER']}>
                 <Analytics />
               </RoleGuard>
             }
@@ -144,7 +150,7 @@ function App() {
           <Route
             path="/audit-logs"
             element={
-              <RoleGuard allowedRoles={['SUPER_ADMIN', 'REGIONAL_MANAGER', 'BRANCH_MANAGER', 'VIEWER']}>
+              <RoleGuard allowedRoles={['SUPER_ADMIN', 'MANAGER', 'STAFF', 'VIEWER']}>
                 <AuditLogs />
               </RoleGuard>
             }
@@ -154,7 +160,7 @@ function App() {
           <Route
             path="/users"
             element={
-              <RoleGuard allowedRoles={['SUPER_ADMIN', 'REGIONAL_MANAGER', 'BRANCH_MANAGER']}>
+              <RoleGuard allowedRoles={['SUPER_ADMIN', 'MANAGER', 'STAFF']}>
                 <Users />
               </RoleGuard>
             }

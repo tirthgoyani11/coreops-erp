@@ -1,7 +1,7 @@
 // User Types
 
 // All 5 user roles as defined in Phase 2
-export type UserRole = 'SUPER_ADMIN' | 'REGIONAL_MANAGER' | 'BRANCH_MANAGER' | 'TECHNICIAN' | 'VIEWER';
+export type UserRole = 'SUPER_ADMIN' | 'MANAGER' | 'STAFF' | 'TECHNICIAN' | 'VIEWER';
 
 export interface User {
     _id: string;

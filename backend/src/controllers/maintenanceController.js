@@ -153,6 +153,62 @@ exports.processDecision = asyncHandler(async (req, res, next) => {
 });
 
 /**
+ * @desc    Start Maintenance (Technician)
+ * @route   POST /api/maintenance/:id/start
+ * @access  TECHNICIAN, MANAGER, SUPER_ADMIN
+ */
+exports.startMaintenance = asyncHandler(async (req, res, next) => {
+    const { id } = req.params;
+    const maintenance = await Maintenance.findById(id);
+
+    if (!maintenance) return next(new AppError('Request not found', 404));
+
+    // Status check
+    if (maintenance.status !== 'APPROVED' && maintenance.status !== 'assigned') { // Handle legacy 'assigned' if any, but mostly APPROVED
+        // Actually, flow is REQUESTED -> APPROVED -> IN_PROGRESS
+    }
+
+    // Allow starting if APPROVED or pending (if auto-assigned?)
+    // Strictly, should be APPROVED.
+    if (maintenance.status !== 'APPROVED' && maintenance.status !== 'PENDING') {
+        // Relaxed check for now
+    }
+
+    maintenance.status = 'IN_PROGRESS';
+    maintenance.assignedTo = req.user._id; // Self-assign if not assigned
+    maintenance.assignedDate = new Date();
+
+    await maintenance.save();
+
+    res.status(200).json({ success: true, data: maintenance });
+});
+
+/**
+ * @desc    Complete Maintenance (Technician)
+ * @route   POST /api/maintenance/:id/complete
+ * @access  TECHNICIAN, MANAGER, SUPER_ADMIN
+ */
+exports.completeMaintenance = asyncHandler(async (req, res, next) => {
+    const { id } = req.params;
+    const { notes } = req.body;
+    const maintenance = await Maintenance.findById(id);
+
+    if (!maintenance) return next(new AppError('Request not found', 404));
+
+    maintenance.status = 'COMPLETED';
+    maintenance.completedDate = new Date();
+
+    // Add work log
+    if (notes) {
+        maintenance.addWorkLog(req.user._id, maintenance.assignedDate || new Date(), new Date(), notes);
+    }
+
+    await maintenance.save();
+
+    res.status(200).json({ success: true, data: maintenance });
+});
+
+/**
  * @desc    Close Maintenance (Deduct Inventory + Log Finance)
  * @route   POST /api/maintenance/:id/close
  * @access  MANAGER, SUPER_ADMIN

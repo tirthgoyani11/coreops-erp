@@ -2,6 +2,8 @@ const Tesseract = require('tesseract.js');
 const fs = require('fs');
 const path = require('path');
 
+const logger = require('../utils/logger');
+
 /**
  * OCR Service using Tesseract.js
  * 
@@ -19,22 +21,22 @@ const path = require('path');
  */
 const scanInvoice = async (imagePath) => {
     try {
-        console.log(`Starting OCR scan for: ${imagePath}`);
+        logger.info(`Starting OCR scan for: ${imagePath}`);
 
         const { data: { text } } = await Tesseract.recognize(
             imagePath,
             'eng',
-            { logger: m => console.log(m) }
+            { logger: m => logger.debug(m) }
         );
 
-        console.log('OCR Scan Complete. Extracted Text Length:', text.length);
+        logger.info(`OCR Scan Complete. Extracted Text Length: ${text.length}`);
 
         // Parse the extracted text
         const parsedData = parseInvoiceText(text);
 
         // Clean up uploaded file
         fs.unlink(imagePath, (err) => {
-            if (err) console.error('Failed to delete temp file:', err);
+            if (err) logger.error('Failed to delete temp file:', err);
         });
 
         return {
@@ -42,7 +44,7 @@ const scanInvoice = async (imagePath) => {
             ...parsedData
         };
     } catch (error) {
-        console.error('OCR Scan Failed:', error);
+        logger.error('OCR Scan Failed:', error);
         throw new Error('Failed to process image');
     }
 };

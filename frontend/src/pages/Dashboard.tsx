@@ -24,15 +24,15 @@ export function Dashboard() {
             switch (user.role) {
                 case 'SUPER_ADMIN':
                     return '/dashboard/admin';
-                case 'REGIONAL_MANAGER':
-                case 'BRANCH_MANAGER':
+                case 'MANAGER':
                     return '/dashboard/branch';
                 case 'TECHNICIAN':
                     return '/dashboard/tech';
                 case 'VIEWER':
                     return '/dashboard/viewer';
+                case 'STAFF':
                 default:
-                    return '/dashboard/branch'; // Default to branch dashboard
+                    return '/dashboard/branch'; // Staff see manager dashboard
             }
         };
 

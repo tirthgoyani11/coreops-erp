@@ -253,6 +253,75 @@ const sendPOApprovedEmail = async (recipient, poNumber, vendorName, totalAmount)
     });
 };
 
+/**
+ * Send password reset email
+ */
+const sendPasswordResetEmail = async (recipient, resetUrl) => {
+    const html = `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 20px; border-radius: 8px 8px 0 0;">
+                <h1 style="color: white; margin: 0;">Password Reset Request</h1>
+            </div>
+            <div style="background: #f8f9fa; padding: 20px; border-radius: 0 0 8px 8px;">
+                <p>You requested to reset your password for CoreOps ERP.</p>
+                <p>Click the button below to reset it. This link is valid for 1 hour.</p>
+                <a href="${resetUrl}" 
+                   style="display: inline-block; background: #667eea; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; margin-top: 20px; margin-bottom: 20px;">
+                    Reset Password
+                </a>
+                <p style="font-size: 12px; color: #666;">If you didn't request this, please ignore this email.</p>
+            </div>
+        </div>
+    `;
+
+    return sendEmail({
+        to: recipient,
+        subject: 'Reset Your Password - CoreOps ERP',
+        html,
+    });
+};
+
+/**
+ * Send PO approval request email
+ */
+const sendPOApprovalRequestEmail = async (recipient, poNumber, vendorName, totalAmount) => {
+    const html = `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 20px; border-radius: 8px 8px 0 0;">
+                <h1 style="color: white; margin: 0;">PO Approval Required</h1>
+            </div>
+            <div style="background: #f8f9fa; padding: 20px; border-radius: 0 0 8px 8px;">
+                <p>A purchase order requires your approval:</p>
+                <table style="width: 100%; border-collapse: collapse;">
+                    <tr>
+                        <td style="padding: 10px; border-bottom: 1px solid #ddd;"><strong>PO Number:</strong></td>
+                        <td style="padding: 10px; border-bottom: 1px solid #ddd;">${poNumber}</td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 10px; border-bottom: 1px solid #ddd;"><strong>Vendor:</strong></td>
+                        <td style="padding: 10px; border-bottom: 1px solid #ddd;">${vendorName}</td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 10px; border-bottom: 1px solid #ddd;"><strong>Total Amount:</strong></td>
+                        <td style="padding: 10px; border-bottom: 1px solid #ddd;">$${totalAmount.toLocaleString()}</td>
+                    </tr>
+                </table>
+                <p style="margin-top: 20px;">Please log in to CoreOps ERP to review and take action.</p>
+                <a href="${process.env.FRONTEND_URL || 'http://localhost:5173'}/purchase-orders" 
+                   style="display: inline-block; background: #667eea; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; margin-top: 10px;">
+                    Review PO
+                </a>
+            </div>
+        </div>
+    `;
+
+    return sendEmail({
+        to: recipient,
+        subject: `[Approval Required] Purchase Order ${poNumber}`,
+        html,
+    });
+};
+
 module.exports = {
     sendEmail,
     sendApprovalRequestEmail,
@@ -260,4 +329,6 @@ module.exports = {
     sendTicketRejectedEmail,
     sendLowStockAlertEmail,
     sendPOApprovedEmail,
+    sendPasswordResetEmail,
+    sendPOApprovalRequestEmail,
 };

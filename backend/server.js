@@ -1,5 +1,6 @@
 require('dotenv').config();
 const app = require('./app');
+// Restart Triggered
 const connectDB = require('./src/config/db');
 const logger = require('./src/utils/logger');
 
