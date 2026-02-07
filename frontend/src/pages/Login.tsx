@@ -256,6 +256,25 @@ export function Login() {
                                     required
                                 />
                             </div>
+
+                            {/* Remember Me & Forgot Password */}
+                            <div className="flex items-center justify-between pt-2">
+                                <label className="flex items-center gap-2 cursor-pointer group">
+                                    <input
+                                        type="checkbox"
+                                        className="w-4 h-4 rounded border-zinc-700 bg-transparent text-[var(--primary)] focus:ring-[var(--primary)] focus:ring-offset-0 focus:ring-1 cursor-pointer"
+                                    />
+                                    <span className="text-zinc-500 text-sm group-hover:text-zinc-400 transition-colors">
+                                        Remember me
+                                    </span>
+                                </label>
+                                <a
+                                    href="/forgot-password"
+                                    className="text-sm text-zinc-500 hover:text-[var(--primary)] transition-colors"
+                                >
+                                    Forgot password?
+                                </a>
+                            </div>
                         </div>
 
                         <button

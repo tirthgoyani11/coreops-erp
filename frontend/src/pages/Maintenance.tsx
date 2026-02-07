@@ -184,7 +184,7 @@ export function Maintenance() {
 
                             {/* Actions */}
                             <div className="flex items-center gap-2 shrink-0">
-                                {user?.role !== 'STAFF' && req.status === 'REQUESTED' && (
+                                {!['TECHNICIAN', 'VIEWER'].includes(user?.role || '') && req.status === 'REQUESTED' && (
                                     <>
                                         <button
                                             onClick={() => handleAction(req._id, 'approve')}
@@ -204,7 +204,7 @@ export function Maintenance() {
                                         </button>
                                     </>
                                 )}
-                                {user?.role !== 'STAFF' && req.status === 'APPROVED' && (
+                                {!['TECHNICIAN', 'VIEWER'].includes(user?.role || '') && req.status === 'APPROVED' && (
                                     <button
                                         onClick={() => handleAction(req._id, 'close')}
                                         disabled={actionLoading === req._id}

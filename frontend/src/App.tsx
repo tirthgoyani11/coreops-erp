@@ -3,7 +3,15 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { MainLayout } from './components/layout/MainLayout';
 import { RoleGuard } from './components/layout/RoleGuard';
 import { Login } from './pages/Login';
+import { ForgotPassword } from './pages/ForgotPassword';
+import { ResetPassword } from './pages/ResetPassword';
+import { Register } from './pages/Register';
+import { SetupWizard } from './pages/SetupWizard';
 import { Dashboard } from './pages/Dashboard';
+import { AdminDashboard } from './pages/dashboards/AdminDashboard';
+import { ManagerDashboard } from './pages/dashboards/ManagerDashboard';
+import { TechDashboard } from './pages/dashboards/TechDashboard';
+import { ViewerDashboard } from './pages/dashboards/ViewerDashboard';
 import { Assets } from './pages/Assets';
 import { Inventory } from './pages/Inventory';
 import { Maintenance } from './pages/Maintenance';
@@ -14,8 +22,23 @@ import { Analytics } from './pages/Analytics';
 import { PurchaseOrders } from './pages/PurchaseOrders';
 import { Notifications } from './pages/Notifications';
 import AuditLogs from './pages/AuditLogs';
+import AccessDenied from './pages/AccessDenied';
 import { useAuthStore } from './stores/authStore';
 import './index.css';
+
+/**
+ * App Routes with RBAC Protection (Phase 3)
+ * 
+ * Route protection based on phase_03_rbac_matrix.md:
+ * - Dashboard, Assets, Inventory, Maintenance: All roles (with scope filtering)
+ * - Vendors: Managers + Viewer (read-only)
+ * - Purchase Orders: Managers only
+ * - Analytics: Not for Technician
+ * - Users: Managers only (with scope limits)
+ * - Offices/Organizations: Super Admin only
+ * - Audit Logs: All managers + Viewer (read-only)
+ * - Settings: Super Admin only
+ */
 
 function App() {
   const { checkAuth } = useAuthStore();
@@ -27,20 +50,117 @@ function App() {
   return (
     <BrowserRouter>
       <Routes>
+        {/* Public Auth Routes (Phase 4) */}
         <Route path="/login" element={<Login />} />
+        <Route path="/forgot-password" element={<ForgotPassword />} />
+        <Route path="/reset-password/:token" element={<ResetPassword />} />
+        <Route path="/register/:inviteToken" element={<Register />} />
+        <Route path="/setup" element={<SetupWizard />} />
+        <Route path="/access-denied" element={<AccessDenied />} />
 
+        {/* Protected Routes inside MainLayout */}
         <Route element={<MainLayout />}>
+          {/* Dashboard Router - redirects based on role */}
           <Route path="/" element={<Dashboard />} />
-          <Route path="/assets" element={<Assets />} />
-          <Route path="/inventory" element={<Inventory />} />
-          <Route path="/maintenance" element={<Maintenance />} />
-          <Route path="/vendors" element={<Vendors />} />
-          <Route path="/analytics" element={<Analytics />} />
-          <Route path="/purchase-orders" element={<PurchaseOrders />} />
-          <Route path="/notifications" element={<Notifications />} />
-          <Route path="/audit-logs" element={<AuditLogs />} />
+          <Route path="/dashboard" element={<Dashboard />} />
 
-          {/* Admin-only routes with RBAC protection */}
+          {/* Role-Specific Dashboards (Phase 5) */}
+          <Route
+            path="/dashboard/admin"
+            element={
+              <RoleGuard allowedRoles={['SUPER_ADMIN']}>
+                <AdminDashboard />
+              </RoleGuard>
+            }
+          />
+          <Route
+            path="/dashboard/branch"
+            element={
+              <RoleGuard allowedRoles={['SUPER_ADMIN', 'REGIONAL_MANAGER', 'BRANCH_MANAGER']}>
+                <ManagerDashboard />
+              </RoleGuard>
+            }
+          />
+          <Route
+            path="/dashboard/tech"
+            element={
+              <RoleGuard allowedRoles={['SUPER_ADMIN', 'REGIONAL_MANAGER', 'BRANCH_MANAGER', 'TECHNICIAN']}>
+                <TechDashboard />
+              </RoleGuard>
+            }
+          />
+          <Route
+            path="/dashboard/viewer"
+            element={
+              <RoleGuard allowedRoles={['SUPER_ADMIN', 'REGIONAL_MANAGER', 'BRANCH_MANAGER', 'VIEWER']}>
+                <ViewerDashboard />
+              </RoleGuard>
+            }
+          />
+
+          {/* Assets - All roles (CRUD scope varies by role) */}
+          <Route path="/assets" element={<Assets />} />
+
+          {/* Inventory - All roles (CRUD scope varies by role) */}
+          <Route path="/inventory" element={<Inventory />} />
+
+          {/* Maintenance - All roles can view (Tech can create, Managers approve) */}
+          <Route path="/maintenance" element={<Maintenance />} />
+
+          {/* Vendors - Managers + Viewer (Branch Mgr = view-only for global vendors) */}
+          <Route
+            path="/vendors"
+            element={
+              <RoleGuard allowedRoles={['SUPER_ADMIN', 'REGIONAL_MANAGER', 'BRANCH_MANAGER', 'VIEWER']}>
+                <Vendors />
+              </RoleGuard>
+            }
+          />
+
+          {/* Purchase Orders - Managers only (no Technician/Viewer) */}
+          <Route
+            path="/purchase-orders"
+            element={
+              <RoleGuard allowedRoles={['SUPER_ADMIN', 'REGIONAL_MANAGER', 'BRANCH_MANAGER']}>
+                <PurchaseOrders />
+              </RoleGuard>
+            }
+          />
+
+          {/* Analytics - Not for Technician */}
+          <Route
+            path="/analytics"
+            element={
+              <RoleGuard allowedRoles={['SUPER_ADMIN', 'REGIONAL_MANAGER', 'BRANCH_MANAGER', 'VIEWER']}>
+                <Analytics />
+              </RoleGuard>
+            }
+          />
+
+          {/* Notifications - Everyone */}
+          <Route path="/notifications" element={<Notifications />} />
+
+          {/* Audit Logs - Managers + Viewer (read-only) */}
+          <Route
+            path="/audit-logs"
+            element={
+              <RoleGuard allowedRoles={['SUPER_ADMIN', 'REGIONAL_MANAGER', 'BRANCH_MANAGER', 'VIEWER']}>
+                <AuditLogs />
+              </RoleGuard>
+            }
+          />
+
+          {/* Users - Managers only (each can manage within their scope) */}
+          <Route
+            path="/users"
+            element={
+              <RoleGuard allowedRoles={['SUPER_ADMIN', 'REGIONAL_MANAGER', 'BRANCH_MANAGER']}>
+                <Users />
+              </RoleGuard>
+            }
+          />
+
+          {/* Offices/Organizations - Super Admin only */}
           <Route
             path="/offices"
             element={
@@ -49,16 +169,16 @@ function App() {
               </RoleGuard>
             }
           />
-          <Route
-            path="/users"
-            element={
-              <RoleGuard allowedRoles={['SUPER_ADMIN']}>
-                <Users />
-              </RoleGuard>
-            }
-          />
+
+          {/* TODO: Add these routes as pages are created */}
+          {/* <Route path="/profile" element={<Profile />} /> */}
+          {/* <Route path="/settings" element={<RoleGuard allowedRoles={['SUPER_ADMIN']}><Settings /></RoleGuard>} /> */}
+          {/* <Route path="/financial" element={<RoleGuard allowedRoles={['SUPER_ADMIN', 'REGIONAL_MANAGER', 'BRANCH_MANAGER', 'VIEWER']}><Financial /></RoleGuard>} /> */}
+          {/* <Route path="/reports" element={<RoleGuard allowedRoles={['SUPER_ADMIN', 'REGIONAL_MANAGER', 'BRANCH_MANAGER', 'VIEWER']}><Reports /></RoleGuard>} /> */}
+          {/* <Route path="/my-tickets" element={<RoleGuard allowedRoles={['TECHNICIAN']}><MyTickets /></RoleGuard>} /> */}
         </Route>
 
+        {/* Catch-all redirect */}
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>
@@ -66,4 +186,3 @@ function App() {
 }
 
 export default App;
-

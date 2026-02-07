@@ -1,77 +1,219 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo, useCallback, memo } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Search, Bell, Plus, Menu, Sun, Moon } from 'lucide-react';
+import { Search, Bell, Plus, Menu, Sun, Moon, Globe, Building2, MapPin, User, X } from 'lucide-react';
 import { useUIStore } from '../../stores/uiStore';
 import { useThemeStore } from '../../stores/themeStore';
+import { useAuthStore } from '../../stores/authStore';
+import { getRoleLabel, getRoleColor, getRoleConfig, hasPermission } from '../../config/roleConfig';
+import type { UserRole } from '../../types';
 import api from '../../lib/api';
 
-export function Header() {
+// Scope icons mapping
+const SCOPE_ICONS = {
+    global: Globe,
+    regional: MapPin,
+    branch: Building2,
+    assigned: User
+} as const;
+
+// Page title mappings for better display names
+const PAGE_TITLES: Record<string, string> = {
+    '': 'Dashboard',
+    'assets': 'Assets',
+    'inventory': 'Inventory',
+    'maintenance': 'Maintenance',
+    'vendors': 'Vendors',
+    'purchase-orders': 'Purchase Orders',
+    'analytics': 'Analytics',
+    'notifications': 'Notifications',
+    'audit-logs': 'Audit Logs',
+    'users': 'Team Members',
+    'offices': 'Organizations',
+    'settings': 'Settings',
+    'profile': 'My Profile',
+    'access-denied': 'Access Denied'
+};
+
+/**
+ * Header Component
+ * 
+ * Features:
+ * - Role badge with scope indicator
+ * - Approval limit display for managers
+ * - Read-only indicator for viewers
+ * - Notification badge with unread count
+ * - Search bar (desktop only)
+ * - Dark mode toggle
+ * - Quick action button
+ * 
+ * All elements are properly accessible with ARIA labels.
+ */
+export const Header = memo(function Header() {
     const location = useLocation();
     const { setMobileSidebarOpen } = useUIStore();
     const { isDarkMode, toggleTheme } = useThemeStore();
+    const { user } = useAuthStore();
     const [unreadCount, setUnreadCount] = useState(0);
+    const [searchQuery, setSearchQuery] = useState('');
+    const [isSearchFocused, setIsSearchFocused] = useState(false);
 
-    // Fetch unread notification count
-    useEffect(() => {
-        const fetchUnreadCount = async () => {
-            try {
-                const res = await api.get('/notifications/unread-count');
-                setUnreadCount(res.data.data?.count || 0);
-            } catch {
-                // Silently fail - not critical
-            }
+    // Memoize role-related values
+    const roleInfo = useMemo(() => {
+        const userRole = (user?.role || 'VIEWER') as UserRole;
+        return {
+            role: userRole,
+            label: getRoleLabel(userRole),
+            color: getRoleColor(userRole),
+            config: getRoleConfig(userRole)
         };
+    }, [user?.role]);
 
-        fetchUnreadCount();
+    const ScopeIcon = SCOPE_ICONS[roleInfo.config.scope];
 
-        // Poll every 30 seconds for new notifications
-        const interval = setInterval(fetchUnreadCount, 30000);
-        return () => clearInterval(interval);
-    }, []);
-
-    const getTitle = () => {
-        const path = location.pathname.substring(1);
-        if (!path) return 'Dashboard';
-        // Handle multi-word routes like purchase-orders
-        return path
+    // Get page title
+    const pageTitle = useMemo(() => {
+        const path = location.pathname.substring(1).split('/')[0];
+        return PAGE_TITLES[path] || path
             .split('-')
             .map(word => word.charAt(0).toUpperCase() + word.slice(1))
             .join(' ');
-    };
+    }, [location.pathname]);
+
+    // Fetch unread notification count
+    const fetchUnreadCount = useCallback(async () => {
+        try {
+            const res = await api.get('/notifications/unread-count');
+            setUnreadCount(res.data.data?.count || 0);
+        } catch {
+            // Silently fail - not critical
+        }
+    }, []);
+
+    useEffect(() => {
+        fetchUnreadCount();
+        const interval = setInterval(fetchUnreadCount, 30000);
+        return () => clearInterval(interval);
+    }, [fetchUnreadCount]);
+
+    // Handle search (placeholder for now)
+    const handleSearch = useCallback((e: React.FormEvent) => {
+        e.preventDefault();
+        if (searchQuery.trim()) {
+            console.log('Search:', searchQuery);
+            // TODO: Implement global search
+        }
+    }, [searchQuery]);
+
+    // Check if user can create (for the New Action button)
+    const canCreate = useMemo(() => {
+        return hasPermission(roleInfo.role, 'assets.create') ||
+            hasPermission(roleInfo.role, 'tickets.create');
+    }, [roleInfo.role]);
 
     return (
-        <header className="h-16 md:h-20 flex items-center justify-between px-4 md:px-8 border-b border-white/5 bg-[#09090b]/80 backdrop-blur-md sticky top-0 z-40">
+        <header
+            className="h-16 md:h-20 flex items-center justify-between px-4 md:px-8 border-b border-white/5 bg-[#09090b]/80 backdrop-blur-md sticky top-0 z-40"
+            role="banner"
+        >
             <div className="flex items-center gap-4">
                 {/* Mobile Menu Button */}
                 <button
                     onClick={() => setMobileSidebarOpen(true)}
-                    className="lg:hidden w-10 h-10 rounded-xl border border-white/10 flex items-center justify-center text-[var(--text-muted)] hover:text-white hover:bg-white/5 transition-colors"
+                    className="lg:hidden w-10 h-10 rounded-xl border border-white/10 flex items-center justify-center text-[var(--text-muted)] hover:text-white hover:bg-white/5 transition-colors focus:outline-none focus:ring-2 focus:ring-[var(--primary)]"
+                    aria-label="Open navigation menu"
+                    aria-expanded="false"
                 >
-                    <Menu className="w-5 h-5" />
+                    <Menu className="w-5 h-5" aria-hidden="true" />
                 </button>
 
-                <h1 className="text-xl md:text-2xl font-bold text-white tracking-tight">{getTitle()}</h1>
+                <h1 className="text-xl md:text-2xl font-bold text-white tracking-tight truncate max-w-[200px] md:max-w-none">
+                    {pageTitle}
+                </h1>
             </div>
 
-            <div className="flex items-center gap-2 md:gap-4">
-                {/* Search - Hidden on mobile */}
-                <div className="relative group hidden md:block">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--text-muted)] group-focus-within:text-[var(--primary)] transition-colors" />
-                    <input
-                        type="text"
-                        placeholder="Search..."
-                        className="bg-[#18181b] border border-white/10 rounded-full pl-9 pr-4 py-2.5 text-sm focus:outline-none focus:border-[var(--primary)] text-white w-64 transition-all"
+            <div className="flex items-center gap-2 md:gap-3">
+                {/* Role Badge with Scope Indicator */}
+                <div
+                    className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/5 border border-white/10"
+                    role="status"
+                    aria-label={`Current role: ${roleInfo.label}, Scope: ${roleInfo.config.scope}`}
+                >
+                    <div
+                        className="w-2 h-2 rounded-full"
+                        style={{ backgroundColor: roleInfo.color }}
+                        aria-hidden="true"
                     />
+                    <span className="text-xs font-medium text-white">{roleInfo.label}</span>
+                    <div className="w-px h-3 bg-white/20" aria-hidden="true" />
+                    <ScopeIcon className="w-3 h-3 text-[var(--text-muted)]" aria-hidden="true" />
+                    <span className="text-xs text-[var(--text-muted)] capitalize">{roleInfo.config.scope}</span>
                 </div>
+
+                {/* Approval Limit Badge - Only for managers with limits */}
+                {roleInfo.config.approvalLimit !== null && roleInfo.config.approvalLimit > 0 && (
+                    <div
+                        className="hidden md:flex items-center gap-1 px-2 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20"
+                        role="status"
+                        aria-label={`Approval limit: $${roleInfo.config.approvalLimit.toLocaleString()}`}
+                    >
+                        <span className="text-xs text-emerald-400 font-medium">
+                            ${roleInfo.config.approvalLimit.toLocaleString()} limit
+                        </span>
+                    </div>
+                )}
+
+                {/* Read-only indicator for Viewer */}
+                {roleInfo.role === 'VIEWER' && (
+                    <div
+                        className="hidden md:flex items-center gap-1 px-2 py-1 rounded-full bg-blue-500/10 border border-blue-500/20"
+                        role="status"
+                        aria-label="You have read-only access"
+                    >
+                        <span className="text-xs text-blue-400 font-medium">Read-only</span>
+                    </div>
+                )}
+
+                {/* Search - Desktop only */}
+                <form onSubmit={handleSearch} className="relative group hidden lg:block">
+                    <Search
+                        className={`absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 transition-colors ${isSearchFocused ? 'text-[var(--primary)]' : 'text-[var(--text-muted)]'
+                            }`}
+                        aria-hidden="true"
+                    />
+                    <input
+                        type="search"
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        onFocus={() => setIsSearchFocused(true)}
+                        onBlur={() => setIsSearchFocused(false)}
+                        placeholder="Search..."
+                        className="bg-[#18181b] border border-white/10 rounded-full pl-9 pr-4 py-2.5 text-sm focus:outline-none focus:border-[var(--primary)] text-white w-48 transition-all"
+                        aria-label="Search"
+                    />
+                    {searchQuery && (
+                        <button
+                            type="button"
+                            onClick={() => setSearchQuery('')}
+                            className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)] hover:text-white"
+                            aria-label="Clear search"
+                        >
+                            <X className="w-3 h-3" aria-hidden="true" />
+                        </button>
+                    )}
+                </form>
 
                 {/* Notifications Link */}
                 <Link
                     to="/notifications"
-                    className="w-10 h-10 rounded-full border border-white/10 flex items-center justify-center hover:bg-white/5 transition-colors text-[var(--text-muted)] hover:text-white relative group"
+                    className="w-10 h-10 rounded-full border border-white/10 flex items-center justify-center hover:bg-white/5 transition-colors text-[var(--text-muted)] hover:text-white relative focus:outline-none focus:ring-2 focus:ring-[var(--primary)]"
+                    aria-label={`Notifications${unreadCount > 0 ? `, ${unreadCount} unread` : ''}`}
                 >
-                    <Bell className="w-4 h-4" />
+                    <Bell className="w-4 h-4" aria-hidden="true" />
                     {unreadCount > 0 && (
-                        <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center px-1 border-2 border-[#09090b]">
+                        <span
+                            className="absolute -top-1 -right-1 min-w-[18px] h-[18px] bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center px-1 border-2 border-[#09090b]"
+                            aria-hidden="true"
+                        >
                             {unreadCount > 99 ? '99+' : unreadCount}
                         </span>
                     )}
@@ -80,18 +222,26 @@ export function Header() {
                 {/* Dark Mode Toggle */}
                 <button
                     onClick={toggleTheme}
-                    className="w-10 h-10 rounded-full border border-white/10 flex items-center justify-center hover:bg-white/5 transition-colors text-[var(--text-muted)] hover:text-white"
-                    title={isDarkMode ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
+                    className="w-10 h-10 rounded-full border border-white/10 flex items-center justify-center hover:bg-white/5 transition-colors text-[var(--text-muted)] hover:text-white focus:outline-none focus:ring-2 focus:ring-[var(--primary)]"
+                    aria-label={isDarkMode ? 'Switch to light mode' : 'Switch to dark mode'}
+                    aria-pressed={isDarkMode}
                 >
-                    {isDarkMode ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+                    {isDarkMode ? <Sun className="w-4 h-4" aria-hidden="true" /> : <Moon className="w-4 h-4" aria-hidden="true" />}
                 </button>
 
-                {/* Global Action - Text hidden on mobile */}
-                <button className="h-10 px-3 md:px-5 bg-[var(--primary)] text-black rounded-full text-sm font-bold flex items-center gap-2 hover:shadow-[0_0_20px_rgba(185,255,102,0.4)] transition-all active:scale-95">
-                    <Plus className="w-4 h-4" />
-                    <span className="hidden md:inline">New Action</span>
-                </button>
+                {/* Quick Action Button - Only if user can create */}
+                {canCreate && (
+                    <button
+                        className="h-10 px-3 md:px-5 bg-[var(--primary)] text-black rounded-full text-sm font-bold flex items-center gap-2 hover:shadow-[0_0_20px_rgba(185,255,102,0.4)] transition-all active:scale-95 focus:outline-none focus:ring-2 focus:ring-[var(--primary)] focus:ring-offset-2 focus:ring-offset-[#09090b]"
+                        aria-label="Create new item"
+                    >
+                        <Plus className="w-4 h-4" aria-hidden="true" />
+                        <span className="hidden md:inline">New</span>
+                    </button>
+                )}
             </div>
         </header>
     );
-}
+});
+
+export default Header;

@@ -100,6 +100,15 @@ const UserSchema = new mongoose.Schema(
             type: Date,
             select: false,
         },
+        // Invitation tokens for user registration
+        inviteToken: {
+            type: String,
+            select: false,
+        },
+        inviteTokenExpires: {
+            type: Date,
+            select: false,
+        },
         // Profile settings
         phone: {
             type: String,

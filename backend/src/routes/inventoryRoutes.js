@@ -9,7 +9,7 @@ const {
 } = require('../controllers/inventoryController');
 const verifyToken = require('../middleware/verifyToken');
 const authorize = require('../middleware/authorize');
-const filterByOffice = require('../middleware/filterByOffice');
+const { filterByOffice } = require('../middleware/filterByOffice');
 const { inventoryValidation, paginationValidation } = require('../middleware/validation');
 
 // All routes require authentication

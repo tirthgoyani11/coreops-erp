@@ -1,0 +1,333 @@
+import { useState, useEffect, memo } from 'react';
+import { motion } from 'framer-motion';
+import { useNavigate } from 'react-router-dom';
+import {
+    Package,
+    ClipboardCheck,
+    DollarSign,
+    CheckCircle2,
+    XCircle,
+    Users,
+    TrendingUp,
+} from 'lucide-react';
+import { StatCard } from '../../components/dashboard/StatCard';
+import { DashboardChart } from '../../components/dashboard/DashboardChart';
+import api from '../../lib/api';
+
+interface ApprovalItem {
+    _id: string;
+    ticketNumber: string;
+    title: string;
+    estimatedCost: number;
+    office?: { name: string };
+    priority: 'low' | 'medium' | 'high' | 'critical';
+}
+
+interface ManagerStats {
+    branchAssets: number;
+    todaysTickets: number;
+    pendingApprovals: number;
+    mtdExpenses: number;
+    budgetUsed: number;
+    technicianCount: number;
+}
+
+// Priority colors
+const priorityColors = {
+    low: 'bg-blue-500/10 text-blue-400 border-blue-500/20',
+    medium: 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20',
+    high: 'bg-orange-500/10 text-orange-400 border-orange-500/20',
+    critical: 'bg-red-500/10 text-red-400 border-red-500/20',
+};
+
+// Inventory status data
+const inventoryStatusData = [
+    { name: 'In Stock', value: 85 },
+    { name: 'Low Stock', value: 12 },
+    { name: 'Out of Stock', value: 3 },
+];
+
+// MTD expenses data
+const expensesData = [
+    { name: 'Week 1', value: 12500 },
+    { name: 'Week 2', value: 18200 },
+    { name: 'Week 3', value: 15800 },
+    { name: 'Week 4', value: 22400 },
+];
+
+// Approval Queue Component
+const ApprovalQueue = memo(function ApprovalQueue({
+    items,
+    loading,
+    onApprove,
+    onReject,
+}: {
+    items: ApprovalItem[];
+    loading: boolean;
+    onApprove: (id: string) => void;
+    onReject: (id: string) => void;
+}) {
+    if (loading) {
+        return (
+            <div className="bg-[#18181b] border border-white/5 rounded-2xl p-6">
+                <div className="w-32 h-5 rounded bg-white/5 mb-4 animate-pulse" />
+                {[1, 2, 3].map(i => (
+                    <div key={i} className="p-4 rounded-xl bg-white/5 mb-2 animate-pulse">
+                        <div className="h-5 w-48 rounded bg-white/5 mb-2" />
+                        <div className="h-4 w-24 rounded bg-white/5" />
+                    </div>
+                ))}
+            </div>
+        );
+    }
+
+    return (
+        <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="bg-[#18181b] border border-white/5 rounded-2xl p-6"
+        >
+            <div className="flex items-center justify-between mb-4">
+                <h3 className="text-white font-medium">Approval Queue</h3>
+                <span className="text-xs text-[var(--text-muted)]">
+                    {items.length} pending
+                </span>
+            </div>
+
+            <div className="space-y-3">
+                {items.length === 0 ? (
+                    <div className="text-center py-8 text-[var(--text-muted)]">
+                        <CheckCircle2 className="w-10 h-10 mx-auto mb-2 opacity-50" />
+                        <p className="text-sm">No pending approvals</p>
+                    </div>
+                ) : (
+                    items.map((item, index) => (
+                        <motion.div
+                            key={item._id}
+                            initial={{ opacity: 0, x: -10 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            transition={{ delay: index * 0.05 }}
+                            className="p-4 rounded-xl bg-white/5 border border-white/5 hover:border-white/10 transition-colors"
+                        >
+                            <div className="flex items-start justify-between gap-4">
+                                <div className="flex-1 min-w-0">
+                                    <div className="flex items-center gap-2 mb-1">
+                                        <span className="text-xs font-mono text-[var(--primary)]">
+                                            #{item.ticketNumber}
+                                        </span>
+                                        <span className={`text-xs px-2 py-0.5 rounded-full border ${priorityColors[item.priority]}`}>
+                                            {item.priority}
+                                        </span>
+                                    </div>
+                                    <p className="text-sm text-white font-medium truncate">{item.title}</p>
+                                    <div className="flex items-center gap-3 mt-1 text-xs text-[var(--text-muted)]">
+                                        <span>₹{item.estimatedCost.toLocaleString()}</span>
+                                        {item.office && <span>• {item.office.name}</span>}
+                                    </div>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <button
+                                        onClick={() => onApprove(item._id)}
+                                        className="p-2 rounded-lg bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 transition-colors"
+                                    >
+                                        <CheckCircle2 className="w-4 h-4" />
+                                    </button>
+                                    <button
+                                        onClick={() => onReject(item._id)}
+                                        className="p-2 rounded-lg bg-red-500/10 text-red-400 hover:bg-red-500/20 transition-colors"
+                                    >
+                                        <XCircle className="w-4 h-4" />
+                                    </button>
+                                </div>
+                            </div>
+                        </motion.div>
+                    ))
+                )}
+            </div>
+        </motion.div>
+    );
+});
+
+// Main Manager Dashboard Component
+export const ManagerDashboard = memo(function ManagerDashboard() {
+    const navigate = useNavigate();
+    const [stats, _setStats] = useState<ManagerStats>({
+        branchAssets: 245,
+        todaysTickets: 8,
+        pendingApprovals: 5,
+        mtdExpenses: 68900,
+        budgetUsed: 72,
+        technicianCount: 12,
+    });
+    const [approvals, setApprovals] = useState<ApprovalItem[]>([]);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        const fetchData = async () => {
+            try {
+                setLoading(true);
+
+                // Fetch approval queue
+                const approvalsRes = await api.get('/maintenance?status=pending_approval&limit=5');
+
+                if (approvalsRes.data?.data) {
+                    setApprovals(approvalsRes.data.data);
+                } else {
+                    // Demo data
+                    setApprovals([
+                        { _id: '1', ticketNumber: 'MT-789', title: 'HVAC Compressor Repair', estimatedCost: 12500, priority: 'high' },
+                        { _id: '2', ticketNumber: 'MT-792', title: 'Server Room AC Maintenance', estimatedCost: 8200, priority: 'critical' },
+                        { _id: '3', ticketNumber: 'MT-795', title: 'Office Printer Replacement', estimatedCost: 25000, priority: 'medium' },
+                    ]);
+                }
+            } catch (error) {
+                // Use demo data on error
+                setApprovals([
+                    { _id: '1', ticketNumber: 'MT-789', title: 'HVAC Compressor Repair', estimatedCost: 12500, priority: 'high' },
+                    { _id: '2', ticketNumber: 'MT-792', title: 'Server Room AC Maintenance', estimatedCost: 8200, priority: 'critical' },
+                ]);
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        fetchData();
+    }, []);
+
+    const handleApprove = async (id: string) => {
+        try {
+            await api.patch(`/maintenance/${id}/approve`);
+            setApprovals(prev => prev.filter(a => a._id !== id));
+        } catch (error) {
+            // Demo mode - just remove from list
+            setApprovals(prev => prev.filter(a => a._id !== id));
+        }
+    };
+
+    const handleReject = async (id: string) => {
+        try {
+            await api.patch(`/maintenance/${id}/reject`);
+            setApprovals(prev => prev.filter(a => a._id !== id));
+        } catch (error) {
+            setApprovals(prev => prev.filter(a => a._id !== id));
+        }
+    };
+
+    return (
+        <div className="p-6 lg:p-8 space-y-6 max-w-[1600px] mx-auto">
+            {/* Header */}
+            <div className="flex items-center justify-between">
+                <div>
+                    <h1 className="text-2xl lg:text-3xl font-bold text-white">Branch Dashboard</h1>
+                    <p className="text-[var(--text-muted)] mt-1">Branch operations overview</p>
+                </div>
+            </div>
+
+            {/* Stats Row */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                <StatCard
+                    title="Branch Assets"
+                    value={stats.branchAssets}
+                    icon={Package}
+                    color="primary"
+                    loading={loading}
+                    onClick={() => navigate('/assets')}
+                />
+                <StatCard
+                    title="Today's Tickets"
+                    value={stats.todaysTickets}
+                    icon={ClipboardCheck}
+                    change={-15}
+                    changeLabel="vs yesterday"
+                    color="blue"
+                    loading={loading}
+                    onClick={() => navigate('/maintenance')}
+                />
+                <StatCard
+                    title="MTD Expenses"
+                    value={`₹${stats.mtdExpenses.toLocaleString()}`}
+                    icon={DollarSign}
+                    color="orange"
+                    loading={loading}
+                />
+                <StatCard
+                    title="Budget Used"
+                    value={`${stats.budgetUsed}%`}
+                    icon={TrendingUp}
+                    color={stats.budgetUsed > 80 ? 'red' : 'green'}
+                    loading={loading}
+                />
+            </div>
+
+            {/* Second Row: Charts + Stats */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <DashboardChart
+                    type="donut"
+                    data={inventoryStatusData}
+                    title="Inventory Status"
+                    loading={loading}
+                />
+                <DashboardChart
+                    type="bar"
+                    data={expensesData}
+                    title="Weekly Expenses Trend"
+                    loading={loading}
+                />
+            </div>
+
+            {/* Bottom Row */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <div className="lg:col-span-2">
+                    <ApprovalQueue
+                        items={approvals}
+                        loading={loading}
+                        onApprove={handleApprove}
+                        onReject={handleReject}
+                    />
+                </div>
+
+                {/* Technician Workload Card */}
+                <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="bg-[#18181b] border border-white/5 rounded-2xl p-6"
+                >
+                    <h3 className="text-white font-medium mb-4">Technician Workload</h3>
+                    <div className="flex items-center gap-4 mb-4">
+                        <div className="w-12 h-12 rounded-xl bg-blue-500/10 flex items-center justify-center">
+                            <Users className="w-6 h-6 text-blue-400" />
+                        </div>
+                        <div>
+                            <p className="text-2xl font-bold text-white">{stats.technicianCount}</p>
+                            <p className="text-sm text-[var(--text-muted)]">Active Technicians</p>
+                        </div>
+                    </div>
+
+                    <div className="space-y-3">
+                        <div className="flex items-center justify-between text-sm">
+                            <span className="text-[var(--text-muted)]">Avg Tickets/Tech</span>
+                            <span className="text-white font-medium">4.2</span>
+                        </div>
+                        <div className="flex items-center justify-between text-sm">
+                            <span className="text-[var(--text-muted)]">Overloaded</span>
+                            <span className="text-orange-400 font-medium">2</span>
+                        </div>
+                        <div className="flex items-center justify-between text-sm">
+                            <span className="text-[var(--text-muted)]">Available</span>
+                            <span className="text-emerald-400 font-medium">4</span>
+                        </div>
+                    </div>
+
+                    <button
+                        onClick={() => navigate('/users?role=TECHNICIAN')}
+                        className="w-full mt-4 py-2 text-sm text-[var(--primary)] bg-[var(--primary)]/10 rounded-lg hover:bg-[var(--primary)]/20 transition-colors"
+                    >
+                        View All Technicians
+                    </button>
+                </motion.div>
+            </div>
+        </div>
+    );
+});
+
+export default ManagerDashboard;

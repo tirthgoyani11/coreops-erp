@@ -1,15 +1,20 @@
 // User Types
+
+// All 5 user roles as defined in Phase 2
+export type UserRole = 'SUPER_ADMIN' | 'REGIONAL_MANAGER' | 'BRANCH_MANAGER' | 'TECHNICIAN' | 'VIEWER';
+
 export interface User {
     _id: string;
     id: string;
     name: string;
     email: string;
-    role: 'SUPER_ADMIN' | 'MANAGER' | 'STAFF';
+    role: UserRole;
     office: Office | null;
     officeId?: string;
     isActive: boolean;
     approvalLimit?: number;
 }
+
 
 export interface LoginCredentials {
     email: string;

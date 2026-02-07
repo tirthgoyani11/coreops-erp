@@ -21,6 +21,7 @@ const analyticsRoutes = require('./src/routes/analyticsRoutes');
 const purchaseOrderRoutes = require('./src/routes/purchaseOrderRoutes');
 const auditLogRoutes = require('./src/routes/auditLogRoutes');
 const ocrRoutes = require('./src/routes/ocrRoutes');
+const setupRoutes = require('./src/routes/setupRoutes');
 
 // Services
 const currencyService = require('./src/services/currencyService');
@@ -122,6 +123,7 @@ app.use('/api/analytics', analyticsRoutes);
 app.use('/api/purchase-orders', purchaseOrderRoutes);
 app.use('/api/audit-logs', auditLogRoutes);
 app.use('/api/ocr', ocrRoutes);
+app.use('/api/setup', setupRoutes);
 
 // Initialize currency rate updates (runs every 4 hours)
 currencyService.scheduleRateUpdates();

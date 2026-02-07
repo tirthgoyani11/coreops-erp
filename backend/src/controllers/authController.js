@@ -145,3 +145,209 @@ exports.seedAdmin = asyncHandler(async (req, res, next) => {
         },
     });
 });
+
+/**
+ * @desc    Request password reset email
+ * @route   POST /api/auth/forgot-password
+ * @access  Public
+ */
+exports.forgotPassword = asyncHandler(async (req, res, next) => {
+    const { email } = req.body;
+
+    if (!email) {
+        return next(new AppError('Please provide an email address', 400));
+    }
+
+    const user = await User.findOne({ email });
+
+    // Always return success to prevent email enumeration
+    if (!user) {
+        return res.status(200).json({
+            success: true,
+            message: 'If an account exists with this email, a reset link has been sent.',
+        });
+    }
+
+    // Generate reset token (valid for 1 hour)
+    const crypto = require('crypto');
+    const resetToken = crypto.randomBytes(32).toString('hex');
+    const resetTokenHash = crypto.createHash('sha256').update(resetToken).digest('hex');
+
+    user.passwordResetToken = resetTokenHash;
+    user.passwordResetExpires = Date.now() + 60 * 60 * 1000; // 1 hour
+    await user.save({ validateBeforeSave: false });
+
+    // In production, send email here
+    const logger = require('../utils/logger');
+    logger.info(`Password reset token generated for: ${email}`);
+
+    // For development, log the token (remove in production)
+    if (process.env.NODE_ENV !== 'production') {
+        logger.debug(`Reset token (dev only): ${resetToken}`);
+    }
+
+    res.status(200).json({
+        success: true,
+        message: 'If an account exists with this email, a reset link has been sent.',
+        // DEV ONLY - remove in production
+        ...(process.env.NODE_ENV !== 'production' && { devToken: resetToken }),
+    });
+});
+
+/**
+ * @desc    Validate password reset token
+ * @route   POST /api/auth/validate-reset-token
+ * @access  Public
+ */
+exports.validateResetToken = asyncHandler(async (req, res, next) => {
+    const { token } = req.body;
+
+    if (!token) {
+        return next(new AppError('Token is required', 400));
+    }
+
+    const crypto = require('crypto');
+    const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+
+    const user = await User.findOne({
+        passwordResetToken: tokenHash,
+        passwordResetExpires: { $gt: Date.now() },
+    });
+
+    if (!user) {
+        return next(new AppError('Invalid or expired token', 400));
+    }
+
+    res.status(200).json({
+        success: true,
+        message: 'Token is valid',
+    });
+});
+
+/**
+ * @desc    Reset password with token
+ * @route   POST /api/auth/reset-password
+ * @access  Public
+ */
+exports.resetPassword = asyncHandler(async (req, res, next) => {
+    const { token, password } = req.body;
+
+    if (!token || !password) {
+        return next(new AppError('Token and password are required', 400));
+    }
+
+    // Validate password strength
+    if (password.length < 8) {
+        return next(new AppError('Password must be at least 8 characters', 400));
+    }
+
+    const crypto = require('crypto');
+    const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+
+    const user = await User.findOne({
+        passwordResetToken: tokenHash,
+        passwordResetExpires: { $gt: Date.now() },
+    });
+
+    if (!user) {
+        return next(new AppError('Invalid or expired token', 400));
+    }
+
+    // Update password and clear reset token
+    user.password = password;
+    user.passwordResetToken = undefined;
+    user.passwordResetExpires = undefined;
+    await user.save();
+
+    const logger = require('../utils/logger');
+    logger.info(`Password reset completed for: ${user.email}`);
+
+    res.status(200).json({
+        success: true,
+        message: 'Password has been reset successfully',
+    });
+});
+
+/**
+ * @desc    Validate invitation token
+ * @route   GET /api/auth/validate-invite/:token
+ * @access  Public
+ */
+exports.validateInvite = asyncHandler(async (req, res, next) => {
+    const { token } = req.params;
+
+    if (!token) {
+        return next(new AppError('Invitation token is required', 400));
+    }
+
+    const crypto = require('crypto');
+    const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+
+    const user = await User.findOne({
+        inviteToken: tokenHash,
+        inviteTokenExpires: { $gt: Date.now() },
+        isActive: false, // Not yet activated
+    });
+
+    if (!user) {
+        return next(new AppError('Invalid or expired invitation', 400));
+    }
+
+    res.status(200).json({
+        success: true,
+        data: {
+            email: user.email,
+            role: user.role,
+            invitedBy: 'Administrator',
+            expiresAt: user.inviteTokenExpires,
+        },
+    });
+});
+
+/**
+ * @desc    Complete registration with invitation
+ * @route   POST /api/auth/register-invite
+ * @access  Public
+ */
+exports.registerWithInvite = asyncHandler(async (req, res, next) => {
+    const { token, firstName, lastName, phone, password } = req.body;
+
+    if (!token || !firstName || !lastName || !password) {
+        return next(new AppError('All required fields must be provided', 400));
+    }
+
+    // Validate password strength
+    if (password.length < 8) {
+        return next(new AppError('Password must be at least 8 characters', 400));
+    }
+
+    const crypto = require('crypto');
+    const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+
+    const user = await User.findOne({
+        inviteToken: tokenHash,
+        inviteTokenExpires: { $gt: Date.now() },
+    });
+
+    if (!user) {
+        return next(new AppError('Invalid or expired invitation', 400));
+    }
+
+    // Complete user registration
+    user.name = `${firstName} ${lastName}`;
+    user.password = password;
+    user.phone = phone || undefined;
+    user.isActive = true;
+    user.inviteToken = undefined;
+    user.inviteTokenExpires = undefined;
+    await user.save();
+
+    const logger = require('../utils/logger');
+    logger.info(`User registered via invite: ${user.email}`);
+
+    res.status(201).json({
+        success: true,
+        message: 'Account created successfully',
+    });
+});
+

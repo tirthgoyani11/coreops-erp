@@ -1,43 +1,22 @@
 import { NavLink, useLocation } from 'react-router-dom';
-import {
-    LayoutDashboard,
-    Package,
-    Building2,
-    Users,
-    LogOut,
-    Layers,
-    ChevronLeft,
-    ChevronRight,
-    Wrench,
-    X,
-    Home,
-    Truck,
-    BarChart3,
-    ShoppingCart,
-    Shield
-} from 'lucide-react';
+import { LogOut, Layers, ChevronLeft, ChevronRight, X } from 'lucide-react';
 import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
 import { cn } from '../../lib/utils';
 import { motion, AnimatePresence } from 'framer-motion';
+import { getNavItemsForRole, getRoleLabel, getRoleColor } from '../../config/roleConfig';
+import type { UserRole } from '../../types';
 
 export function Sidebar() {
     const { user, logout } = useAuthStore();
     const { isSidebarCollapsed, toggleSidebar, isMobileSidebarOpen, setMobileSidebarOpen } = useUIStore();
     const location = useLocation();
 
-    const navItems = [
-        { label: 'Dashboard', path: '/', icon: Home },
-        { label: 'Assets', path: '/assets', icon: LayoutDashboard },
-        { label: 'Inventory', path: '/inventory', icon: Package },
-        { label: 'Maintenance', path: '/maintenance', icon: Wrench },
-        { label: 'Vendors', path: '/vendors', icon: Truck },
-        { label: 'Purchase Orders', path: '/purchase-orders', icon: ShoppingCart },
-        { label: 'Analytics', path: '/analytics', icon: BarChart3 },
-        { label: 'Audit Logs', path: '/audit-logs', icon: Shield, adminOnly: true },
-        { label: 'Offices', path: '/offices', icon: Building2, adminOnly: true },
-        { label: 'Team', path: '/users', icon: Users, adminOnly: true },
-    ];
+    // Get navigation items based on user role
+    const userRole = (user?.role || 'VIEWER') as UserRole;
+    const navItems = getNavItemsForRole(userRole);
+    const roleLabel = getRoleLabel(userRole);
+    const roleColor = getRoleColor(userRole);
 
     const SidebarContent = () => (
         <>
@@ -78,8 +57,8 @@ export function Sidebar() {
                 )}
 
                 {navItems.map((item) => {
-                    if (item.adminOnly && user?.role !== 'SUPER_ADMIN') return null;
                     const isActive = location.pathname === item.path;
+                    const IconComponent = item.icon;
 
                     return (
                         <NavLink
@@ -95,7 +74,7 @@ export function Sidebar() {
                             )}
                             title={isSidebarCollapsed && !isMobileSidebarOpen ? item.label : undefined}
                         >
-                            <item.icon className={cn("w-5 h-5 shrink-0", isActive ? "text-[var(--primary)]" : "group-hover:text-white")} />
+                            <IconComponent className={cn("w-5 h-5 shrink-0", isActive ? "text-[var(--primary)]" : "group-hover:text-white")} />
 
                             {(!isSidebarCollapsed || isMobileSidebarOpen) && (
                                 <span className="font-medium text-sm truncate">{item.label}</span>
@@ -112,13 +91,16 @@ export function Sidebar() {
                 })}
             </nav>
 
-            {/* User Footer */}
+            {/* User Footer with Role Badge */}
             <div className="p-4 border-t border-white/5">
                 <div className={cn(
                     "bg-white/5 rounded-2xl flex items-center transition-colors group relative cursor-pointer",
                     isSidebarCollapsed && !isMobileSidebarOpen ? "justify-center p-2 w-12 h-12 mx-auto" : "p-4 gap-3 hover:bg-white/10"
                 )}>
-                    <div className="w-8 h-8 shrink-0 rounded-full bg-gradient-to-br from-indigo-500 to-purple-500 flex items-center justify-center text-[10px] font-bold">
+                    <div
+                        className="w-8 h-8 shrink-0 rounded-full flex items-center justify-center text-[10px] font-bold text-white"
+                        style={{ background: `linear-gradient(135deg, ${roleColor}, ${roleColor}99)` }}
+                    >
                         {user?.name?.charAt(0)}
                     </div>
 
@@ -126,7 +108,12 @@ export function Sidebar() {
                         <>
                             <div className="flex-1 min-w-0">
                                 <p className="text-sm font-semibold truncate text-white">{user?.name}</p>
-                                <p className="text-xs text-[var(--text-muted)] truncate capitalize">{user?.role?.toLowerCase().replace('_', ' ')}</p>
+                                <p
+                                    className="text-xs truncate"
+                                    style={{ color: roleColor }}
+                                >
+                                    {roleLabel}
+                                </p>
                             </div>
                             <button
                                 onClick={logout}
