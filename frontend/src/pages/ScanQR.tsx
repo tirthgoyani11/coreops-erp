@@ -25,7 +25,7 @@ export function ScanQR() {
             // Navigate to asset or maintenance creation
             // specific logic could go here
             setTimeout(() => {
-                navigate(`/assets?highlight=${mockAssetId}`);
+                navigate(`/assets/${mockAssetId}`);
             }, 1000);
         }, 1500);
     };

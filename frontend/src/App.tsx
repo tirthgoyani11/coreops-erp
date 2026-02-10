@@ -12,7 +12,9 @@ import { AdminDashboard } from './pages/dashboards/AdminDashboard';
 import { ManagerDashboard } from './pages/dashboards/ManagerDashboard';
 import { TechDashboard } from './pages/dashboards/TechDashboard';
 import { ViewerDashboard } from './pages/dashboards/ViewerDashboard';
-import { Assets } from './pages/Assets';
+import AssetList from './pages/AssetList';
+import AssetForm from './pages/AssetForm';
+import AssetDetail from './pages/AssetDetail';
 import { Inventory } from './pages/Inventory';
 import { Maintenance } from './pages/Maintenance';
 import TicketDetails from './pages/TicketDetails';
@@ -101,7 +103,11 @@ function App() {
           />
 
           {/* Assets - All roles (CRUD scope varies by role) */}
-          <Route path="/assets" element={<Assets />} />
+          <Route path="/assets" element={<AssetList />} />
+          <Route path="/assets/new" element={<RoleGuard allowedRoles={['SUPER_ADMIN', 'MANAGER']}><AssetForm /></RoleGuard>} />
+          <Route path="/assets/:id" element={<AssetDetail />} />
+          <Route path="/assets/:id/edit" element={<RoleGuard allowedRoles={['SUPER_ADMIN', 'MANAGER']}><AssetForm /></RoleGuard>} />
+
 
           {/* Inventory - All roles (CRUD scope varies by role) */}
           <Route path="/inventory" element={<Inventory />} />

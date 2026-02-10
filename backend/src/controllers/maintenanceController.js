@@ -256,9 +256,19 @@ exports.closeMaintenance = asyncHandler(async (req, res, next) => {
     maintenance.status = 'CLOSED';
     await maintenance.save();
 
-    // 4. Update Asset Final Status
+    // 4. Update Asset Final Status & Log History
     const finalAssetStatus = maintenance.decision === 'REPLACE' ? 'RETIRED' : 'ACTIVE';
-    await Asset.findByIdAndUpdate(maintenance.assetId, { status: finalAssetStatus });
+
+    const asset = await Asset.findById(maintenance.assetId);
+    if (asset) {
+        asset.status = finalAssetStatus;
+        await asset.addMaintenanceRecord(
+            maintenance._id,
+            maintenance.decision,
+            maintenance.repairCost,
+            `Ticket Closed. Decision: ${maintenance.decision}`
+        );
+    }
 
     res.status(200).json({
         success: true,
