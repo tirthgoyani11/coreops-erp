@@ -10,6 +10,8 @@ const {
     resetPassword,
     validateInvite,
     registerWithInvite,
+    refreshToken,
+    logout,
 } = require('../controllers/authController');
 const verifyToken = require('../middleware/verifyToken');
 const authorize = require('../middleware/authorize');
@@ -29,8 +31,12 @@ router.post('/reset-password', authLimiter, resetPassword);
 router.get('/validate-invite/:token', authLimiter, validateInvite);
 router.post('/register-invite', authLimiter, registerWithInvite);
 
+// Token management routes (public, cookie-based)
+router.post('/refresh', authLimiter, refreshToken);
+router.post('/logout', logout);
+
 // Protected routes with validation
-router.post('/register', verifyToken, authorize('SUPER_ADMIN'), authValidation.register, register);
+router.post('/register', verifyToken, authorize('SUPER_ADMIN', 'ADMIN'), authValidation.register, register);
 router.get('/me', verifyToken, getMe);
 
 module.exports = router;

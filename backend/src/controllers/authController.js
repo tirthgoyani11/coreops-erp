@@ -1,7 +1,39 @@
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
+const RefreshToken = require('../models/RefreshToken');
 const { asyncHandler, AppError } = require('../utils/errorHandler');
 const emailService = require('../services/emailService');
+const logger = require('../utils/logger');
+
+// ── Token Helpers ──────────────────────────────────────────
+
+const ACCESS_TOKEN_EXPIRY = '15m';
+const REFRESH_TOKEN_DAYS = 7;
+
+function generateAccessToken(userId) {
+    return jwt.sign({ id: userId }, process.env.JWT_SECRET, {
+        expiresIn: ACCESS_TOKEN_EXPIRY,
+    });
+}
+
+function setRefreshCookie(res, token) {
+    res.cookie('refreshToken', token, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'strict',
+        maxAge: REFRESH_TOKEN_DAYS * 24 * 60 * 60 * 1000, // 7 days in ms
+        path: '/api/auth', // Only sent to auth endpoints
+    });
+}
+
+function clearRefreshCookie(res) {
+    res.clearCookie('refreshToken', {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'strict',
+        path: '/api/auth',
+    });
+}
 
 /**
  * @desc    Register new user
@@ -61,17 +93,26 @@ exports.login = asyncHandler(async (req, res, next) => {
         return next(new AppError('Invalid credentials', 401));
     }
 
-    // Generate token
-    const token = jwt.sign(
-        { id: user._id },
-        process.env.JWT_SECRET,
-        { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
-    );
+    // Generate access token (short-lived, returned in body)
+    const accessToken = generateAccessToken(user._id);
+
+    // Generate refresh token (long-lived, set as httpOnly cookie)
+    const family = RefreshToken.generateFamily();
+    const refreshTokenValue = RefreshToken.generateToken();
+
+    await RefreshToken.create({
+        token: refreshTokenValue,
+        userId: user._id,
+        family,
+        expiresAt: new Date(Date.now() + REFRESH_TOKEN_DAYS * 24 * 60 * 60 * 1000),
+    });
+
+    setRefreshCookie(res, refreshTokenValue);
 
     res.status(200).json({
         success: true,
         message: 'Login successful',
-        token,
+        token: accessToken,
         user: {
             id: user._id,
             name: user.name,
@@ -79,6 +120,107 @@ exports.login = asyncHandler(async (req, res, next) => {
             role: user.role,
             office: user.officeId,
         },
+    });
+});
+
+/**
+ * @desc    Refresh access token using httpOnly cookie
+ * @route   POST /api/auth/refresh
+ * @access  Public (cookie required)
+ *
+ * Security: Implements token rotation + reuse detection.
+ * If a used token is presented, the entire family is revoked.
+ */
+exports.refreshToken = asyncHandler(async (req, res, next) => {
+    const incomingToken = req.cookies?.refreshToken;
+
+    if (!incomingToken) {
+        return next(new AppError('Refresh token required', 401));
+    }
+
+    // Find the token in DB
+    const storedToken = await RefreshToken.findOne({ token: incomingToken });
+
+    if (!storedToken) {
+        // Token not found — may have been revoked
+        clearRefreshCookie(res);
+        return next(new AppError('Invalid refresh token', 401));
+    }
+
+    // Reuse detection: if this token was already used, revoke entire family
+    if (storedToken.isUsed) {
+        logger.warn(`Refresh token reuse detected! Revoking family: ${storedToken.family} for user: ${storedToken.userId}`);
+        await RefreshToken.revokeFamily(storedToken.family);
+        clearRefreshCookie(res);
+        return next(new AppError('Refresh token reuse detected. Please login again.', 401));
+    }
+
+    // Check expiration
+    if (storedToken.expiresAt < new Date()) {
+        await RefreshToken.deleteOne({ _id: storedToken._id });
+        clearRefreshCookie(res);
+        return next(new AppError('Refresh token expired', 401));
+    }
+
+    // Verify user still exists and is active
+    const user = await User.findById(storedToken.userId).populate('officeId');
+    if (!user || !user.isActive) {
+        await RefreshToken.revokeFamily(storedToken.family);
+        clearRefreshCookie(res);
+        return next(new AppError('User not found or deactivated', 401));
+    }
+
+    // Rotate: mark current token as used, create new one in same family
+    const newTokenValue = RefreshToken.generateToken();
+
+    storedToken.isUsed = true;
+    storedToken.replacedByToken = newTokenValue;
+    await storedToken.save();
+
+    await RefreshToken.create({
+        token: newTokenValue,
+        userId: user._id,
+        family: storedToken.family,
+        expiresAt: new Date(Date.now() + REFRESH_TOKEN_DAYS * 24 * 60 * 60 * 1000),
+    });
+
+    // Issue new access token + cookie
+    const accessToken = generateAccessToken(user._id);
+    setRefreshCookie(res, newTokenValue);
+
+    res.status(200).json({
+        success: true,
+        token: accessToken,
+        user: {
+            id: user._id,
+            name: user.name,
+            email: user.email,
+            role: user.role,
+            office: user.officeId,
+        },
+    });
+});
+
+/**
+ * @desc    Logout — clear refresh cookie and revoke token family
+ * @route   POST /api/auth/logout
+ * @access  Public (cookie-based)
+ */
+exports.logout = asyncHandler(async (req, res) => {
+    const incomingToken = req.cookies?.refreshToken;
+
+    if (incomingToken) {
+        const storedToken = await RefreshToken.findOne({ token: incomingToken });
+        if (storedToken) {
+            await RefreshToken.revokeFamily(storedToken.family);
+        }
+    }
+
+    clearRefreshCookie(res);
+
+    res.status(200).json({
+        success: true,
+        message: 'Logged out successfully',
     });
 });
 

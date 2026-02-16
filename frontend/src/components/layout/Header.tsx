@@ -112,21 +112,21 @@ export const Header = memo(function Header() {
 
     return (
         <header
-            className="h-16 md:h-20 flex items-center justify-between px-4 md:px-8 border-b border-white/5 bg-[#09090b]/80 backdrop-blur-md sticky top-0 z-40"
+            className="h-16 md:h-20 flex items-center justify-between px-4 md:px-8 border-b border-[var(--border-color)] bg-[var(--bg-overlay)] backdrop-blur-md sticky top-0 z-40"
             role="banner"
         >
             <div className="flex items-center gap-4">
                 {/* Mobile Menu Button */}
                 <button
                     onClick={() => setMobileSidebarOpen(true)}
-                    className="lg:hidden w-10 h-10 rounded-xl border border-white/10 flex items-center justify-center text-[var(--text-muted)] hover:text-white hover:bg-white/5 transition-colors focus:outline-none focus:ring-2 focus:ring-[var(--primary)]"
+                    className="lg:hidden w-10 h-10 rounded-xl border border-[var(--border-color)] flex items-center justify-center text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-card-hover)] transition-colors focus:outline-none focus:ring-2 focus:ring-[var(--primary)]"
                     aria-label="Open navigation menu"
                     aria-expanded="false"
                 >
                     <Menu className="w-5 h-5" aria-hidden="true" />
                 </button>
 
-                <h1 className="text-xl md:text-2xl font-bold text-white tracking-tight truncate max-w-[200px] md:max-w-none">
+                <h1 className="text-xl md:text-2xl font-bold text-[var(--text-primary)] tracking-tight truncate max-w-[200px] md:max-w-none">
                     {pageTitle}
                 </h1>
             </div>
@@ -134,7 +134,7 @@ export const Header = memo(function Header() {
             <div className="flex items-center gap-2 md:gap-3">
                 {/* Role Badge with Scope Indicator */}
                 <div
-                    className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/5 border border-white/10"
+                    className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full bg-[var(--bg-card)] border border-[var(--border-color)]"
                     role="status"
                     aria-label={`Current role: ${roleInfo.label}, Scope: ${roleInfo.config.scope}`}
                 >
@@ -143,10 +143,10 @@ export const Header = memo(function Header() {
                         style={{ backgroundColor: roleInfo.color }}
                         aria-hidden="true"
                     />
-                    <span className="text-xs font-medium text-white">{roleInfo.label}</span>
-                    <div className="w-px h-3 bg-white/20" aria-hidden="true" />
-                    <ScopeIcon className="w-3 h-3 text-[var(--text-muted)]" aria-hidden="true" />
-                    <span className="text-xs text-[var(--text-muted)] capitalize">{roleInfo.config.scope}</span>
+                    <span className="text-xs font-medium text-[var(--text-primary)]">{roleInfo.label}</span>
+                    <div className="w-px h-3 bg-[var(--border-color)]" aria-hidden="true" />
+                    <ScopeIcon className="w-3 h-3 text-[var(--text-secondary)]" aria-hidden="true" />
+                    <span className="text-xs text-[var(--text-secondary)] capitalize">{roleInfo.config.scope}</span>
                 </div>
 
                 {/* Approval Limit Badge - Only for managers with limits */}
@@ -176,7 +176,7 @@ export const Header = memo(function Header() {
                 {/* Search - Desktop only */}
                 <form onSubmit={handleSearch} className="relative group hidden lg:block">
                     <Search
-                        className={`absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 transition-colors ${isSearchFocused ? 'text-[var(--primary)]' : 'text-[var(--text-muted)]'
+                        className={`absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 transition-colors ${isSearchFocused ? 'text-[var(--primary)]' : 'text-[var(--text-secondary)]'
                             }`}
                         aria-hidden="true"
                     />
@@ -187,14 +187,14 @@ export const Header = memo(function Header() {
                         onFocus={() => setIsSearchFocused(true)}
                         onBlur={() => setIsSearchFocused(false)}
                         placeholder="Search..."
-                        className="bg-[#18181b] border border-white/10 rounded-full pl-9 pr-4 py-2.5 text-sm focus:outline-none focus:border-[var(--primary)] text-white w-48 transition-all"
+                        className="bg-[var(--bg-card)] border border-[var(--border-color)] rounded-full pl-9 pr-4 py-2.5 text-sm focus:outline-none focus:border-[var(--primary)] text-[var(--text-primary)] w-48 transition-all"
                         aria-label="Search"
                     />
                     {searchQuery && (
                         <button
                             type="button"
                             onClick={() => setSearchQuery('')}
-                            className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)] hover:text-white"
+                            className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
                             aria-label="Clear search"
                         >
                             <X className="w-3 h-3" aria-hidden="true" />
@@ -205,13 +205,13 @@ export const Header = memo(function Header() {
                 {/* Notifications Link */}
                 <Link
                     to="/notifications"
-                    className="w-10 h-10 rounded-full border border-white/10 flex items-center justify-center hover:bg-white/5 transition-colors text-[var(--text-muted)] hover:text-white relative focus:outline-none focus:ring-2 focus:ring-[var(--primary)]"
+                    className="w-10 h-10 rounded-full border border-[var(--border-color)] flex items-center justify-center hover:bg-[var(--bg-card-hover)] transition-colors text-[var(--text-secondary)] hover:text-[var(--text-primary)] relative focus:outline-none focus:ring-2 focus:ring-[var(--primary)]"
                     aria-label={`Notifications${unreadCount > 0 ? `, ${unreadCount} unread` : ''}`}
                 >
                     <Bell className="w-4 h-4" aria-hidden="true" />
                     {unreadCount > 0 && (
                         <span
-                            className="absolute -top-1 -right-1 min-w-[18px] h-[18px] bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center px-1 border-2 border-[#09090b]"
+                            className="absolute -top-1 -right-1 min-w-[18px] h-[18px] bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center px-1 border-2 border-[var(--bg-background)]"
                             aria-hidden="true"
                         >
                             {unreadCount > 99 ? '99+' : unreadCount}
@@ -222,7 +222,7 @@ export const Header = memo(function Header() {
                 {/* Dark Mode Toggle */}
                 <button
                     onClick={toggleTheme}
-                    className="w-10 h-10 rounded-full border border-white/10 flex items-center justify-center hover:bg-white/5 transition-colors text-[var(--text-muted)] hover:text-white focus:outline-none focus:ring-2 focus:ring-[var(--primary)]"
+                    className="w-10 h-10 rounded-full border border-[var(--border-color)] flex items-center justify-center hover:bg-[var(--bg-card-hover)] transition-colors text-[var(--text-secondary)] hover:text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--primary)]"
                     aria-label={isDarkMode ? 'Switch to light mode' : 'Switch to dark mode'}
                     aria-pressed={isDarkMode}
                 >
@@ -232,7 +232,7 @@ export const Header = memo(function Header() {
                 {/* Quick Action Button - Only if user can create */}
                 {canCreate && (
                     <button
-                        className="h-10 px-3 md:px-5 bg-[var(--primary)] text-black rounded-full text-sm font-bold flex items-center gap-2 hover:shadow-[0_0_20px_rgba(185,255,102,0.4)] transition-all active:scale-95 focus:outline-none focus:ring-2 focus:ring-[var(--primary)] focus:ring-offset-2 focus:ring-offset-[#09090b]"
+                        className="h-10 px-3 md:px-5 bg-[var(--primary)] text-[var(--primary-fg)] rounded-full text-sm font-bold flex items-center gap-2 hover:shadow-[0_0_20px_rgba(185,255,102,0.4)] transition-all active:scale-95 focus:outline-none focus:ring-2 focus:ring-[var(--primary)] focus:ring-offset-2 focus:ring-offset-[var(--bg-background)]"
                         aria-label="Create new item"
                     >
                         <Plus className="w-4 h-4" aria-hidden="true" />
@@ -240,7 +240,7 @@ export const Header = memo(function Header() {
                     </button>
                 )}
             </div>
-        </header>
+        </header >
     );
 });
 

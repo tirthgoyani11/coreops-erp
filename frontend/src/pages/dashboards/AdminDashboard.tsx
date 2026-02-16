@@ -71,13 +71,13 @@ const AuditLogTable = memo(function AuditLogTable({ logs, loading }: { logs: Aud
 
     if (loading) {
         return (
-            <div className="bg-[#18181b] border border-white/5 rounded-2xl p-6">
-                <div className="w-32 h-5 rounded bg-white/5 mb-4 animate-pulse" />
+            <div className="bg-[var(--bg-card)] border border-[var(--border-color)] rounded-2xl p-6">
+                <div className="w-32 h-5 rounded bg-[var(--bg-card-hover)] mb-4 animate-pulse" />
                 {[1, 2, 3, 4].map(i => (
                     <div key={i} className="flex items-center gap-4 py-3 animate-pulse">
-                        <div className="w-8 h-8 rounded-full bg-white/5" />
-                        <div className="flex-1 h-4 rounded bg-white/5" />
-                        <div className="w-16 h-4 rounded bg-white/5" />
+                        <div className="w-8 h-8 rounded-full bg-[var(--bg-card-hover)]" />
+                        <div className="flex-1 h-4 rounded bg-[var(--bg-card-hover)]" />
+                        <div className="w-16 h-4 rounded bg-[var(--bg-card-hover)]" />
                     </div>
                 ))}
             </div>
@@ -88,10 +88,10 @@ const AuditLogTable = memo(function AuditLogTable({ logs, loading }: { logs: Aud
         <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            className="bg-[#18181b] border border-white/5 rounded-2xl p-6"
+            className="bg-[var(--bg-card)] border border-[var(--border-color)] rounded-2xl p-6"
         >
             <div className="flex items-center justify-between mb-4">
-                <h3 className="text-white font-medium">Recent Activity</h3>
+                <h3 className="text-[var(--text-primary)] font-medium">Recent Activity</h3>
                 <button className="text-xs text-[var(--primary)] hover:underline flex items-center gap-1">
                     View All <ChevronRight className="w-3 h-3" />
                 </button>
@@ -99,7 +99,7 @@ const AuditLogTable = memo(function AuditLogTable({ logs, loading }: { logs: Aud
 
             <div className="space-y-1">
                 {logs.length === 0 ? (
-                    <p className="text-[var(--text-muted)] text-sm py-4 text-center">No recent activity</p>
+                    <p className="text-[var(--text-secondary)] text-sm py-4 text-center">No recent activity</p>
                 ) : (
                     logs.map((log, index) => (
                         <motion.div
@@ -107,19 +107,19 @@ const AuditLogTable = memo(function AuditLogTable({ logs, loading }: { logs: Aud
                             initial={{ opacity: 0, x: -10 }}
                             animate={{ opacity: 1, x: 0 }}
                             transition={{ delay: index * 0.05 }}
-                            className="flex items-center gap-3 py-3 border-b border-white/5 last:border-0"
+                            className="flex items-center gap-3 py-3 border-b border-[var(--border-color)] last:border-0"
                         >
                             <div className="w-8 h-8 rounded-full bg-[var(--primary)]/10 flex items-center justify-center">
                                 <User className="w-4 h-4 text-[var(--primary)]" />
                             </div>
                             <div className="flex-1 min-w-0">
-                                <p className="text-sm text-white truncate">
+                                <p className="text-sm text-[var(--text-primary)] truncate">
                                     <span className="font-medium">{log.user?.name || 'System'}</span>
                                     {' '}
-                                    <span className="text-[var(--text-muted)]">{log.action}</span>
+                                    <span className="text-[var(--text-secondary)]">{log.action}</span>
                                 </p>
                             </div>
-                            <div className="flex items-center gap-1 text-xs text-[var(--text-muted)]">
+                            <div className="flex items-center gap-1 text-xs text-[var(--text-secondary)]">
                                 <Clock className="w-3 h-3" />
                                 {formatTime(log.createdAt)}
                             </div>
@@ -197,12 +197,12 @@ export const AdminDashboard = memo(function AdminDashboard() {
             {/* Header */}
             <div className="flex items-center justify-between">
                 <div>
-                    <h1 className="text-2xl lg:text-3xl font-bold text-white">Admin Dashboard</h1>
-                    <p className="text-[var(--text-muted)] mt-1">Enterprise overview and system metrics</p>
+                    <h1 className="text-2xl lg:text-3xl font-bold text-[var(--text-primary)]">Admin Dashboard</h1>
+                    <p className="text-[var(--text-secondary)] mt-1">Enterprise overview and system metrics</p>
                 </div>
                 <div className="flex items-center gap-2 text-xs">
                     <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                    <span className="text-[var(--text-muted)]">Live</span>
+                    <span className="text-[var(--text-secondary)]">Live</span>
                 </div>
             </div>
 

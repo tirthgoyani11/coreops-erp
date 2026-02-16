@@ -21,7 +21,7 @@ export function Sidebar() {
     const SidebarContent = () => (
         <>
             {/* Brand Header */}
-            <div className={cn("h-20 flex items-center border-b border-white/5", isSidebarCollapsed && !isMobileSidebarOpen ? "justify-center px-0" : "px-8 justify-between")}>
+            <div className={cn("h-20 flex items-center border-b border-[var(--sidebar-border)]", isSidebarCollapsed && !isMobileSidebarOpen ? "justify-center px-0" : "px-8 justify-between")}>
                 <div className="flex items-center gap-3">
                     <div className="w-8 h-8 rounded-lg bg-[var(--primary)] flex items-center justify-center shadow-[0_0_15px_rgba(185,255,102,0.3)] shrink-0">
                         <Layers className="w-4 h-4 text-black" />
@@ -30,7 +30,7 @@ export function Sidebar() {
                         <motion.span
                             initial={{ opacity: 0 }}
                             animate={{ opacity: 1 }}
-                            className="text-xl font-bold tracking-tight truncate"
+                            className="text-xl font-bold tracking-tight truncate text-[var(--sidebar-text)]"
                         >
                             CoreOps
                         </motion.span>
@@ -41,7 +41,7 @@ export function Sidebar() {
                 {isMobileSidebarOpen && (
                     <button
                         onClick={() => setMobileSidebarOpen(false)}
-                        className="lg:hidden p-2 hover:bg-white/5 rounded-lg text-[var(--text-muted)]"
+                        className="lg:hidden p-2 hover:bg-[var(--sidebar-hover)] rounded-lg text-[var(--sidebar-text-muted)]"
                     >
                         <X className="w-5 h-5" />
                     </button>
@@ -51,7 +51,7 @@ export function Sidebar() {
             {/* Navigation */}
             <nav className="flex-1 py-6 px-3 space-y-1 overflow-y-auto">
                 {(!isSidebarCollapsed || isMobileSidebarOpen) && (
-                    <p className="px-4 text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-wider mb-4 truncate">
+                    <p className="px-4 text-[10px] font-bold text-[var(--sidebar-text-muted)] uppercase tracking-wider mb-4 truncate">
                         Main Menu
                     </p>
                 )}
@@ -69,12 +69,12 @@ export function Sidebar() {
                                 "flex items-center rounded-xl transition-all group relative overflow-hidden",
                                 isSidebarCollapsed && !isMobileSidebarOpen ? "justify-center w-12 h-12 mx-auto" : "px-4 py-3 gap-3",
                                 isActive
-                                    ? "bg-white/5 text-white"
-                                    : "text-[var(--text-muted)] hover:text-white hover:bg-white/5"
+                                    ? "bg-[var(--sidebar-active)] text-[var(--sidebar-text)]"
+                                    : "text-[var(--sidebar-text-muted)] hover:text-[var(--sidebar-text)] hover:bg-[var(--sidebar-hover)]"
                             )}
                             title={isSidebarCollapsed && !isMobileSidebarOpen ? item.label : undefined}
                         >
-                            <IconComponent className={cn("w-5 h-5 shrink-0", isActive ? "text-[var(--primary)]" : "group-hover:text-white")} />
+                            <IconComponent className={cn("w-5 h-5 shrink-0", isActive ? "text-[var(--primary)]" : "group-hover:text-[var(--sidebar-text)]")} />
 
                             {(!isSidebarCollapsed || isMobileSidebarOpen) && (
                                 <span className="font-medium text-sm truncate">{item.label}</span>
@@ -92,10 +92,10 @@ export function Sidebar() {
             </nav>
 
             {/* User Footer with Role Badge */}
-            <div className="p-4 border-t border-white/5">
+            <div className="p-4 border-t border-[var(--sidebar-border)]">
                 <div className={cn(
-                    "bg-white/5 rounded-2xl flex items-center transition-colors group relative cursor-pointer",
-                    isSidebarCollapsed && !isMobileSidebarOpen ? "justify-center p-2 w-12 h-12 mx-auto" : "p-4 gap-3 hover:bg-white/10"
+                    "bg-[var(--sidebar-hover)] rounded-2xl flex items-center transition-colors group relative cursor-pointer",
+                    isSidebarCollapsed && !isMobileSidebarOpen ? "justify-center p-2 w-12 h-12 mx-auto" : "p-4 gap-3 hover:bg-[var(--sidebar-active)]"
                 )}>
                     <div
                         className="w-8 h-8 shrink-0 rounded-full flex items-center justify-center text-[10px] font-bold text-white"
@@ -107,7 +107,7 @@ export function Sidebar() {
                     {(!isSidebarCollapsed || isMobileSidebarOpen) && (
                         <>
                             <div className="flex-1 min-w-0">
-                                <p className="text-sm font-semibold truncate text-white">{user?.name}</p>
+                                <p className="text-sm font-semibold truncate text-[var(--sidebar-text)]">{user?.name}</p>
                                 <p
                                     className="text-xs truncate"
                                     style={{ color: roleColor }}
@@ -117,7 +117,7 @@ export function Sidebar() {
                             </div>
                             <button
                                 onClick={logout}
-                                className="p-2 -mr-2 text-[var(--text-muted)] hover:text-red-400 transition-colors"
+                                className="p-2 -mr-2 text-[var(--sidebar-text-muted)] hover:text-red-400 transition-colors"
                             >
                                 <LogOut className="w-4 h-4" />
                             </button>
@@ -134,14 +134,14 @@ export function Sidebar() {
             <motion.aside
                 initial={false}
                 animate={{ width: isSidebarCollapsed ? 80 : 280 }}
-                className="hidden lg:flex fixed left-0 top-0 h-screen bg-[#0c0c0e] border-r border-white/5 flex-col z-50 transition-all duration-300 ease-in-out"
+                className="hidden lg:flex fixed left-0 top-0 h-screen bg-[var(--bg-sidebar)] border-r border-[var(--sidebar-border)] flex-col z-50 transition-all duration-300 ease-in-out"
             >
                 <SidebarContent />
 
                 {/* Toggle Button */}
                 <button
                     onClick={toggleSidebar}
-                    className="absolute -right-3 top-24 w-6 h-6 bg-[var(--bg-card)] border border-white/10 rounded-full flex items-center justify-center text-[var(--text-muted)] hover:text-white transition-colors z-50 shadow-lg"
+                    className="absolute -right-3 top-24 w-6 h-6 bg-[var(--bg-card)] border border-[var(--border-color)] rounded-full flex items-center justify-center text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors z-50"
                 >
                     {isSidebarCollapsed ? <ChevronRight className="w-3 h-3" /> : <ChevronLeft className="w-3 h-3" />}
                 </button>
@@ -166,7 +166,7 @@ export function Sidebar() {
                             animate={{ x: 0 }}
                             exit={{ x: -280 }}
                             transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-                            className="lg:hidden fixed left-0 top-0 h-screen w-[280px] bg-[#0c0c0e] border-r border-white/5 flex flex-col z-50"
+                            className="lg:hidden fixed left-0 top-0 h-screen w-[280px] bg-[var(--bg-sidebar)] border-r border-[var(--sidebar-border)] flex flex-col z-50"
                         >
                             <SidebarContent />
                         </motion.aside>

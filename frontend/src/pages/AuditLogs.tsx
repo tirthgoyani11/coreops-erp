@@ -14,6 +14,7 @@ import {
     ChevronLeft,
     ChevronRight,
     Eye,
+    FileSpreadsheet,
 } from 'lucide-react';
 import api from '../lib/api';
 import { exportAuditLogs } from '../utils/exportUtils';
@@ -96,7 +97,7 @@ const AuditLogs = () => {
         fetchLogs();
     }, [pagination.page, filters]);
 
-    const handleExport = (format: 'pdf' | 'excel') => {
+    const handleExport = (format: 'pdf' | 'excel' | 'csv') => {
         exportAuditLogs(logs as unknown as Record<string, unknown>[], format);
     };
 
@@ -142,28 +143,35 @@ const AuditLogs = () => {
             {/* Header */}
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                 <div>
-                    <h1 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                    <h1 className="text-2xl font-bold text-[var(--text-primary)] flex items-center gap-2">
                         <Shield className="w-6 h-6 text-purple-600" />
                         Audit Logs
                     </h1>
-                    <p className="text-gray-600 dark:text-gray-400 mt-1">
+                    <p className="text-[var(--text-secondary)] mt-1">
                         Security and activity monitoring
                     </p>
                 </div>
                 <div className="flex gap-2">
                     <button
                         onClick={() => setShowFilters(!showFilters)}
-                        className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center gap-2"
+                        className="px-4 py-2 border border-[var(--border-color)] rounded-lg hover:bg-[var(--bg-card-hover)] flex items-center gap-2 text-[var(--text-secondary)]"
                     >
                         <Filter className="w-4 h-4" />
                         Filters
                     </button>
                     <button
                         onClick={() => handleExport('pdf')}
-                        className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center gap-2"
+                        className="px-4 py-2 border border-[var(--border-color)] rounded-lg hover:bg-[var(--bg-card-hover)] flex items-center gap-2 text-[var(--text-secondary)]"
                     >
                         <Download className="w-4 h-4" />
                         PDF
+                    </button>
+                    <button
+                        onClick={() => handleExport('csv')}
+                        className="px-4 py-2 border border-[var(--border-color)] rounded-lg hover:bg-[var(--bg-card-hover)] flex items-center gap-2 text-[var(--text-secondary)]"
+                    >
+                        <FileSpreadsheet className="w-4 h-4" />
+                        CSV
                     </button>
                     <button
                         onClick={() => handleExport('excel')}
@@ -181,11 +189,11 @@ const AuditLogs = () => {
                     initial={{ height: 0, opacity: 0 }}
                     animate={{ height: 'auto', opacity: 1 }}
                     exit={{ height: 0, opacity: 0 }}
-                    className="bg-white dark:bg-gray-800 rounded-xl p-4 shadow-sm border border-gray-200 dark:border-gray-700"
+                    className="bg-[var(--bg-card)] rounded-xl p-4 shadow-sm border border-[var(--border-color)]"
                 >
                     <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1">
                                 Action
                             </label>
                             <div className="relative">
@@ -195,7 +203,7 @@ const AuditLogs = () => {
                                     placeholder="Search action..."
                                     value={filters.action}
                                     onChange={(e) => setFilters(f => ({ ...f, action: e.target.value }))}
-                                    className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700"
+                                    className="w-full pl-10 pr-4 py-2 border border-[var(--border-color)] rounded-lg bg-[var(--bg-background)] text-[var(--text-primary)] focus:outline-none focus:border-[var(--primary)]"
                                 />
                             </div>
                         </div>
@@ -206,7 +214,7 @@ const AuditLogs = () => {
                             <select
                                 value={filters.resourceType}
                                 onChange={(e) => setFilters(f => ({ ...f, resourceType: e.target.value }))}
-                                className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700"
+                                className="w-full px-4 py-2 border border-[var(--border-color)] rounded-lg bg-[var(--bg-background)] text-[var(--text-primary)] focus:outline-none focus:border-[var(--primary)]"
                             >
                                 <option value="">All</option>
                                 <option value="User">User</option>
@@ -242,7 +250,7 @@ const AuditLogs = () => {
                                     type="date"
                                     value={filters.startDate}
                                     onChange={(e) => setFilters(f => ({ ...f, startDate: e.target.value }))}
-                                    className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700"
+                                    className="w-full pl-10 pr-4 py-2 border border-[var(--border-color)] rounded-lg bg-[var(--bg-background)] text-[var(--text-primary)] focus:outline-none focus:border-[var(--primary)]"
                                 />
                             </div>
                         </div>
@@ -265,12 +273,12 @@ const AuditLogs = () => {
             )}
 
             {/* Logs Table */}
-            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
+            <div className="bg-[var(--bg-card)] rounded-xl shadow-sm border border-[var(--border-color)] overflow-hidden">
                 <div className="overflow-x-auto">
                     <table className="w-full">
-                        <thead className="bg-gray-50 dark:bg-gray-700/50">
+                        <thead className="bg-[var(--bg-card-hover)]">
                             <tr>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                                <th className="px-6 py-3 text-left text-xs font-medium text-[var(--text-muted)] uppercase tracking-wider">
                                     Timestamp
                                 </th>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
@@ -293,7 +301,7 @@ const AuditLogs = () => {
                                 </th>
                             </tr>
                         </thead>
-                        <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+                        <tbody className="divide-y divide-[var(--border-color)]">
                             {loading ? (
                                 <tr>
                                     <td colSpan={7} className="px-6 py-12 text-center">
@@ -304,7 +312,7 @@ const AuditLogs = () => {
                                 </tr>
                             ) : logs.length === 0 ? (
                                 <tr>
-                                    <td colSpan={7} className="px-6 py-12 text-center text-gray-500 dark:text-gray-400">
+                                    <td colSpan={7} className="px-6 py-12 text-center text-[var(--text-muted)]">
                                         No audit logs found
                                     </td>
                                 </tr>
@@ -312,12 +320,12 @@ const AuditLogs = () => {
                                 logs.map((log) => {
                                     const { date, time } = formatTime(log.timestamp);
                                     return (
-                                        <tr key={log._id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                                        <tr key={log._id} className="hover:bg-[var(--bg-card-hover)] transition-colors">
                                             <td className="px-6 py-4 whitespace-nowrap">
-                                                <div className="text-sm font-medium text-gray-900 dark:text-white">
+                                                <div className="text-sm font-medium text-[var(--text-primary)]">
                                                     {date}
                                                 </div>
-                                                <div className="text-xs text-gray-500 dark:text-gray-400">
+                                                <div className="text-xs text-[var(--text-muted)]">
                                                     {time}
                                                 </div>
                                             </td>
@@ -325,7 +333,7 @@ const AuditLogs = () => {
                                                 <div className="flex items-center gap-2">
                                                     <User className="w-4 h-4 text-gray-400" />
                                                     <div>
-                                                        <div className="text-sm font-medium text-gray-900 dark:text-white">
+                                                        <div className="text-sm font-medium text-[var(--text-primary)]">
                                                             {log.user?.name || 'System'}
                                                         </div>
                                                         <div className="text-xs text-gray-500 dark:text-gray-400">
@@ -339,7 +347,7 @@ const AuditLogs = () => {
                                                     {log.action.replace(/_/g, ' ')}
                                                 </span>
                                             </td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-[var(--text-secondary)]">
                                                 {log.resourceType || 'N/A'}
                                             </td>
                                             <td className="px-6 py-4 whitespace-nowrap">
@@ -348,13 +356,13 @@ const AuditLogs = () => {
                                                     <span className="text-sm capitalize">{log.status}</span>
                                                 </div>
                                             </td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400 font-mono">
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-[var(--text-secondary)] font-mono">
                                                 {log.ipAddress || 'N/A'}
                                             </td>
                                             <td className="px-6 py-4 whitespace-nowrap">
                                                 <button
                                                     onClick={() => setSelectedLog(log)}
-                                                    className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-600 rounded-lg"
+                                                    className="p-1.5 hover:bg-[var(--bg-card-hover)] rounded-lg text-[var(--text-muted)] hover:text-[var(--text-primary)]"
                                                 >
                                                     <Eye className="w-4 h-4 text-gray-500" />
                                                 </button>
@@ -368,8 +376,8 @@ const AuditLogs = () => {
                 </div>
 
                 {/* Pagination */}
-                <div className="px-6 py-4 border-t border-gray-200 dark:border-gray-700 flex items-center justify-between">
-                    <div className="text-sm text-gray-500 dark:text-gray-400">
+                <div className="px-6 py-4 border-t border-[var(--border-color)] flex items-center justify-between">
+                    <div className="text-sm text-[var(--text-muted)]">
                         Showing {(pagination.page - 1) * pagination.limit + 1} to{' '}
                         {Math.min(pagination.page * pagination.limit, pagination.total)} of{' '}
                         {pagination.total} entries
@@ -378,11 +386,11 @@ const AuditLogs = () => {
                         <button
                             onClick={() => setPagination(p => ({ ...p, page: p.page - 1 }))}
                             disabled={pagination.page === 1}
-                            className="p-2 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                            className="p-2 border border-[var(--border-color)] rounded-lg hover:bg-[var(--bg-card-hover)] disabled:opacity-50 disabled:cursor-not-allowed text-[var(--text-secondary)]"
                         >
                             <ChevronLeft className="w-4 h-4" />
                         </button>
-                        <span className="text-sm text-gray-600 dark:text-gray-400">
+                        <span className="text-sm text-[var(--text-secondary)]">
                             Page {pagination.page} of {pagination.pages}
                         </span>
                         <button
@@ -402,15 +410,15 @@ const AuditLogs = () => {
                     <motion.div
                         initial={{ scale: 0.95, opacity: 0 }}
                         animate={{ scale: 1, opacity: 1 }}
-                        className="bg-white dark:bg-gray-800 rounded-xl shadow-xl max-w-2xl w-full max-h-[80vh] overflow-y-auto"
+                        className="bg-[var(--bg-card)] rounded-xl shadow-xl max-w-2xl w-full max-h-[80vh] overflow-y-auto text-[var(--text-primary)]"
                     >
-                        <div className="p-6 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center">
-                            <h2 className="text-xl font-bold text-gray-900 dark:text-white">
+                        <div className="p-6 border-b border-[var(--border-color)] flex justify-between items-center">
+                            <h2 className="text-xl font-bold text-[var(--text-primary)]">
                                 Audit Log Details
                             </h2>
                             <button
                                 onClick={() => setSelectedLog(null)}
-                                className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg"
+                                className="p-2 hover:bg-[var(--bg-card-hover)] rounded-lg text-[var(--text-secondary)]"
                             >
                                 <XCircle className="w-5 h-5" />
                             </button>
@@ -418,7 +426,7 @@ const AuditLogs = () => {
                         <div className="p-6 space-y-4">
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
-                                    <label className="text-sm text-gray-500 dark:text-gray-400">Timestamp</label>
+                                    <label className="text-sm text-[var(--text-muted)]">Timestamp</label>
                                     <p className="font-medium">{new Date(selectedLog.timestamp).toLocaleString()}</p>
                                 </div>
                                 <div>
@@ -438,7 +446,7 @@ const AuditLogs = () => {
                                     <p className="font-mono">{selectedLog.ipAddress || 'N/A'}</p>
                                 </div>
                                 <div>
-                                    <label className="text-sm text-gray-500 dark:text-gray-400">Status</label>
+                                    <label className="text-sm text-[var(--text-muted)]">Status</label>
                                     <div className="flex items-center gap-1.5">
                                         {getStatusIcon(selectedLog.status)}
                                         <span className="capitalize">{selectedLog.status}</span>
@@ -448,7 +456,7 @@ const AuditLogs = () => {
                             {selectedLog.changes && (
                                 <div>
                                     <label className="text-sm text-gray-500 dark:text-gray-400">Changes</label>
-                                    <pre className="mt-2 p-4 bg-gray-100 dark:bg-gray-900 rounded-lg overflow-x-auto text-sm">
+                                    <pre className="mt-2 p-4 bg-[var(--bg-background)] rounded-lg overflow-x-auto text-sm border border-[var(--border-color)] text-[var(--text-secondary)]">
                                         {JSON.stringify(selectedLog.changes, null, 2)}
                                     </pre>
                                 </div>

@@ -23,16 +23,19 @@ export function Dashboard() {
         const getDashboardPath = () => {
             switch (user.role) {
                 case 'SUPER_ADMIN':
+                    return '/dashboard/super-admin';
+                case 'ADMIN':
                     return '/dashboard/admin';
                 case 'MANAGER':
                     return '/dashboard/branch';
                 case 'TECHNICIAN':
                     return '/dashboard/tech';
+                case 'STAFF':
+                    return '/dashboard/staff';
                 case 'VIEWER':
                     return '/dashboard/viewer';
-                case 'STAFF':
                 default:
-                    return '/dashboard/branch'; // Staff see manager dashboard
+                    return '/dashboard/branch';
             }
         };
 
@@ -41,7 +44,7 @@ export function Dashboard() {
 
     // Show loading while determining redirect
     return (
-        <div className="min-h-screen bg-[#030304] flex items-center justify-center">
+        <div className="min-h-screen bg-[var(--bg-background)] flex items-center justify-center">
             <div className="flex flex-col items-center gap-4">
                 <Loader2 className="w-10 h-10 text-[var(--primary)] animate-spin" />
                 <p className="text-[var(--text-muted)]">Loading dashboard...</p>

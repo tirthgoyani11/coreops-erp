@@ -21,13 +21,13 @@ interface PurchaseOrder {
 }
 
 const STATUS_CONFIG: Record<string, { color: string; bg: string; icon: any }> = {
-    'DRAFT': { color: 'text-zinc-400', bg: 'bg-zinc-500/20', icon: FileText },
-    'PENDING_APPROVAL': { color: 'text-amber-400', bg: 'bg-amber-500/20', icon: Clock },
-    'APPROVED': { color: 'text-blue-400', bg: 'bg-blue-500/20', icon: Check },
-    'REJECTED': { color: 'text-red-400', bg: 'bg-red-500/20', icon: XCircle },
-    'RECEIVED': { color: 'text-emerald-400', bg: 'bg-emerald-500/20', icon: Truck },
-    'PARTIALLY_RECEIVED': { color: 'text-cyan-400', bg: 'bg-cyan-500/20', icon: Truck },
-    'CANCELLED': { color: 'text-zinc-500', bg: 'bg-zinc-500/20', icon: XCircle },
+    'DRAFT': { color: 'text-zinc-600 dark:text-zinc-400', bg: 'bg-zinc-500/10 dark:bg-zinc-500/20', icon: FileText },
+    'PENDING_APPROVAL': { color: 'text-amber-600 dark:text-amber-400', bg: 'bg-amber-500/10 dark:bg-amber-500/20', icon: Clock },
+    'APPROVED': { color: 'text-blue-600 dark:text-blue-400', bg: 'bg-blue-500/10 dark:bg-blue-500/20', icon: Check },
+    'REJECTED': { color: 'text-red-600 dark:text-red-400', bg: 'bg-red-500/10 dark:bg-red-500/20', icon: XCircle },
+    'RECEIVED': { color: 'text-emerald-600 dark:text-emerald-400', bg: 'bg-emerald-500/10 dark:bg-emerald-500/20', icon: Truck },
+    'PARTIALLY_RECEIVED': { color: 'text-cyan-600 dark:text-cyan-400', bg: 'bg-cyan-500/10 dark:bg-cyan-500/20', icon: Truck },
+    'CANCELLED': { color: 'text-zinc-600 dark:text-zinc-500', bg: 'bg-zinc-500/10 dark:bg-zinc-500/20', icon: XCircle },
 };
 
 export function PurchaseOrders() {
@@ -147,19 +147,19 @@ export function PurchaseOrders() {
         <div className="space-y-8">
             {/* Stats */}
             <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-                <div className="bg-[var(--bg-card)] border border-white/5 p-6 rounded-3xl">
-                    <p className="text-[var(--text-muted)] font-medium mb-1">Total Orders</p>
-                    <h2 className="text-3xl font-bold text-white">{orders.length}</h2>
+                <div className="bg-[var(--bg-card)] border border-[var(--border-color)] p-6 rounded-3xl">
+                    <p className="text-[var(--text-secondary)] font-medium mb-1">Total Orders</p>
+                    <h2 className="text-3xl font-bold text-[var(--text-primary)]">{orders.length}</h2>
                 </div>
 
-                <div className="bg-[var(--bg-card)] border border-white/5 p-6 rounded-3xl">
-                    <p className="text-[var(--text-muted)] font-medium mb-1">Pending Approval</p>
-                    <h2 className="text-3xl font-bold text-amber-400">{byStatus.pending}</h2>
+                <div className="bg-[var(--bg-card)] border border-[var(--border-color)] p-6 rounded-3xl">
+                    <p className="text-[var(--text-secondary)] font-medium mb-1">Pending Approval</p>
+                    <h2 className="text-3xl font-bold text-amber-600 dark:text-amber-400">{byStatus.pending}</h2>
                 </div>
 
-                <div className="bg-[var(--bg-card)] border border-white/5 p-6 rounded-3xl">
-                    <p className="text-[var(--text-muted)] font-medium mb-1">Received</p>
-                    <h2 className="text-3xl font-bold text-emerald-400">{byStatus.received}</h2>
+                <div className="bg-[var(--bg-card)] border border-[var(--border-color)] p-6 rounded-3xl">
+                    <p className="text-[var(--text-secondary)] font-medium mb-1">Received</p>
+                    <h2 className="text-3xl font-bold text-emerald-600 dark:text-emerald-400">{byStatus.received}</h2>
                 </div>
 
                 <button
@@ -179,7 +179,7 @@ export function PurchaseOrders() {
                         onClick={() => setStatusFilter(status)}
                         className={`px-4 py-2 rounded-xl text-sm font-medium transition-all ${statusFilter === status
                             ? 'bg-[var(--primary)] text-black'
-                            : 'bg-white/5 text-[var(--text-muted)] hover:bg-white/10'
+                            : 'bg-[var(--bg-overlay)] text-[var(--text-secondary)] hover:bg-[var(--bg-card-hover)]'
                             }`}
                     >
                         {status || 'All'}
@@ -189,16 +189,16 @@ export function PurchaseOrders() {
 
             {/* Orders List */}
             <div>
-                <h3 className="text-lg font-bold mb-6 flex items-center gap-2 text-white">
+                <h3 className="text-lg font-bold mb-6 flex items-center gap-2 text-[var(--text-primary)]">
                     <div className="w-1.5 h-6 bg-[var(--primary)] rounded-full shadow-[0_0_10px_var(--primary)]" />
                     Purchase Orders ({orders.length})
                 </h3>
 
                 {orders.length === 0 ? (
-                    <div className="text-center py-20 bg-[#18181b] rounded-[2rem] border border-white/5">
-                        <ShoppingCart className="w-12 h-12 mx-auto text-[var(--text-muted)] mb-4 opacity-50" />
-                        <h3 className="text-xl font-bold mb-2">No Purchase Orders</h3>
-                        <p className="text-[var(--text-muted)]">Create your first purchase order above.</p>
+                    <div className="text-center py-20 bg-[var(--bg-card)] rounded-[2rem] border border-[var(--border-color)]">
+                        <ShoppingCart className="w-12 h-12 mx-auto text-[var(--text-secondary)] mb-4 opacity-50" />
+                        <h3 className="text-xl font-bold mb-2 text-[var(--text-primary)]">No Purchase Orders</h3>
+                        <p className="text-[var(--text-secondary)]">Create your first purchase order above.</p>
                     </div>
                 ) : (
                     <div className="space-y-4">
@@ -212,7 +212,7 @@ export function PurchaseOrders() {
                                     initial={{ opacity: 0, x: -20 }}
                                     animate={{ opacity: 1, x: 0 }}
                                     transition={{ delay: i * 0.05 }}
-                                    className="bg-[var(--bg-card)] border border-white/5 p-6 rounded-2xl hover:border-white/20 transition-all group cursor-pointer"
+                                    className="bg-[var(--bg-card)] border border-[var(--border-color)] p-6 rounded-2xl hover:border-[var(--primary)]/30 transition-all group cursor-pointer"
                                 >
                                     <div className="flex items-center justify-between">
                                         <div className="flex items-center gap-4">
@@ -220,10 +220,10 @@ export function PurchaseOrders() {
                                                 <StatusIcon className={`w-5 h-5 ${config.color}`} />
                                             </div>
                                             <div>
-                                                <h4 className="font-bold text-white group-hover:text-[var(--primary)] transition-colors">
+                                                <h4 className="font-bold text-[var(--text-primary)] group-hover:text-[var(--primary)] transition-colors">
                                                     {order.poNumber}
                                                 </h4>
-                                                <p className="text-sm text-[var(--text-muted)]">
+                                                <p className="text-sm text-[var(--text-secondary)]">
                                                     {order.vendor?.name || 'Unknown Vendor'}
                                                 </p>
                                             </div>
@@ -231,8 +231,8 @@ export function PurchaseOrders() {
 
                                         <div className="flex items-center gap-6">
                                             <div className="text-right">
-                                                <p className="font-bold text-white">{formatCurrency(order.totalAmount)}</p>
-                                                <p className="text-xs text-[var(--text-muted)]">
+                                                <p className="font-bold text-[var(--text-primary)]">{formatCurrency(order.totalAmount)}</p>
+                                                <p className="text-xs text-[var(--text-secondary)]">
                                                     {order.items?.length || 0} items
                                                 </p>
                                             </div>
@@ -250,7 +250,7 @@ export function PurchaseOrders() {
                                                 </button>
                                             )}
 
-                                            <ChevronRight className="w-5 h-5 text-[var(--text-muted)] group-hover:text-[var(--primary)] transition-colors" />
+                                            <ChevronRight className="w-5 h-5 text-[var(--text-secondary)] group-hover:text-[var(--primary)] transition-colors" />
                                         </div>
                                     </div>
                                 </motion.div>
@@ -268,19 +268,19 @@ export function PurchaseOrders() {
                             initial={{ scale: 0.95, opacity: 0 }}
                             animate={{ scale: 1, opacity: 1 }}
                             exit={{ scale: 0.95, opacity: 0 }}
-                            className="bg-[#18181b] border border-white/10 p-8 rounded-3xl w-full max-w-2xl shadow-2xl relative max-h-[90vh] overflow-y-auto"
+                            className="bg-[var(--bg-card)] border border-[var(--border-color)] p-8 rounded-3xl w-full max-w-2xl shadow-2xl relative max-h-[90vh] overflow-y-auto"
                             onClick={e => e.stopPropagation()}
                         >
-                            <button onClick={() => setShowModal(false)} className="absolute top-6 right-6 p-2 rounded-full hover:bg-white/5 text-[var(--text-muted)]">
+                            <button onClick={() => setShowModal(false)} className="absolute top-6 right-6 p-2 rounded-full hover:bg-[var(--bg-overlay)] text-[var(--text-secondary)]">
                                 <X className="w-5 h-5" />
                             </button>
                             <h2 className="text-2xl font-bold mb-6">New Purchase Order</h2>
 
                             <form onSubmit={handleSubmit} className="space-y-6">
                                 <div>
-                                    <label className="block text-xs font-bold text-[var(--text-muted)] uppercase tracking-wider mb-2">Vendor</label>
+                                    <label className="block text-xs font-bold text-[var(--text-secondary)] uppercase tracking-wider mb-2">Vendor</label>
                                     <select
-                                        className="w-full bg-[#27272a] border border-white/5 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-[var(--primary)]"
+                                        className="w-full bg-[var(--bg-overlay)] border border-[var(--border-color)] rounded-xl px-4 py-3 text-[var(--text-primary)] focus:outline-none focus:border-[var(--primary)]"
                                         value={formData.vendor}
                                         onChange={e => setFormData({ ...formData, vendor: e.target.value })}
                                         required
@@ -294,7 +294,7 @@ export function PurchaseOrders() {
 
                                 <div>
                                     <div className="flex items-center justify-between mb-3">
-                                        <label className="text-xs font-bold text-[var(--text-muted)] uppercase tracking-wider">Items</label>
+                                        <label className="text-xs font-bold text-[var(--text-secondary)] uppercase tracking-wider">Items</label>
                                         <button type="button" onClick={addItem} className="text-[var(--primary)] text-sm font-medium hover:underline">
                                             + Add Item
                                         </button>
@@ -306,7 +306,7 @@ export function PurchaseOrders() {
                                                 <input
                                                     type="text"
                                                     placeholder="Item name"
-                                                    className="flex-1 bg-[#27272a] border border-white/5 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-[var(--primary)]"
+                                                    className="flex-1 bg-[var(--bg-overlay)] border border-[var(--border-color)] rounded-xl px-4 py-3 text-[var(--text-primary)] focus:outline-none focus:border-[var(--primary)]"
                                                     value={item.name}
                                                     onChange={e => updateItem(index, 'name', e.target.value)}
                                                     required
@@ -315,7 +315,7 @@ export function PurchaseOrders() {
                                                     type="text"
                                                     inputMode="numeric"
                                                     placeholder="Qty"
-                                                    className="w-20 bg-[#27272a] border border-white/5 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-[var(--primary)]"
+                                                    className="w-20 bg-[var(--bg-overlay)] border border-[var(--border-color)] rounded-xl px-4 py-3 text-[var(--text-primary)] focus:outline-none focus:border-[var(--primary)]"
                                                     value={item.quantity}
                                                     onChange={e => {
                                                         if (e.target.value === '' || /^\d*$/.test(e.target.value)) {
@@ -328,7 +328,7 @@ export function PurchaseOrders() {
                                                     type="text"
                                                     inputMode="decimal"
                                                     placeholder="Price"
-                                                    className="w-28 bg-[#27272a] border border-white/5 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-[var(--primary)]"
+                                                    className="w-28 bg-[var(--bg-overlay)] border border-[var(--border-color)] rounded-xl px-4 py-3 text-[var(--text-primary)] focus:outline-none focus:border-[var(--primary)]"
                                                     value={item.unitPrice}
                                                     onChange={e => {
                                                         if (e.target.value === '' || /^\d*\.?\d*$/.test(e.target.value)) {
@@ -338,7 +338,7 @@ export function PurchaseOrders() {
                                                     required
                                                 />
                                                 {formData.items.length > 1 && (
-                                                    <button type="button" onClick={() => removeItem(index)} className="p-3 text-red-400 hover:bg-red-500/10 rounded-xl">
+                                                    <button type="button" onClick={() => removeItem(index)} className="p-3 text-red-600 dark:text-red-400 hover:bg-red-500/10 rounded-xl">
                                                         <X className="w-5 h-5" />
                                                     </button>
                                                 )}
@@ -346,15 +346,15 @@ export function PurchaseOrders() {
                                         ))}
                                     </div>
 
-                                    <p className="text-right mt-3 text-lg font-bold text-white">
+                                    <p className="text-right mt-3 text-lg font-bold text-[var(--text-primary)]">
                                         Total: {formatCurrency(formData.items.reduce((sum, i) => sum + ((parseInt(i.quantity) || 0) * (parseFloat(i.unitPrice) || 0)), 0))}
                                     </p>
                                 </div>
 
                                 <div>
-                                    <label className="block text-xs font-bold text-[var(--text-muted)] uppercase tracking-wider mb-2">Notes</label>
+                                    <label className="block text-xs font-bold text-[var(--text-secondary)] uppercase tracking-wider mb-2">Notes</label>
                                     <textarea
-                                        className="w-full bg-[#27272a] border border-white/5 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-[var(--primary)] resize-none"
+                                        className="w-full bg-[var(--bg-overlay)] border border-[var(--border-color)] rounded-xl px-4 py-3 text-[var(--text-primary)] focus:outline-none focus:border-[var(--primary)] resize-none"
                                         rows={3}
                                         placeholder="Optional notes..."
                                         value={formData.notes}

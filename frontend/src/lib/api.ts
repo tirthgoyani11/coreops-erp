@@ -4,14 +4,38 @@ import type { AxiosResponse, InternalAxiosRequestConfig } from 'axios';
 // Environment-based API URL
 const API_BASE_URL = import.meta.env.VITE_API_URL || '/api';
 
+// ── In-memory access token (never persisted to localStorage) ──
+let accessToken: string | null = null;
+
+export function setAccessToken(token: string | null) {
+    accessToken = token;
+}
+
+export function getAccessToken(): string | null {
+    return accessToken;
+}
+
+// ── Refresh token queue (prevents multiple concurrent refresh calls) ──
+let isRefreshing = false;
+let refreshSubscribers: Array<(token: string) => void> = [];
+
+function onTokenRefreshed(token: string) {
+    refreshSubscribers.forEach((cb) => cb(token));
+    refreshSubscribers = [];
+}
+
+function addRefreshSubscriber(callback: (token: string) => void) {
+    refreshSubscribers.push(callback);
+}
+
 // Create axios instance with security defaults
 const api = axios.create({
     baseURL: API_BASE_URL,
-    timeout: 30000, // 30 second timeout
+    timeout: 30000,
     headers: {
         'Content-Type': 'application/json',
     },
-    withCredentials: false, // Set to true if using cookies
+    withCredentials: true, // Send httpOnly cookies with every request
 });
 
 // Request ID generator for tracing
@@ -22,10 +46,9 @@ const generateRequestId = (): string => {
 // Request interceptor - add auth token and request ID
 api.interceptors.request.use(
     (config: InternalAxiosRequestConfig) => {
-        // Add auth token
-        const token = localStorage.getItem('token');
-        if (token) {
-            config.headers.Authorization = `Bearer ${token}`;
+        // Add access token from memory (NOT localStorage)
+        if (accessToken) {
+            config.headers.Authorization = `Bearer ${accessToken}`;
         }
 
         // Add request ID for tracing
@@ -43,13 +66,14 @@ api.interceptors.request.use(
     }
 );
 
-// Response interceptor - handle errors globally
+// Response interceptor - handle errors globally with auto-refresh
 api.interceptors.response.use(
     (response: AxiosResponse) => {
         return response;
     },
-    (error: AxiosError<{ message?: string; errors?: Array<{ field: string; message: string }> }>) => {
+    async (error: AxiosError<{ message?: string; code?: string; errors?: Array<{ field: string; message: string }> }>) => {
         const { response, config } = error;
+        const originalRequest = config as InternalAxiosRequestConfig & { _retry?: boolean };
 
         // Log error for debugging (in development)
         if (import.meta.env.DEV) {
@@ -64,22 +88,64 @@ api.interceptors.response.use(
         // Handle specific status codes
         if (response) {
             switch (response.status) {
-                case 401:
-                    // Unauthorized - clear token and redirect to login
-                    localStorage.removeItem('token');
-                    // Only redirect if not already on login page
-                    if (!window.location.pathname.includes('/login')) {
-                        window.location.href = '/login';
+                case 401: {
+                    const isTokenExpired = response.data?.code === 'TOKEN_EXPIRED';
+                    const isRefreshUrl = originalRequest.url?.includes('/auth/refresh');
+                    const isLoginUrl = originalRequest.url?.includes('/auth/login');
+
+                    // If token expired and not already retrying, attempt refresh
+                    if (isTokenExpired && !originalRequest._retry && !isRefreshUrl && !isLoginUrl) {
+                        if (isRefreshing) {
+                            // Another refresh is in progress — queue this request
+                            return new Promise((resolve) => {
+                                addRefreshSubscriber((newToken: string) => {
+                                    originalRequest.headers.Authorization = `Bearer ${newToken}`;
+                                    resolve(api(originalRequest));
+                                });
+                            });
+                        }
+
+                        originalRequest._retry = true;
+                        isRefreshing = true;
+
+                        try {
+                            const { data } = await api.post('/auth/refresh');
+                            const newToken = data.token;
+                            setAccessToken(newToken);
+                            isRefreshing = false;
+                            onTokenRefreshed(newToken);
+
+                            // Retry original request with new token
+                            originalRequest.headers.Authorization = `Bearer ${newToken}`;
+                            return api(originalRequest);
+                        } catch (refreshError) {
+                            isRefreshing = false;
+                            refreshSubscribers = [];
+                            setAccessToken(null);
+
+                            // Refresh failed — redirect to login
+                            if (!window.location.pathname.includes('/login')) {
+                                window.location.href = '/login';
+                            }
+                            return Promise.reject(refreshError);
+                        }
+                    }
+
+                    // Non-expired 401 or refresh failed — redirect to login
+                    if (!isLoginUrl && !isRefreshUrl) {
+                        setAccessToken(null);
+                        if (!window.location.pathname.includes('/login')) {
+                            window.location.href = '/login';
+                        }
                     }
                     break;
+                }
 
                 case 403:
-                    // Forbidden - user doesn't have permission
                     console.warn('[API] Access forbidden:', config?.url);
                     break;
 
                 case 429:
-                    // Rate limited
                     console.warn('[API] Rate limited - too many requests');
                     break;
 
@@ -87,15 +153,12 @@ api.interceptors.response.use(
                 case 502:
                 case 503:
                 case 504:
-                    // Server error
                     console.error('[API] Server error:', response.status);
                     break;
             }
         } else if (error.code === 'ECONNABORTED') {
-            // Timeout
             console.error('[API] Request timeout');
         } else if (!navigator.onLine) {
-            // Network offline
             console.error('[API] Network offline');
         }
 

@@ -69,12 +69,12 @@ const ApprovalQueue = memo(function ApprovalQueue({
 }) {
     if (loading) {
         return (
-            <div className="bg-[#18181b] border border-white/5 rounded-2xl p-6">
-                <div className="w-32 h-5 rounded bg-white/5 mb-4 animate-pulse" />
+            <div className="bg-[var(--bg-card)] border border-[var(--border-color)] rounded-2xl p-6">
+                <div className="w-32 h-5 rounded bg-[var(--bg-card-hover)] mb-4 animate-pulse" />
                 {[1, 2, 3].map(i => (
-                    <div key={i} className="p-4 rounded-xl bg-white/5 mb-2 animate-pulse">
-                        <div className="h-5 w-48 rounded bg-white/5 mb-2" />
-                        <div className="h-4 w-24 rounded bg-white/5" />
+                    <div key={i} className="p-4 rounded-xl bg-[var(--bg-card-hover)] mb-2 animate-pulse">
+                        <div className="h-5 w-48 rounded bg-[var(--bg-card-hover)] mb-2" />
+                        <div className="h-4 w-24 rounded bg-[var(--bg-card-hover)]" />
                     </div>
                 ))}
             </div>
@@ -85,18 +85,19 @@ const ApprovalQueue = memo(function ApprovalQueue({
         <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            className="bg-[#18181b] border border-white/5 rounded-2xl p-6"
+
+            className="bg-[var(--bg-card)] border border-[var(--border-color)] rounded-2xl p-6"
         >
             <div className="flex items-center justify-between mb-4">
-                <h3 className="text-white font-medium">Approval Queue</h3>
-                <span className="text-xs text-[var(--text-muted)]">
+                <h3 className="text-[var(--text-primary)] font-medium">Approval Queue</h3>
+                <span className="text-xs text-[var(--text-secondary)]">
                     {items.length} pending
                 </span>
             </div>
 
             <div className="space-y-3">
                 {items.length === 0 ? (
-                    <div className="text-center py-8 text-[var(--text-muted)]">
+                    <div className="text-center py-8 text-[var(--text-secondary)]">
                         <CheckCircle2 className="w-10 h-10 mx-auto mb-2 opacity-50" />
                         <p className="text-sm">No pending approvals</p>
                     </div>
@@ -107,7 +108,7 @@ const ApprovalQueue = memo(function ApprovalQueue({
                             initial={{ opacity: 0, x: -10 }}
                             animate={{ opacity: 1, x: 0 }}
                             transition={{ delay: index * 0.05 }}
-                            className="p-4 rounded-xl bg-white/5 border border-white/5 hover:border-white/10 transition-colors"
+                            className="p-4 rounded-xl bg-[var(--bg-overlay)] border border-[var(--border-color)] hover:border-[var(--primary)]/30 transition-colors"
                         >
                             <div className="flex items-start justify-between gap-4">
                                 <div className="flex-1 min-w-0">
@@ -119,8 +120,8 @@ const ApprovalQueue = memo(function ApprovalQueue({
                                             {item.priority}
                                         </span>
                                     </div>
-                                    <p className="text-sm text-white font-medium truncate">{item.title}</p>
-                                    <div className="flex items-center gap-3 mt-1 text-xs text-[var(--text-muted)]">
+                                    <p className="text-sm text-[var(--text-primary)] font-medium truncate">{item.title}</p>
+                                    <div className="flex items-center gap-3 mt-1 text-xs text-[var(--text-secondary)]">
                                         <span>₹{item.estimatedCost.toLocaleString()}</span>
                                         {item.office && <span>• {item.office.name}</span>}
                                     </div>
@@ -218,8 +219,8 @@ export const ManagerDashboard = memo(function ManagerDashboard() {
             {/* Header */}
             <div className="flex items-center justify-between">
                 <div>
-                    <h1 className="text-2xl lg:text-3xl font-bold text-white">Branch Dashboard</h1>
-                    <p className="text-[var(--text-muted)] mt-1">Branch operations overview</p>
+                    <h1 className="text-2xl lg:text-3xl font-bold text-[var(--text-primary)]">Branch Dashboard</h1>
+                    <p className="text-[var(--text-secondary)] mt-1">Branch operations overview</p>
                 </div>
             </div>
 
@@ -290,30 +291,30 @@ export const ManagerDashboard = memo(function ManagerDashboard() {
                 <motion.div
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
-                    className="bg-[#18181b] border border-white/5 rounded-2xl p-6"
+                    className="bg-[var(--bg-card)] border border-[var(--border-color)] rounded-2xl p-6"
                 >
-                    <h3 className="text-white font-medium mb-4">Technician Workload</h3>
+                    <h3 className="text-[var(--text-primary)] font-medium mb-4">Technician Workload</h3>
                     <div className="flex items-center gap-4 mb-4">
                         <div className="w-12 h-12 rounded-xl bg-blue-500/10 flex items-center justify-center">
                             <Users className="w-6 h-6 text-blue-400" />
                         </div>
                         <div>
-                            <p className="text-2xl font-bold text-white">{stats.technicianCount}</p>
-                            <p className="text-sm text-[var(--text-muted)]">Active Technicians</p>
+                            <p className="text-2xl font-bold text-[var(--text-primary)]">{stats.technicianCount}</p>
+                            <p className="text-sm text-[var(--text-secondary)]">Active Technicians</p>
                         </div>
                     </div>
 
                     <div className="space-y-3">
                         <div className="flex items-center justify-between text-sm">
-                            <span className="text-[var(--text-muted)]">Avg Tickets/Tech</span>
-                            <span className="text-white font-medium">4.2</span>
+                            <span className="text-[var(--text-secondary)]">Avg Tickets/Tech</span>
+                            <span className="text-[var(--text-primary)] font-medium">4.2</span>
                         </div>
                         <div className="flex items-center justify-between text-sm">
-                            <span className="text-[var(--text-muted)]">Overloaded</span>
+                            <span className="text-[var(--text-secondary)]">Overloaded</span>
                             <span className="text-orange-400 font-medium">2</span>
                         </div>
                         <div className="flex items-center justify-between text-sm">
-                            <span className="text-[var(--text-muted)]">Available</span>
+                            <span className="text-[var(--text-secondary)]">Available</span>
                             <span className="text-emerald-400 font-medium">4</span>
                         </div>
                     </div>

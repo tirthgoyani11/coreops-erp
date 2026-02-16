@@ -45,13 +45,13 @@ export const StatCard = memo(function StatCard({
 
     if (loading) {
         return (
-            <div className="bg-[#18181b] border border-white/5 rounded-2xl p-6 animate-pulse">
+            <div className="bg-[var(--bg-card)] border border-[var(--border-color)] rounded-2xl p-6 animate-pulse">
                 <div className="flex items-start justify-between mb-4">
-                    <div className="w-12 h-12 rounded-xl bg-white/5" />
-                    <div className="w-16 h-4 rounded bg-white/5" />
+                    <div className="w-12 h-12 rounded-xl bg-[var(--bg-card-hover)]" />
+                    <div className="w-16 h-4 rounded bg-[var(--bg-card-hover)]" />
                 </div>
-                <div className="w-24 h-8 rounded bg-white/5 mb-2" />
-                <div className="w-20 h-4 rounded bg-white/5" />
+                <div className="w-24 h-8 rounded bg-[var(--bg-card-hover)] mb-2" />
+                <div className="w-20 h-4 rounded bg-[var(--bg-card-hover)]" />
             </div>
         );
     }
@@ -63,8 +63,8 @@ export const StatCard = memo(function StatCard({
             whileHover={onClick ? { scale: 1.02, y: -2 } : undefined}
             onClick={onClick}
             className={`
-                bg-[#18181b] border border-white/5 rounded-2xl p-6
-                ${onClick ? 'cursor-pointer hover:border-white/10 transition-all' : ''}
+                bg-[var(--bg-card)] border border-[var(--border-color)] rounded-2xl p-6
+                ${onClick ? 'cursor-pointer hover:border-[var(--primary)]/50 transition-all' : ''}
             `}
         >
             <div className="flex items-start justify-between mb-4">
@@ -87,7 +87,7 @@ export const StatCard = memo(function StatCard({
                 )}
             </div>
 
-            <div className="text-3xl font-bold text-white mb-1 tracking-tight">
+            <div className="text-3xl font-bold text-[var(--text-primary)] mb-1 tracking-tight">
                 {value}
             </div>
 

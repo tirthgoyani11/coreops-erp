@@ -125,8 +125,8 @@ export function Notifications() {
                         )}
                     </div>
                     <div>
-                        <h1 className="text-2xl font-bold text-white">Notifications</h1>
-                        <p className="text-[var(--text-muted)]">{unreadCount} unread</p>
+                        <h1 className="text-2xl font-bold text-[var(--text-primary)]">Notifications</h1>
+                        <p className="text-[var(--text-secondary)]">{unreadCount} unread</p>
                     </div>
                 </div>
 
@@ -135,7 +135,7 @@ export function Notifications() {
                         <button
                             onClick={markAllAsRead}
                             disabled={actionLoading === 'all'}
-                            className="px-4 py-2 bg-white/5 hover:bg-white/10 text-white rounded-xl flex items-center gap-2 transition-colors disabled:opacity-50"
+                            className="px-4 py-2 bg-[var(--bg-overlay)] hover:bg-[var(--bg-card-hover)] text-[var(--text-primary)] rounded-xl flex items-center gap-2 transition-colors disabled:opacity-50"
                         >
                             {actionLoading === 'all' ? (
                                 <Loader2 className="w-4 h-4 animate-spin" />
@@ -155,8 +155,8 @@ export function Notifications() {
                         key={f}
                         onClick={() => setFilter(f)}
                         className={`px-4 py-2 rounded-xl text-sm font-medium transition-all capitalize ${filter === f
-                                ? 'bg-[var(--primary)] text-black'
-                                : 'bg-white/5 text-[var(--text-muted)] hover:bg-white/10'
+                            ? 'bg-[var(--primary)] text-black'
+                            : 'bg-[var(--bg-overlay)] text-[var(--text-secondary)] hover:bg-[var(--bg-card-hover)]'
                             }`}
                     >
                         {f}
@@ -183,10 +183,10 @@ export function Notifications() {
 
             {/* Notifications List */}
             {notifications.length === 0 ? (
-                <div className="text-center py-20 bg-[#18181b] rounded-[2rem] border border-white/5">
-                    <Bell className="w-12 h-12 mx-auto text-[var(--text-muted)] mb-4 opacity-50" />
-                    <h3 className="text-xl font-bold mb-2">No Notifications</h3>
-                    <p className="text-[var(--text-muted)]">You're all caught up!</p>
+                <div className="text-center py-20 bg-[var(--bg-card)] rounded-[2rem] border border-[var(--border-color)]">
+                    <Bell className="w-12 h-12 mx-auto text-[var(--text-secondary)] mb-4 opacity-50" />
+                    <h3 className="text-xl font-bold mb-2 text-[var(--text-primary)]">No Notifications</h3>
+                    <p className="text-[var(--text-secondary)]">You're all caught up!</p>
                 </div>
             ) : (
                 <div className="space-y-3">
@@ -203,8 +203,8 @@ export function Notifications() {
                                     exit={{ opacity: 0, x: 20, height: 0 }}
                                     transition={{ delay: i * 0.03 }}
                                     className={`bg-[var(--bg-card)] border p-4 rounded-2xl flex items-start gap-4 group transition-all ${notification.isRead
-                                            ? 'border-white/5 opacity-70'
-                                            : 'border-[var(--primary)]/30 bg-[var(--primary)]/5'
+                                        ? 'border-[var(--border-color)] opacity-70'
+                                        : 'border-[var(--primary)]/30 bg-[var(--primary)]/5'
                                         }`}
                                 >
                                     <div className={`w-10 h-10 rounded-xl ${config.bg} flex items-center justify-center shrink-0`}>
@@ -213,14 +213,14 @@ export function Notifications() {
 
                                     <div className="flex-1 min-w-0">
                                         <div className="flex items-start justify-between gap-2">
-                                            <h4 className={`font-semibold ${notification.isRead ? 'text-[var(--text-muted)]' : 'text-white'}`}>
+                                            <h4 className={`font-semibold ${notification.isRead ? 'text-[var(--text-secondary)]' : 'text-[var(--text-primary)]'}`}>
                                                 {notification.title}
                                             </h4>
-                                            <span className="text-xs text-[var(--text-muted)] whitespace-nowrap">
+                                            <span className="text-xs text-[var(--text-secondary)] whitespace-nowrap">
                                                 {formatTime(notification.createdAt)}
                                             </span>
                                         </div>
-                                        <p className="text-sm text-[var(--text-muted)] mt-1 line-clamp-2">
+                                        <p className="text-sm text-[var(--text-secondary)] mt-1 line-clamp-2">
                                             {notification.message}
                                         </p>
                                         {notification.actionUrl && (
@@ -238,7 +238,7 @@ export function Notifications() {
                                             <button
                                                 onClick={() => markAsRead(notification._id)}
                                                 disabled={actionLoading === notification._id}
-                                                className="p-2 hover:bg-white/10 rounded-lg text-[var(--text-muted)] hover:text-white transition-colors"
+                                                className="p-2 hover:bg-[var(--bg-overlay)] rounded-lg text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors"
                                                 title="Mark as read"
                                             >
                                                 {actionLoading === notification._id ? (
@@ -251,7 +251,7 @@ export function Notifications() {
                                         <button
                                             onClick={() => deleteNotification(notification._id)}
                                             disabled={actionLoading === notification._id}
-                                            className="p-2 hover:bg-red-500/20 rounded-lg text-[var(--text-muted)] hover:text-red-400 transition-colors"
+                                            className="p-2 hover:bg-red-500/20 rounded-lg text-[var(--text-secondary)] hover:text-red-400 transition-colors"
                                             title="Delete"
                                         >
                                             <Trash2 className="w-4 h-4" />

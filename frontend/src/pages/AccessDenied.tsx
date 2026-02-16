@@ -53,7 +53,7 @@ export const AccessDenied = memo(function AccessDenied() {
 
     return (
         <div
-            className="min-h-screen bg-[#030304] flex items-center justify-center p-4"
+            className="min-h-screen bg-[var(--bg-background)] flex items-center justify-center p-4"
             role="main"
             aria-labelledby="access-denied-title"
         >
@@ -87,7 +87,7 @@ export const AccessDenied = memo(function AccessDenied() {
                 {/* Title */}
                 <h1
                     id="access-denied-title"
-                    className="text-3xl font-bold text-white mb-2"
+                    className="text-3xl font-bold text-[var(--text-primary)] mb-2"
                 >
                     Access Denied
                 </h1>
@@ -130,7 +130,7 @@ export const AccessDenied = memo(function AccessDenied() {
 
                 {/* Role Badge */}
                 <div
-                    className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/5 border border-white/10 mb-8"
+                    className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-[var(--bg-overlay)] border border-[var(--border-color)] mb-8"
                     role="status"
                     aria-label={`Your current role is ${roleLabel}`}
                 >
@@ -140,9 +140,9 @@ export const AccessDenied = memo(function AccessDenied() {
                         aria-hidden="true"
                     />
                     <span className="text-sm text-[var(--text-muted)]">
-                        Your role: <span className="text-white font-medium">{roleLabel}</span>
+                        Your role: <span className="text-[var(--text-primary)] font-medium">{roleLabel}</span>
                     </span>
-                    <span className="text-xs text-[var(--text-muted)] capitalize px-2 py-0.5 rounded bg-white/5">
+                    <span className="text-xs text-[var(--text-muted)] capitalize px-2 py-0.5 rounded bg-[var(--bg-card)]">
                         {roleConfig.scope} scope
                     </span>
                 </div>
@@ -159,7 +159,7 @@ export const AccessDenied = memo(function AccessDenied() {
                     </Link>
                     <button
                         onClick={handleGoBack}
-                        className="inline-flex items-center justify-center gap-2 px-6 py-3 bg-white/5 text-white rounded-xl font-semibold hover:bg-white/10 transition-all border border-white/10 focus:outline-none focus:ring-2 focus:ring-white/20 focus:ring-offset-2 focus:ring-offset-[#030304]"
+                        className="inline-flex items-center justify-center gap-2 px-6 py-3 bg-[var(--bg-overlay)] text-[var(--text-primary)] rounded-xl font-semibold hover:bg-[var(--bg-card-hover)] transition-all border border-[var(--border-color)] focus:outline-none focus:ring-2 focus:ring-[var(--border-color)] focus:ring-offset-2 focus:ring-offset-[var(--bg-background)]"
                         aria-label="Go back to previous page"
                     >
                         <ArrowLeft className="w-4 h-4" aria-hidden="true" />

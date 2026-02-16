@@ -10,20 +10,20 @@ export function ProfitChart() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.3 }}
-            className="bg-[#18181b] rounded-[2rem] p-6 border border-zinc-800 relative overflow-hidden"
+            className="bg-[var(--bg-card)] rounded-[2rem] p-6 border border-[var(--border-color)] relative overflow-hidden"
         >
             <div className="flex items-center justify-between mb-8">
                 <div>
-                    <h3 className="text-lg font-bold text-white mb-1">Yearly profit <span className="text-zinc-500 text-sm font-normal">{'{20%}'}</span></h3>
+                    <h3 className="text-lg font-bold text-[var(--text-primary)] mb-1">Yearly profit <span className="text-[var(--text-muted)] text-sm font-normal">{'{20%}'}</span></h3>
                     <div className="flex items-center gap-2">
-                        <span className="text-[10px] bg-zinc-800 px-2 py-0.5 rounded text-zinc-400">Average</span>
-                        <span className="text-xs font-mono text-zinc-500">$ 568,338</span>
+                        <span className="text-[10px] bg-[var(--bg-card-hover)] px-2 py-0.5 rounded text-[var(--text-muted)]">Average</span>
+                        <span className="text-xs font-mono text-[var(--text-secondary)]">$ 568,338</span>
                     </div>
                 </div>
 
                 <div className="flex gap-2">
-                    <button className="p-2 hover:bg-zinc-800 rounded-lg text-zinc-400"><Minimize2 className="w-4 h-4" /></button>
-                    <button className="p-2 hover:bg-zinc-800 rounded-lg text-zinc-400"><ArrowUpRight className="w-4 h-4" /></button>
+                    <button className="p-2 hover:bg-[var(--bg-card-hover)] rounded-lg text-[var(--text-muted)]"><Minimize2 className="w-4 h-4" /></button>
+                    <button className="p-2 hover:bg-[var(--bg-card-hover)] rounded-lg text-[var(--text-muted)]"><ArrowUpRight className="w-4 h-4" /></button>
                 </div>
             </div>
 
@@ -37,14 +37,14 @@ export function ProfitChart() {
                         </div>
 
                         {/* Bar */}
-                        <div className="w-full bg-zinc-800 rounded-t-xl relative overflow-hidden group-hover:bg-[#10b981]/20 transition-colors" style={{ height: `${h}%` }}>
+                        <div className="w-full bg-[var(--bg-card-hover)] rounded-t-xl relative overflow-hidden group-hover:bg-[#10b981]/20 transition-colors" style={{ height: `${h}%` }}>
                             {/* Fill Effect */}
                             {i === 5 && (
                                 <div className="absolute bottom-0 w-full bg-[var(--primary)] h-full animate-pulse opacity-80" />
                             )}
                         </div>
 
-                        <span className="text-[10px] text-zinc-600 font-mono uppercase">{months[i]}</span>
+                        <span className="text-[10px] text-[var(--text-muted)] font-mono uppercase">{months[i]}</span>
                     </div>
                 ))}
             </div>

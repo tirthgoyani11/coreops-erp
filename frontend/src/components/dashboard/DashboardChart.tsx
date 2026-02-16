@@ -41,10 +41,10 @@ const CustomTooltip = ({ active, payload, label }: { active?: boolean; payload?:
     if (!active || !payload?.length) return null;
 
     return (
-        <div className="bg-[#1a1a1c] border border-white/10 rounded-lg px-3 py-2 shadow-xl">
+        <div className="bg-[var(--bg-card)] border border-[var(--border-color)] rounded-lg px-3 py-2 shadow-xl">
             {label && <p className="text-xs text-[var(--text-muted)] mb-1">{label}</p>}
             {payload.map((entry, index) => (
-                <p key={index} className="text-sm font-medium text-white">
+                <p key={index} className="text-sm font-medium text-[var(--text-primary)]">
                     {entry.name}: {typeof entry.value === 'number' ? entry.value.toLocaleString() : entry.value}
                 </p>
             ))}
@@ -65,10 +65,10 @@ export const DashboardChart = memo(function DashboardChart({
 
     if (loading) {
         return (
-            <div className="bg-[#18181b] border border-white/5 rounded-2xl p-6">
-                <div className="w-32 h-5 rounded bg-white/5 mb-4 animate-pulse" />
+            <div className="bg-[var(--bg-card)] border border-[var(--border-color)] rounded-2xl p-6">
+                <div className="w-32 h-5 rounded bg-[var(--bg-card-hover)] mb-4 animate-pulse" />
                 <div
-                    className="w-full rounded-xl bg-white/5 animate-pulse"
+                    className="w-full rounded-xl bg-[var(--bg-card-hover)] animate-pulse"
                     style={{ height: `${height}px` }}
                 />
             </div>
@@ -77,10 +77,10 @@ export const DashboardChart = memo(function DashboardChart({
 
     if (!data?.length) {
         return (
-            <div className="bg-[#18181b] border border-white/5 rounded-2xl p-6">
-                <h3 className="text-white font-medium mb-4">{title}</h3>
+            <div className="bg-[var(--bg-card)] border border-[var(--border-color)] rounded-2xl p-6">
+                <h3 className="text-[var(--text-primary)] font-medium mb-4">{title}</h3>
                 <div
-                    className="w-full rounded-xl bg-white/5 flex items-center justify-center text-[var(--text-muted)]"
+                    className="w-full rounded-xl bg-[var(--bg-card-hover)] flex items-center justify-center text-[var(--text-muted)]"
                     style={{ height: `${height}px` }}
                 >
                     No data available
@@ -114,7 +114,7 @@ export const DashboardChart = memo(function DashboardChart({
                             </Pie>
                             <Tooltip content={<CustomTooltip />} />
                             <Legend
-                                wrapperStyle={{ fontSize: '12px', color: 'var(--text-muted)' }}
+                                wrapperStyle={{ fontSize: '12px', color: 'var(--text-secondary)' }}
                             />
                         </PieChart>
                     </ResponsiveContainer>
@@ -124,7 +124,7 @@ export const DashboardChart = memo(function DashboardChart({
                 return (
                     <ResponsiveContainer width="100%" height={height}>
                         <LineChart data={data}>
-                            <CartesianGrid strokeDasharray="3 3" stroke="#27272a" />
+                            <CartesianGrid strokeDasharray="3 3" stroke="var(--border-color)" />
                             <XAxis
                                 dataKey="name"
                                 stroke="#71717a"
@@ -132,7 +132,7 @@ export const DashboardChart = memo(function DashboardChart({
                                 tickLine={false}
                             />
                             <YAxis
-                                stroke="#71717a"
+                                stroke="var(--text-secondary)"
                                 fontSize={12}
                                 tickLine={false}
                                 axisLine={false}
@@ -154,7 +154,7 @@ export const DashboardChart = memo(function DashboardChart({
                 return (
                     <ResponsiveContainer width="100%" height={height}>
                         <BarChart data={data}>
-                            <CartesianGrid strokeDasharray="3 3" stroke="#27272a" />
+                            <CartesianGrid strokeDasharray="3 3" stroke="var(--border-color)" />
                             <XAxis
                                 dataKey="name"
                                 stroke="#71717a"
@@ -162,7 +162,7 @@ export const DashboardChart = memo(function DashboardChart({
                                 tickLine={false}
                             />
                             <YAxis
-                                stroke="#71717a"
+                                stroke="var(--text-secondary)"
                                 fontSize={12}
                                 tickLine={false}
                                 axisLine={false}
@@ -186,9 +186,9 @@ export const DashboardChart = memo(function DashboardChart({
         <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            className="bg-[#18181b] border border-white/5 rounded-2xl p-6"
+            className="bg-[var(--bg-card)] border border-[var(--border-color)] rounded-2xl p-6"
         >
-            <h3 className="text-white font-medium mb-4">{title}</h3>
+            <h3 className="text-[var(--text-primary)] font-medium mb-4">{title}</h3>
             {renderChart()}
         </motion.div>
     );

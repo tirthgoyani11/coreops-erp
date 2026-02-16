@@ -43,9 +43,9 @@ export const QuickActions = memo(function QuickActions({
         <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            className="bg-[#18181b] border border-white/5 rounded-2xl p-6"
+            className="bg-[var(--bg-card)] border border-[var(--border-color)] rounded-2xl p-6"
         >
-            <h3 className="text-white font-medium mb-4">{title}</h3>
+            <h3 className="text-[var(--text-primary)] font-medium mb-4">{title}</h3>
 
             <div className="space-y-2">
                 {actions.map((action, index) => (
@@ -55,7 +55,7 @@ export const QuickActions = memo(function QuickActions({
                         animate={{ opacity: 1, x: 0 }}
                         transition={{ delay: index * 0.05 }}
                         onClick={() => navigate(action.href)}
-                        className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-white/5 hover:bg-white/10 border border-transparent hover:border-white/10 transition-all group"
+                        className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-[var(--bg-overlay)] hover:bg-[var(--bg-card-hover)] border border-transparent hover:border-[var(--border-color)] transition-all group"
                     >
                         <div
                             className="w-8 h-8 rounded-lg flex items-center justify-center transition-colors"
@@ -68,13 +68,13 @@ export const QuickActions = memo(function QuickActions({
                                 style={{ color: action.color }}
                             />
                         </div>
-                        <span className="text-sm font-medium text-[var(--text-muted)] group-hover:text-white transition-colors">
+                        <span className="text-sm font-medium text-[var(--text-secondary)] group-hover:text-[var(--text-primary)] transition-colors">
                             {action.label}
                         </span>
                     </motion.button>
                 ))}
             </div>
-        </motion.div>
+        </motion.div >
     );
 });
 

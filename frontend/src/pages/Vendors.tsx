@@ -89,9 +89,9 @@ export function Vendors() {
     };
 
     const getScoreColor = (score: number) => {
-        if (score >= 80) return 'text-emerald-400';
-        if (score >= 60) return 'text-amber-400';
-        return 'text-red-400';
+        if (score >= 80) return 'text-emerald-600 dark:text-emerald-400';
+        if (score >= 60) return 'text-amber-600 dark:text-amber-400';
+        return 'text-red-600 dark:text-red-400';
     };
 
     const activeVendors = vendors.filter(v => v.isActive && !v.blacklisted);
@@ -104,12 +104,12 @@ export function Vendors() {
             <div className="space-y-8">
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                     {[1, 2, 3].map(i => (
-                        <div key={i} className="h-32 bg-[#18181b] rounded-3xl animate-pulse border border-white/5" />
+                        <div key={i} className="h-32 bg-[var(--bg-card)] rounded-3xl animate-pulse border border-[var(--border-color)]" />
                     ))}
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                     {[1, 2, 3, 4, 5, 6].map(i => (
-                        <div key={i} className="h-48 bg-[#18181b] rounded-[2rem] animate-pulse border border-white/5" />
+                        <div key={i} className="h-48 bg-[var(--bg-card)] rounded-[2rem] animate-pulse border border-[var(--border-color)]" />
                     ))}
                 </div>
             </div>
@@ -120,18 +120,18 @@ export function Vendors() {
         <div className="space-y-8">
             {/* Stats */}
             <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-                <div className="bg-[var(--bg-card)] border border-white/5 p-6 rounded-3xl">
-                    <p className="text-[var(--text-muted)] font-medium mb-1">Total Vendors</p>
-                    <h2 className="text-3xl font-bold text-white">{vendors.length}</h2>
+                <div className="bg-[var(--bg-card)] border border-[var(--border-color)] p-6 rounded-3xl">
+                    <p className="text-[var(--text-secondary)] font-medium mb-1">Total Vendors</p>
+                    <h2 className="text-3xl font-bold text-[var(--text-primary)]">{vendors.length}</h2>
                 </div>
 
-                <div className="bg-[var(--bg-card)] border border-white/5 p-6 rounded-3xl">
-                    <p className="text-[var(--text-muted)] font-medium mb-1">Active Vendors</p>
-                    <h2 className="text-3xl font-bold text-emerald-400">{activeVendors.length}</h2>
+                <div className="bg-[var(--bg-card)] border border-[var(--border-color)] p-6 rounded-3xl">
+                    <p className="text-[var(--text-secondary)] font-medium mb-1">Active Vendors</p>
+                    <h2 className="text-3xl font-bold text-emerald-600 dark:text-emerald-400">{activeVendors.length}</h2>
                 </div>
 
-                <div className="bg-[var(--bg-card)] border border-white/5 p-6 rounded-3xl">
-                    <p className="text-[var(--text-muted)] font-medium mb-1">Avg Reliability</p>
+                <div className="bg-[var(--bg-card)] border border-[var(--border-color)] p-6 rounded-3xl">
+                    <p className="text-[var(--text-secondary)] font-medium mb-1">Avg Reliability</p>
                     <h2 className={`text-3xl font-bold ${getScoreColor(avgScore)}`}>{avgScore}%</h2>
                 </div>
 
@@ -147,19 +147,19 @@ export function Vendors() {
             {/* Search & Filter */}
             <div className="flex gap-4 flex-wrap">
                 <div className="relative flex-1 min-w-[200px]">
-                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-[var(--text-muted)]" />
+                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-[var(--text-secondary)]" />
                     <input
                         type="text"
                         placeholder="Search vendors..."
-                        className="w-full bg-[#27272a] border border-white/5 rounded-xl pl-12 pr-4 py-3 text-white focus:outline-none focus:border-[var(--primary)]"
+                        className="w-full bg-[var(--bg-overlay)] border border-[var(--border-color)] rounded-xl pl-12 pr-4 py-3 text-[var(--text-primary)] focus:outline-none focus:border-[var(--primary)]"
                         value={searchTerm}
                         onChange={e => setSearchTerm(e.target.value)}
                     />
                 </div>
                 <div className="relative">
-                    <Filter className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-[var(--text-muted)]" />
+                    <Filter className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-[var(--text-secondary)]" />
                     <select
-                        className="bg-[#27272a] border border-white/5 rounded-xl pl-12 pr-8 py-3 text-white focus:outline-none focus:border-[var(--primary)] appearance-none"
+                        className="bg-[var(--bg-overlay)] border border-[var(--border-color)] rounded-xl pl-12 pr-8 py-3 text-[var(--text-primary)] focus:outline-none focus:border-[var(--primary)] appearance-none"
                         value={filterType}
                         onChange={e => setFilterType(e.target.value)}
                     >
@@ -173,16 +173,16 @@ export function Vendors() {
 
             {/* Vendor Grid */}
             <div>
-                <h3 className="text-lg font-bold mb-6 flex items-center gap-2 text-white">
+                <h3 className="text-lg font-bold mb-6 flex items-center gap-2 text-[var(--text-primary)]">
                     <div className="w-1.5 h-6 bg-[var(--primary)] rounded-full shadow-[0_0_10px_var(--primary)]" />
                     Vendor Directory ({vendors.length})
                 </h3>
 
                 {vendors.length === 0 ? (
-                    <div className="text-center py-20 bg-[#18181b] rounded-[2rem] border border-white/5">
-                        <Building2 className="w-12 h-12 mx-auto text-[var(--text-muted)] mb-4 opacity-50" />
+                    <div className="text-center py-20 bg-[var(--bg-card)] rounded-[2rem] border border-[var(--border-color)]">
+                        <Building2 className="w-12 h-12 mx-auto text-[var(--text-secondary)] mb-4 opacity-50" />
                         <h3 className="text-xl font-bold mb-2">No Vendors Found</h3>
-                        <p className="text-[var(--text-muted)]">Add your first vendor to get started.</p>
+                        <p className="text-[var(--text-secondary)]">Add your first vendor to get started.</p>
                     </div>
                 ) : (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -192,10 +192,10 @@ export function Vendors() {
                                 initial={{ opacity: 0, y: 20 }}
                                 animate={{ opacity: 1, y: 0 }}
                                 transition={{ delay: i * 0.05 }}
-                                className="bg-[var(--bg-card)] border border-white/5 p-6 rounded-[2rem] hover:border-white/20 hover:bg-[#1f1f22] transition-all group cursor-pointer relative overflow-hidden"
+                                className="bg-[var(--bg-card)] border border-[var(--border-color)] p-6 rounded-[2rem] hover:border-[var(--primary)]/30 hover:bg-[var(--bg-card-hover)] transition-all group cursor-pointer relative overflow-hidden"
                             >
                                 <div className="flex justify-between items-start mb-4">
-                                    <div className="w-12 h-12 rounded-2xl bg-white/5 flex items-center justify-center text-[var(--primary)] group-hover:scale-110 group-hover:bg-[var(--primary)] group-hover:text-black transition-all duration-300">
+                                    <div className="w-12 h-12 rounded-2xl bg-[var(--bg-overlay)] flex items-center justify-center text-[var(--primary)] group-hover:scale-110 group-hover:bg-[var(--primary)] group-hover:text-black transition-all duration-300">
                                         <Building2 className="w-6 h-6" />
                                     </div>
                                     <div className="flex items-center gap-2">
@@ -207,26 +207,26 @@ export function Vendors() {
                                 </div>
 
                                 <div className="mb-4">
-                                    <h4 className="text-lg font-bold text-white group-hover:text-[var(--primary)] transition-colors truncate">{vendor.name}</h4>
-                                    <p className="text-xs text-[var(--text-muted)] font-mono">{vendor.vendorCode}</p>
+                                    <h4 className="text-lg font-bold text-[var(--text-primary)] group-hover:text-[var(--primary)] transition-colors truncate">{vendor.name}</h4>
+                                    <p className="text-xs text-[var(--text-secondary)] font-mono">{vendor.vendorCode}</p>
                                 </div>
 
-                                <div className="space-y-2 text-sm text-[var(--text-muted)]">
+                                <div className="space-y-2 text-sm text-[var(--text-secondary)]">
                                     <p className="flex items-center gap-2">
-                                        <span className="px-2 py-0.5 rounded-full bg-white/5 text-xs">{vendor.type}</span>
+                                        <span className="px-2 py-0.5 rounded-full bg-[var(--bg-overlay)] text-xs">{vendor.type}</span>
                                     </p>
                                     {vendor.contactInfo?.email && (
                                         <p className="truncate">{vendor.contactInfo.email}</p>
                                     )}
                                 </div>
 
-                                <div className="flex items-center justify-between pt-4 mt-4 border-t border-white/5">
+                                <div className="flex items-center justify-between pt-4 mt-4 border-t border-[var(--border-color)]">
                                     <div className="flex items-center gap-1 text-sm">
-                                        <TrendingUp className="w-4 h-4 text-[var(--text-muted)]" />
-                                        <span className="text-white font-medium">{vendor.performanceMetrics?.totalOrders || 0}</span>
-                                        <span className="text-[var(--text-muted)]">orders</span>
+                                        <TrendingUp className="w-4 h-4 text-[var(--text-secondary)]" />
+                                        <span className="text-[var(--text-primary)] font-medium">{vendor.performanceMetrics?.totalOrders || 0}</span>
+                                        <span className="text-[var(--text-secondary)]">orders</span>
                                     </div>
-                                    <span className={`text-xs px-2 py-1 rounded-full ${vendor.isActive ? 'bg-emerald-500/20 text-emerald-400' : 'bg-red-500/20 text-red-400'}`}>
+                                    <span className={`text-xs px-2 py-1 rounded-full ${vendor.isActive ? 'bg-emerald-500/10 dark:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400' : 'bg-red-500/10 dark:bg-red-500/20 text-red-600 dark:text-red-400'}`}>
                                         {vendor.isActive ? 'Active' : 'Inactive'}
                                     </span>
                                 </div>
@@ -246,19 +246,19 @@ export function Vendors() {
                             initial={{ scale: 0.95, opacity: 0 }}
                             animate={{ scale: 1, opacity: 1 }}
                             exit={{ scale: 0.95, opacity: 0 }}
-                            className="bg-[#18181b] border border-white/10 p-8 rounded-3xl w-full max-w-lg shadow-2xl relative"
+                            className="bg-[var(--bg-card)] border border-[var(--border-color)] p-8 rounded-3xl w-full max-w-lg shadow-2xl relative"
                             onClick={e => e.stopPropagation()}
                         >
-                            <button onClick={() => setShowModal(false)} className="absolute top-6 right-6 p-2 rounded-full hover:bg-white/5 text-[var(--text-muted)]">
+                            <button onClick={() => setShowModal(false)} className="absolute top-6 right-6 p-2 rounded-full hover:bg-[var(--bg-overlay)] text-[var(--text-secondary)]">
                                 <X className="w-5 h-5" />
                             </button>
                             <h2 className="text-2xl font-bold mb-6">Add New Vendor</h2>
                             <form onSubmit={handleSubmit} className="space-y-5">
                                 <div>
-                                    <label className="block text-xs font-bold text-[var(--text-muted)] uppercase tracking-wider mb-2">Vendor Name</label>
+                                    <label className="block text-xs font-bold text-[var(--text-secondary)] uppercase tracking-wider mb-2">Vendor Name</label>
                                     <input
                                         type="text"
-                                        className="w-full bg-[#27272a] border border-white/5 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-[var(--primary)]"
+                                        className="w-full bg-[var(--bg-overlay)] border border-[var(--border-color)] rounded-xl px-4 py-3 text-[var(--text-primary)] focus:outline-none focus:border-[var(--primary)]"
                                         placeholder="e.g., ABC Electronics"
                                         value={formData.name}
                                         onChange={e => setFormData({ ...formData, name: e.target.value })}
@@ -267,9 +267,9 @@ export function Vendors() {
                                 </div>
 
                                 <div>
-                                    <label className="block text-xs font-bold text-[var(--text-muted)] uppercase tracking-wider mb-2">Type</label>
+                                    <label className="block text-xs font-bold text-[var(--text-secondary)] uppercase tracking-wider mb-2">Type</label>
                                     <select
-                                        className="w-full bg-[#27272a] border border-white/5 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-[var(--primary)]"
+                                        className="w-full bg-[var(--bg-overlay)] border border-[var(--border-color)] rounded-xl px-4 py-3 text-[var(--text-primary)] focus:outline-none focus:border-[var(--primary)]"
                                         value={formData.type}
                                         onChange={e => setFormData({ ...formData, type: e.target.value })}
                                     >
@@ -282,10 +282,10 @@ export function Vendors() {
                                 </div>
 
                                 <div>
-                                    <label className="block text-xs font-bold text-[var(--text-muted)] uppercase tracking-wider mb-2">Email *</label>
+                                    <label className="block text-xs font-bold text-[var(--text-secondary)] uppercase tracking-wider mb-2">Email *</label>
                                     <input
                                         type="email"
-                                        className="w-full bg-[#27272a] border border-white/5 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-[var(--primary)]"
+                                        className="w-full bg-[var(--bg-overlay)] border border-[var(--border-color)] rounded-xl px-4 py-3 text-[var(--text-primary)] focus:outline-none focus:border-[var(--primary)]"
                                         placeholder="vendor@example.com"
                                         value={formData.contactInfo.email}
                                         onChange={e => setFormData({ ...formData, contactInfo: { ...formData.contactInfo, email: e.target.value } })}
@@ -294,10 +294,10 @@ export function Vendors() {
                                 </div>
 
                                 <div>
-                                    <label className="block text-xs font-bold text-[var(--text-muted)] uppercase tracking-wider mb-2">Phone</label>
+                                    <label className="block text-xs font-bold text-[var(--text-secondary)] uppercase tracking-wider mb-2">Phone</label>
                                     <input
                                         type="tel"
-                                        className="w-full bg-[#27272a] border border-white/5 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-[var(--primary)]"
+                                        className="w-full bg-[var(--bg-overlay)] border border-[var(--border-color)] rounded-xl px-4 py-3 text-[var(--text-primary)] focus:outline-none focus:border-[var(--primary)]"
                                         placeholder="+91 98765 43210"
                                         value={formData.contactInfo.phone}
                                         onChange={e => setFormData({ ...formData, contactInfo: { ...formData.contactInfo, phone: e.target.value } })}

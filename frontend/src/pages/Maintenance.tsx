@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Wrench, CheckCircle, XCircle, Plus, Lock, X, Loader2, Download } from 'lucide-react';
+import { Wrench, CheckCircle, XCircle, Plus, Lock, X, Loader2, Download, FileSpreadsheet } from 'lucide-react';
 import api from '../lib/api';
 import { exportMaintenance } from '../utils/exportUtils';
 import { formatCurrency, cn } from '../lib/utils';
@@ -103,7 +103,7 @@ export function Maintenance() {
         return (
             <div className="space-y-4">
                 {[1, 2, 3].map(i => (
-                    <div key={i} className="h-32 bg-[#18181b] rounded-2xl animate-pulse border border-white/5" />
+                    <div key={i} className="h-32 bg-[var(--bg-card)] rounded-2xl animate-pulse border border-[var(--border-color)]" />
                 ))}
             </div>
         );
@@ -112,24 +112,31 @@ export function Maintenance() {
     return (
         <div className="space-y-6">
             {/* Header */}
-            <div className="flex justify-between items-center bg-[#18181b] p-6 rounded-3xl border border-white/5">
+            <div className="flex justify-between items-center bg-[var(--bg-card)] p-6 rounded-3xl border border-[var(--border-color)]">
                 <div>
-                    <h2 className="text-2xl font-bold mb-1">Maintenance Requests</h2>
-                    <p className="text-[var(--text-muted)] text-sm">
+                    <h2 className="text-2xl font-bold mb-1 text-[var(--text-primary)]">Maintenance Requests</h2>
+                    <p className="text-[var(--text-secondary)] text-sm">
                         {requests.filter(r => r.status === 'REQUESTED').length} pending · {requests.filter(r => r.status === 'APPROVED').length} approved
                     </p>
                 </div>
                 <div className="flex gap-2">
                     <button
                         onClick={() => exportMaintenance(requests as any, 'pdf')}
-                        className="px-4 py-3 border border-white/10 rounded-xl hover:bg-white/5 flex items-center gap-2 text-white transition-colors"
+                        className="px-4 py-3 border border-[var(--border-color)] rounded-xl hover:bg-[var(--bg-overlay)] flex items-center gap-2 text-[var(--text-primary)] transition-colors"
                     >
                         <Download className="w-4 h-4" />
                         PDF
                     </button>
                     <button
+                        onClick={() => exportMaintenance(requests as any, 'csv')}
+                        className="px-4 py-3 border border-[var(--border-color)] rounded-xl hover:bg-[var(--bg-overlay)] flex items-center gap-2 text-[var(--text-primary)] transition-colors"
+                    >
+                        <FileSpreadsheet className="w-4 h-4" />
+                        CSV
+                    </button>
+                    <button
                         onClick={() => exportMaintenance(requests as any, 'excel')}
-                        className="px-4 py-3 border border-white/10 rounded-xl hover:bg-white/5 flex items-center gap-2 text-white transition-colors"
+                        className="px-4 py-3 border border-[var(--border-color)] rounded-xl hover:bg-[var(--bg-overlay)] flex items-center gap-2 text-[var(--text-primary)] transition-colors"
                     >
                         <Download className="w-4 h-4" />
                         Excel
@@ -148,10 +155,10 @@ export function Maintenance() {
             {/* Requests List */}
             <div className="space-y-4">
                 {requests.length === 0 ? (
-                    <div className="text-center py-20 bg-[#18181b] rounded-3xl border border-white/5">
-                        <Wrench className="w-12 h-12 mx-auto text-[var(--text-muted)] mb-4 opacity-50" />
-                        <h3 className="text-xl font-bold mb-2">No Maintenance Requests</h3>
-                        <p className="text-[var(--text-muted)]">Create your first request above.</p>
+                    <div className="text-center py-20 bg-[var(--bg-card)] rounded-3xl border border-[var(--border-color)]">
+                        <Wrench className="w-12 h-12 mx-auto text-[var(--text-secondary)] mb-4 opacity-50" />
+                        <h3 className="text-xl font-bold mb-2 text-[var(--text-primary)]">No Maintenance Requests</h3>
+                        <p className="text-[var(--text-secondary)]">Create your first request above.</p>
                     </div>
                 ) : (
                     requests.map((req) => (
@@ -159,15 +166,15 @@ export function Maintenance() {
                             key={req._id}
                             initial={{ opacity: 0, y: 10 }}
                             animate={{ opacity: 1, y: 0 }}
-                            className="bg-[#18181b] border border-white/5 p-6 rounded-2xl flex flex-col md:flex-row md:items-center justify-between gap-4 group hover:border-white/10 transition-all"
+                            className="bg-[var(--bg-card)] border border-[var(--border-color)] p-6 rounded-2xl flex flex-col md:flex-row md:items-center justify-between gap-4 group hover:border-[var(--primary)]/30 transition-all"
                         >
                             <div className="flex items-start gap-4 flex-1">
                                 <div className={cn("w-12 h-12 rounded-xl flex items-center justify-center shrink-0", getDecisionStyle(req.decision))}>
                                     <Wrench className="w-6 h-6" />
                                 </div>
                                 <div className="min-w-0">
-                                    <h3 className="font-bold text-lg mb-1 truncate">{req.assetId?.name || 'Unknown Asset'}</h3>
-                                    <p className="text-[var(--text-muted)] text-sm line-clamp-2">{req.issueDescription}</p>
+                                    <h3 className="font-bold text-lg mb-1 truncate text-[var(--text-primary)]">{req.assetId?.name || 'Unknown Asset'}</h3>
+                                    <p className="text-[var(--text-secondary)] text-sm line-clamp-2">{req.issueDescription}</p>
                                     <div className="flex flex-wrap items-center gap-2 mt-3">
                                         <span className={cn("px-3 py-1 rounded-full text-xs font-bold border", getStatusStyle(req.status))}>
                                             {req.status}
@@ -175,7 +182,7 @@ export function Maintenance() {
                                         <span className={cn("px-3 py-1 rounded-full text-xs font-bold", getDecisionStyle(req.decision))}>
                                             {req.decision}
                                         </span>
-                                        <span className="text-xs text-[var(--text-muted)] bg-white/5 px-3 py-1 rounded-full">
+                                        <span className="text-xs text-[var(--text-secondary)] bg-[var(--bg-overlay)] px-3 py-1 rounded-full">
                                             {formatCurrency(req.repairCost)}
                                         </span>
                                     </div>
@@ -228,10 +235,10 @@ export function Maintenance() {
                             initial={{ scale: 0.95, opacity: 0 }}
                             animate={{ scale: 1, opacity: 1 }}
                             exit={{ scale: 0.95, opacity: 0 }}
-                            className="bg-[#18181b] border border-white/10 p-8 rounded-3xl w-full max-w-lg shadow-2xl relative"
+                            className="bg-[var(--bg-card)] border border-[var(--border-color)] p-8 rounded-3xl w-full max-w-lg shadow-2xl relative"
                             onClick={e => e.stopPropagation()}
                         >
-                            <button onClick={() => setShowModal(false)} className="absolute top-6 right-6 p-2 rounded-full hover:bg-white/5 text-[var(--text-muted)]">
+                            <button onClick={() => setShowModal(false)} className="absolute top-6 right-6 p-2 rounded-full hover:bg-[var(--bg-overlay)] text-[var(--text-secondary)]">
                                 <X className="w-5 h-5" />
                             </button>
                             <h2 className="text-2xl font-bold mb-6">Request Maintenance</h2>
@@ -244,9 +251,9 @@ export function Maintenance() {
 
                             <form onSubmit={handleSubmit} className="space-y-5">
                                 <div>
-                                    <label className="block text-xs font-bold text-[var(--text-muted)] uppercase tracking-wider mb-2">Select Asset</label>
+                                    <label className="block text-xs font-bold text-[var(--text-secondary)] uppercase tracking-wider mb-2">Select Asset</label>
                                     <select
-                                        className="w-full bg-[#27272a] border border-white/5 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-[var(--primary)] transition-colors"
+                                        className="w-full bg-[var(--bg-overlay)] border border-[var(--border-color)] rounded-xl px-4 py-3 text-[var(--text-primary)] focus:outline-none focus:border-[var(--primary)] transition-colors"
                                         value={formData.assetId}
                                         onChange={e => setFormData({ ...formData, assetId: e.target.value })}
                                         required
@@ -259,9 +266,9 @@ export function Maintenance() {
                                 </div>
 
                                 <div>
-                                    <label className="block text-xs font-bold text-[var(--text-muted)] uppercase tracking-wider mb-2">Issue Description</label>
+                                    <label className="block text-xs font-bold text-[var(--text-secondary)] uppercase tracking-wider mb-2">Issue Description</label>
                                     <textarea
-                                        className="w-full bg-[#27272a] border border-white/5 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-[var(--primary)] transition-colors h-28 resize-none"
+                                        className="w-full bg-[var(--bg-overlay)] border border-[var(--border-color)] rounded-xl px-4 py-3 text-[var(--text-primary)] focus:outline-none focus:border-[var(--primary)] transition-colors h-28 resize-none"
                                         placeholder="Describe the problem in detail..."
                                         value={formData.issueDescription}
                                         onChange={e => setFormData({ ...formData, issueDescription: e.target.value })}
@@ -270,17 +277,17 @@ export function Maintenance() {
                                 </div>
 
                                 <div>
-                                    <label className="block text-xs font-bold text-[var(--text-muted)] uppercase tracking-wider mb-2">Estimated Repair Cost (INR)</label>
+                                    <label className="block text-xs font-bold text-[var(--text-secondary)] uppercase tracking-wider mb-2">Estimated Repair Cost (INR)</label>
                                     <input
                                         type="text"
                                         inputMode="decimal"
-                                        className="w-full bg-[#27272a] border border-white/5 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-[var(--primary)] transition-colors"
+                                        className="w-full bg-[var(--bg-overlay)] border border-[var(--border-color)] rounded-xl px-4 py-3 text-[var(--text-primary)] focus:outline-none focus:border-[var(--primary)] transition-colors"
                                         placeholder="Enter amount"
                                         value={formData.repairCost}
                                         onChange={e => handleNumberChange(e.target.value)}
                                         required
                                     />
-                                    <p className="text-xs text-[var(--text-muted)] mt-2">
+                                    <p className="text-xs text-[var(--text-secondary)] mt-2">
                                         💡 If cost exceeds 60% of asset value, system will recommend <strong className="text-red-400">REPLACE</strong>.
                                     </p>
                                 </div>

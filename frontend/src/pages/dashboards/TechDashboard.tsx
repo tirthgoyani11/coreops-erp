@@ -52,8 +52,8 @@ const TicketCard = memo(function TicketCard({
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, x: -100 }}
             className={`
-                bg-[#18181b] border rounded-2xl p-4
-                ${isPrimary ? 'border-[var(--primary)]/30' : 'border-white/5'}
+                bg-[var(--bg-card)] border rounded-2xl p-4
+                ${isPrimary ? 'border-[var(--primary)]/30' : 'border-[var(--border-color)]'}
             `}
             onClick={() => onViewDetails(ticket._id)}
         >
@@ -66,7 +66,7 @@ const TicketCard = memo(function TicketCard({
                         </span>
                         <span className="text-xs text-[var(--text-muted)]">#{ticket.ticketNumber}</span>
                     </div>
-                    <h3 className="text-white font-medium text-lg mb-1 truncate">{ticket.title}</h3>
+                    <h3 className="text-[var(--text-primary)] font-medium text-lg mb-1 truncate">{ticket.title}</h3>
                     <div className="flex items-center gap-3 text-sm text-[var(--text-muted)]">
                         <span className="flex items-center gap-1">
                             <MapPin className="w-3 h-3" /> {ticket.location}
@@ -94,7 +94,7 @@ const TicketCard = memo(function TicketCard({
                         e.stopPropagation();
                         onViewDetails(ticket._id);
                     }}
-                    className="w-full mt-3 py-2 text-sm text-[var(--text-muted)] hover:text-white flex items-center justify-center gap-1 transition-colors"
+                    className="w-full mt-3 py-2 text-sm text-[var(--text-secondary)] hover:text-[var(--text-primary)] flex items-center justify-center gap-1 transition-colors"
                 >
                     View Details <ChevronRight className="w-4 h-4" />
                 </button>
@@ -199,8 +199,8 @@ export const TechDashboard = memo(function TechDashboard() {
             {/* Header */}
             <div className="flex items-center justify-between">
                 <div>
-                    <h1 className="text-xl font-bold text-white">My Maintenance</h1>
-                    <p className="text-sm text-[var(--text-muted)]">
+                    <h1 className="text-xl font-bold text-[var(--text-primary)]">My Maintenance</h1>
+                    <p className="text-sm text-[var(--text-secondary)]">
                         {openTickets.length} active • {completedCount} completed
                     </p>
                 </div>
@@ -254,8 +254,8 @@ export const TechDashboard = memo(function TechDashboard() {
                     className="text-center py-12"
                 >
                     <CheckCircle2 className="w-16 h-16 text-emerald-500 mx-auto mb-4" />
-                    <h2 className="text-xl font-bold text-white mb-2">No tickets!</h2>
-                    <p className="text-[var(--text-muted)]">You're all caught up or no tickets available.</p>
+                    <h2 className="text-xl font-bold text-[var(--text-primary)] mb-2">No tickets!</h2>
+                    <p className="text-[var(--text-secondary)]">You're all caught up or no tickets available.</p>
                 </motion.div>
             )}
 
@@ -263,17 +263,17 @@ export const TechDashboard = memo(function TechDashboard() {
             <div className="grid grid-cols-2 gap-3 pb-8 mt-6">
                 <button
                     onClick={() => navigate('/scan')}
-                    className="flex flex-col items-center gap-2 py-6 bg-[#18181b] border border-white/5 rounded-2xl hover:border-white/10 transition-colors"
+                    className="flex flex-col items-center gap-2 py-6 bg-[var(--bg-card)] border border-[var(--border-color)] rounded-2xl hover:border-[var(--primary)]/30 transition-colors"
                 >
                     <QrCode className="w-8 h-8 text-[var(--primary)]" />
-                    <span className="text-sm font-medium text-white">Scan Asset</span>
+                    <span className="text-sm font-medium text-[var(--text-primary)]">Scan Asset</span>
                 </button>
                 <button
                     onClick={() => navigate('/maintenance')}
-                    className="flex flex-col items-center gap-2 py-6 bg-[#18181b] border border-white/5 rounded-2xl hover:border-white/10 transition-colors"
+                    className="flex flex-col items-center gap-2 py-6 bg-[var(--bg-card)] border border-[var(--border-color)] rounded-2xl hover:border-[var(--primary)]/30 transition-colors"
                 >
                     <Plus className="w-8 h-8 text-blue-400" />
-                    <span className="text-sm font-medium text-white">All Requests</span>
+                    <span className="text-sm font-medium text-[var(--text-primary)]">All Requests</span>
                 </button>
             </div>
         </div>

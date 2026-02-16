@@ -87,8 +87,8 @@ export function Analytics() {
                     <BarChart3 className="w-6 h-6 text-[var(--primary)]" />
                 </div>
                 <div>
-                    <h1 className="text-2xl font-bold text-white">Analytics Dashboard</h1>
-                    <p className="text-[var(--text-muted)]">Overview of your operations</p>
+                    <h1 className="text-2xl font-bold text-[var(--text-primary)]">Analytics Dashboard</h1>
+                    <p className="text-[var(--text-secondary)]">Overview of your operations</p>
                 </div>
             </div>
 
@@ -97,15 +97,15 @@ export function Analytics() {
                 <motion.div
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
-                    className="bg-[var(--bg-card)] border border-white/5 p-6 rounded-3xl relative overflow-hidden"
+                    className="bg-[var(--bg-card)] border border-[var(--border-color)] p-6 rounded-3xl relative overflow-hidden"
                 >
                     <div className="flex items-center gap-3 mb-4">
                         <div className="w-10 h-10 rounded-xl bg-emerald-500/20 flex items-center justify-center">
                             <DollarSign className="w-5 h-5 text-emerald-400" />
                         </div>
-                        <span className="text-[var(--text-muted)]">Total Asset Value</span>
+                        <span className="text-[var(--text-secondary)]">Total Asset Value</span>
                     </div>
-                    <h3 className="text-3xl font-bold text-white">{formatCurrency(stats?.assets.totalValue || 0)}</h3>
+                    <h3 className="text-3xl font-bold text-[var(--text-primary)]">{formatCurrency(stats?.assets.totalValue || 0)}</h3>
                     <div className="absolute -right-10 -bottom-10 w-24 h-24 bg-emerald-500/10 blur-[60px]" />
                 </motion.div>
 
@@ -113,16 +113,16 @@ export function Analytics() {
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: 0.1 }}
-                    className="bg-[var(--bg-card)] border border-white/5 p-6 rounded-3xl relative overflow-hidden"
+                    className="bg-[var(--bg-card)] border border-[var(--border-color)] p-6 rounded-3xl relative overflow-hidden"
                 >
                     <div className="flex items-center gap-3 mb-4">
                         <div className="w-10 h-10 rounded-xl bg-blue-500/20 flex items-center justify-center">
                             <Package className="w-5 h-5 text-blue-400" />
                         </div>
-                        <span className="text-[var(--text-muted)]">Active Assets</span>
+                        <span className="text-[var(--text-secondary)]">Active Assets</span>
                     </div>
-                    <h3 className="text-3xl font-bold text-white">{stats?.assets.active || 0}</h3>
-                    <p className="text-sm text-[var(--text-muted)] mt-1">of {stats?.assets.total || 0} total</p>
+                    <h3 className="text-3xl font-bold text-[var(--text-primary)]">{stats?.assets.active || 0}</h3>
+                    <p className="text-sm text-[var(--text-secondary)] mt-1">of {stats?.assets.total || 0} total</p>
                     <div className="absolute -right-10 -bottom-10 w-24 h-24 bg-blue-500/10 blur-[60px]" />
                 </motion.div>
 
@@ -130,15 +130,15 @@ export function Analytics() {
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: 0.2 }}
-                    className="bg-[var(--bg-card)] border border-white/5 p-6 rounded-3xl relative overflow-hidden"
+                    className="bg-[var(--bg-card)] border border-[var(--border-color)] p-6 rounded-3xl relative overflow-hidden"
                 >
                     <div className="flex items-center gap-3 mb-4">
                         <div className="w-10 h-10 rounded-xl bg-amber-500/20 flex items-center justify-center">
                             <Wrench className="w-5 h-5 text-amber-400" />
                         </div>
-                        <span className="text-[var(--text-muted)]">Open Tickets</span>
+                        <span className="text-[var(--text-secondary)]">Open Tickets</span>
                     </div>
-                    <h3 className="text-3xl font-bold text-white">{stats?.maintenance.openTickets || 0}</h3>
+                    <h3 className="text-3xl font-bold text-[var(--text-primary)]">{stats?.maintenance.openTickets || 0}</h3>
                     <p className="text-sm text-amber-400 mt-1">{stats?.maintenance.pendingApprovals || 0} pending approval</p>
                     <div className="absolute -right-10 -bottom-10 w-24 h-24 bg-amber-500/10 blur-[60px]" />
                 </motion.div>
@@ -147,16 +147,16 @@ export function Analytics() {
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: 0.3 }}
-                    className="bg-[var(--bg-card)] border border-white/5 p-6 rounded-3xl relative overflow-hidden"
+                    className="bg-[var(--bg-card)] border border-[var(--border-color)] p-6 rounded-3xl relative overflow-hidden"
                 >
                     <div className="flex items-center gap-3 mb-4">
                         <div className="w-10 h-10 rounded-xl bg-red-500/20 flex items-center justify-center">
                             <AlertTriangle className="w-5 h-5 text-red-400" />
                         </div>
-                        <span className="text-[var(--text-muted)]">Low Stock Items</span>
+                        <span className="text-[var(--text-secondary)]">Low Stock Items</span>
                     </div>
-                    <h3 className="text-3xl font-bold text-white">{stats?.inventory.lowStock || 0}</h3>
-                    <p className="text-sm text-[var(--text-muted)] mt-1">of {stats?.inventory.total || 0} items</p>
+                    <h3 className="text-3xl font-bold text-[var(--text-primary)]">{stats?.inventory.lowStock || 0}</h3>
+                    <p className="text-sm text-[var(--text-secondary)] mt-1">of {stats?.inventory.total || 0} items</p>
                     <div className="absolute -right-10 -bottom-10 w-24 h-24 bg-red-500/10 blur-[60px]" />
                 </motion.div>
             </div>
@@ -168,24 +168,24 @@ export function Analytics() {
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: 0.4 }}
-                    className="bg-[var(--bg-card)] border border-white/5 p-6 rounded-3xl"
+                    className="bg-[var(--bg-card)] border border-[var(--border-color)] p-6 rounded-3xl"
                 >
-                    <h3 className="text-lg font-bold mb-6 flex items-center gap-2 text-white">
+                    <h3 className="text-lg font-bold mb-6 flex items-center gap-2 text-[var(--text-primary)]">
                         <div className="w-1.5 h-6 bg-[var(--primary)] rounded-full" />
                         Asset Value by Category
                     </h3>
 
                     {categories.length === 0 ? (
-                        <p className="text-[var(--text-muted)] text-center py-8">No data available</p>
+                        <p className="text-[var(--text-secondary)] text-center py-8">No data available</p>
                     ) : (
                         <div className="space-y-4">
                             {categories.map((cat, i) => (
                                 <div key={cat._id || i} className="group">
                                     <div className="flex justify-between items-center mb-2">
-                                        <span className="text-white font-medium">{cat._id || 'Other'}</span>
-                                        <span className="text-[var(--text-muted)]">{formatCurrency(cat.totalValue)}</span>
+                                        <span className="text-[var(--text-primary)] font-medium">{cat._id || 'Other'}</span>
+                                        <span className="text-[var(--text-secondary)]">{formatCurrency(cat.totalValue)}</span>
                                     </div>
-                                    <div className="h-3 bg-white/5 rounded-full overflow-hidden">
+                                    <div className="h-3 bg-[var(--bg-overlay)] rounded-full overflow-hidden">
                                         <motion.div
                                             initial={{ width: 0 }}
                                             animate={{ width: `${(cat.totalValue / maxCategoryValue) * 100}%` }}
@@ -193,7 +193,7 @@ export function Analytics() {
                                             className="h-full bg-gradient-to-r from-[var(--primary)] to-[var(--primary)]/60 rounded-full"
                                         />
                                     </div>
-                                    <p className="text-xs text-[var(--text-muted)] mt-1">{cat.count} assets</p>
+                                    <p className="text-xs text-[var(--text-secondary)] mt-1">{cat.count} assets</p>
                                 </div>
                             ))}
                         </div>
@@ -205,27 +205,27 @@ export function Analytics() {
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: 0.5 }}
-                    className="bg-[var(--bg-card)] border border-white/5 p-6 rounded-3xl"
+                    className="bg-[var(--bg-card)] border border-[var(--border-color)] p-6 rounded-3xl"
                 >
-                    <h3 className="text-lg font-bold mb-6 flex items-center gap-2 text-white">
+                    <h3 className="text-lg font-bold mb-6 flex items-center gap-2 text-[var(--text-primary)]">
                         <div className="w-1.5 h-6 bg-amber-500 rounded-full" />
                         Maintenance Cost Trends
                     </h3>
 
                     {maintenanceTrends.length === 0 ? (
-                        <p className="text-[var(--text-muted)] text-center py-8">No maintenance data yet</p>
+                        <p className="text-[var(--text-secondary)] text-center py-8">No maintenance data yet</p>
                     ) : (
                         <div className="space-y-4">
                             {maintenanceTrends.map((trend, i) => (
                                 <div key={trend.period} className="group">
                                     <div className="flex justify-between items-center mb-2">
-                                        <span className="text-white font-medium">{trend.period}</span>
+                                        <span className="text-[var(--text-primary)] font-medium">{trend.period}</span>
                                         <div className="flex items-center gap-4">
-                                            <span className="text-sm text-[var(--text-muted)]">{trend.ticketCount} tickets</span>
+                                            <span className="text-sm text-[var(--text-secondary)]">{trend.ticketCount} tickets</span>
                                             <span className="text-amber-400">{formatCurrency(trend.totalCost)}</span>
                                         </div>
                                     </div>
-                                    <div className="h-3 bg-white/5 rounded-full overflow-hidden">
+                                    <div className="h-3 bg-[var(--bg-overlay)] rounded-full overflow-hidden">
                                         <motion.div
                                             initial={{ width: 0 }}
                                             animate={{ width: `${(trend.totalCost / maxTrendCost) * 100}%` }}
@@ -248,20 +248,22 @@ export function Analytics() {
                         initial={{ opacity: 0, scale: 0.95 }}
                         animate={{ opacity: 1, scale: 1 }}
                         transition={{ delay: 0.6 + i * 0.1 }}
-                        className="bg-[#18181b] border border-white/5 p-4 rounded-2xl text-center"
+
+                        className="bg-[var(--bg-card)] border border-[var(--border-color)] p-4 rounded-2xl text-center"
                     >
-                        <p className="text-2xl font-bold text-white">{status.count}</p>
-                        <p className="text-xs text-[var(--text-muted)] uppercase tracking-wider">{status._id}</p>
+                        <p className="text-2xl font-bold text-[var(--text-primary)]">{status.count}</p>
+                        <p className="text-xs text-[var(--text-secondary)] uppercase tracking-wider">{status._id}</p>
                     </motion.div>
                 ))}
                 <motion.div
                     initial={{ opacity: 0, scale: 0.95 }}
                     animate={{ opacity: 1, scale: 1 }}
                     transition={{ delay: 0.8 }}
-                    className="bg-[#18181b] border border-white/5 p-4 rounded-2xl text-center"
+
+                    className="bg-[var(--bg-card)] border border-[var(--border-color)] p-4 rounded-2xl text-center"
                 >
-                    <p className="text-2xl font-bold text-white">{stats?.vendors.total || 0}</p>
-                    <p className="text-xs text-[var(--text-muted)] uppercase tracking-wider">Vendors</p>
+                    <p className="text-2xl font-bold text-[var(--text-primary)]">{stats?.vendors.total || 0}</p>
+                    <p className="text-xs text-[var(--text-secondary)] uppercase tracking-wider">Vendors</p>
                 </motion.div>
             </div>
         </div>

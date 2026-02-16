@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Package, Search, Plus, X, Loader2, Wrench, Building2, Download } from 'lucide-react';
+import { Package, Search, Plus, X, Loader2, Wrench, Building2, Download, FileSpreadsheet } from 'lucide-react';
 import api from '../lib/api';
 import { exportInventory } from '../utils/exportUtils';
 import { formatCurrency, cn } from '../lib/utils';
@@ -100,8 +100,8 @@ export function Inventory() {
     if (loading) {
         return (
             <div className="space-y-4">
-                <div className="h-16 w-full bg-[#18181b] rounded-2xl animate-pulse" />
-                <div className="h-80 w-full bg-[#18181b] rounded-3xl animate-pulse" />
+                <div className="h-16 w-full bg-[var(--bg-card)] rounded-2xl animate-pulse" />
+                <div className="h-80 w-full bg-[var(--bg-card)] rounded-3xl animate-pulse" />
             </div>
         );
     }
@@ -110,29 +110,36 @@ export function Inventory() {
         <div className="space-y-6">
             {/* Stats Bar */}
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                <div className="bg-[#18181b] border border-white/5 p-5 rounded-2xl">
-                    <p className="text-xs text-[var(--text-muted)] font-medium mb-1">Total Items</p>
-                    <p className="text-2xl font-bold">{items.length}</p>
+                <div className="bg-[var(--bg-card)] border border-[var(--border-color)] p-5 rounded-2xl">
+                    <p className="text-xs text-[var(--text-secondary)] font-medium mb-1">Total Items</p>
+                    <p className="text-2xl font-bold text-[var(--text-primary)]">{items.length}</p>
                 </div>
-                <div className="bg-[#18181b] border border-white/5 p-5 rounded-2xl">
-                    <p className="text-xs text-[var(--text-muted)] font-medium mb-1">Inventory Value</p>
-                    <p className="text-2xl font-bold">{formatCurrency(totalValue)}</p>
+                <div className="bg-[var(--bg-card)] border border-[var(--border-color)] p-5 rounded-2xl">
+                    <p className="text-xs text-[var(--text-secondary)] font-medium mb-1">Inventory Value</p>
+                    <p className="text-2xl font-bold text-[var(--text-primary)]">{formatCurrency(totalValue)}</p>
                 </div>
-                <div className="bg-[#18181b] border border-white/5 p-5 rounded-2xl">
-                    <p className="text-xs text-[var(--text-muted)] font-medium mb-1">Low Stock Items</p>
-                    <p className="text-2xl font-bold text-amber-400">{lowStockCount}</p>
+                <div className="bg-[var(--bg-card)] border border-[var(--border-color)] p-5 rounded-2xl">
+                    <p className="text-xs text-[var(--text-secondary)] font-medium mb-1">Low Stock Items</p>
+                    <p className="text-2xl font-bold text-amber-600 dark:text-amber-400">{lowStockCount}</p>
                 </div>
                 <div className="flex gap-2">
                     <button
                         onClick={() => exportInventory(items as any, 'pdf')}
-                        className="px-4 py-2 border border-white/10 rounded-xl hover:bg-white/5 flex items-center gap-2 text-white transition-colors"
+                        className="px-4 py-2 border border-[var(--border-color)] rounded-xl hover:bg-[var(--bg-card-hover)] flex items-center gap-2 text-[var(--text-secondary)] transition-colors"
                     >
                         <Download className="w-4 h-4" />
                         PDF
                     </button>
                     <button
+                        onClick={() => exportInventory(items as any, 'csv')}
+                        className="px-4 py-2 border border-[var(--border-color)] rounded-xl hover:bg-[var(--bg-card-hover)] flex items-center gap-2 text-[var(--text-secondary)] transition-colors"
+                    >
+                        <FileSpreadsheet className="w-4 h-4" />
+                        CSV
+                    </button>
+                    <button
                         onClick={() => exportInventory(items as any, 'excel')}
-                        className="px-4 py-2 border border-white/10 rounded-xl hover:bg-white/5 flex items-center gap-2 text-white transition-colors"
+                        className="px-4 py-2 border border-[var(--border-color)] rounded-xl hover:bg-[var(--bg-card-hover)] flex items-center gap-2 text-[var(--text-secondary)] transition-colors"
                     >
                         <Download className="w-4 h-4" />
                         Excel
@@ -148,8 +155,8 @@ export function Inventory() {
             </div>
 
             {/* Toolbar */}
-            <div className="flex flex-col md:flex-row gap-4 justify-between items-center bg-[#18181b] p-4 rounded-2xl border border-white/5">
-                <div className="flex items-center gap-1 bg-[#27272a] p-1 rounded-lg">
+            <div className="flex flex-col md:flex-row gap-4 justify-between items-center bg-[var(--bg-card)] p-4 rounded-2xl border border-[var(--border-color)]">
+                <div className="flex items-center gap-1 bg-[var(--bg-overlay)] p-1 rounded-lg">
                     {(['ALL', 'PRODUCT', 'SPARE'] as const).map((type) => (
                         <button
                             key={type}
@@ -158,7 +165,7 @@ export function Inventory() {
                                 "px-4 py-2 rounded-md text-sm font-semibold transition-all",
                                 filterType === type
                                     ? 'bg-[var(--primary)] text-black shadow-lg'
-                                    : 'text-[var(--text-muted)] hover:text-white'
+                                    : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
                             )}
                         >
                             {type}
@@ -167,60 +174,64 @@ export function Inventory() {
                 </div>
 
                 <div className="relative w-full md:w-auto">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--text-muted)]" />
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--text-secondary)]" />
                     <input
                         type="text"
                         placeholder="Search SKU or Name..."
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
-                        className="w-full md:w-64 bg-[#27272a] border border-white/5 rounded-xl pl-10 pr-4 py-2.5 focus:outline-none focus:border-[var(--primary)] transition-colors text-sm"
+                        className="w-full md:w-64 bg-[var(--bg-overlay)] border border-[var(--border-color)] rounded-xl pl-10 pr-4 py-2.5 focus:outline-none focus:border-[var(--primary)] transition-colors text-sm text-[var(--text-primary)]"
                     />
                 </div>
             </div>
 
             {/* Data Table */}
-            <div className="bg-[#18181b] border border-white/5 rounded-3xl overflow-hidden">
+            <div className="bg-[var(--bg-card)] border border-[var(--border-color)] rounded-3xl overflow-hidden">
                 <div className="overflow-x-auto">
                     <table className="w-full text-left border-collapse">
                         <thead>
-                            <tr className="border-b border-white/5 bg-[#27272a]/50">
-                                <th className="p-5 text-xs font-bold text-[var(--text-muted)] uppercase tracking-wider">Item</th>
-                                <th className="p-5 text-xs font-bold text-[var(--text-muted)] uppercase tracking-wider">SKU / Type</th>
-                                <th className="p-5 text-xs font-bold text-[var(--text-muted)] uppercase tracking-wider">Stock</th>
-                                <th className="p-5 text-xs font-bold text-[var(--text-muted)] uppercase tracking-wider text-right">Unit Cost</th>
-                                <th className="p-5 text-xs font-bold text-[var(--text-muted)] uppercase tracking-wider text-right">Total</th>
+                            <tr className="border-b border-[var(--border-color)] bg-[var(--bg-overlay)]/50">
+                                <th className="p-5 text-xs font-bold text-[var(--text-secondary)] uppercase tracking-wider">Item</th>
+                                <th className="p-5 text-xs font-bold text-[var(--text-secondary)] uppercase tracking-wider">SKU / Type</th>
+                                <th className="p-5 text-xs font-bold text-[var(--text-secondary)] uppercase tracking-wider">Stock</th>
+                                <th className="p-5 text-xs font-bold text-[var(--text-secondary)] uppercase tracking-wider text-right">Unit Cost</th>
+                                <th className="p-5 text-xs font-bold text-[var(--text-secondary)] uppercase tracking-wider text-right">Total</th>
                             </tr>
                         </thead>
-                        <tbody className="divide-y divide-white/5">
+                        <tbody className="divide-y divide-[var(--border-color)]">
                             {filteredItems.length > 0 ? (
                                 filteredItems.map((item) => (
-                                    <tr key={item._id} className="hover:bg-white/[0.02] transition-colors">
+                                    <tr key={item._id} className="hover:bg-[var(--bg-card-hover)] transition-colors">
                                         <td className="p-5">
                                             <div className="flex items-center gap-3">
                                                 <div className={cn(
                                                     "w-10 h-10 rounded-lg flex items-center justify-center",
-                                                    item.type === 'SPARE' ? 'bg-orange-500/10 text-orange-400' : 'bg-sky-500/10 text-sky-400'
+                                                    item.type === 'SPARE'
+                                                        ? 'bg-orange-500/10 dark:bg-orange-500/20 text-orange-600 dark:text-orange-400'
+                                                        : 'bg-sky-500/10 dark:bg-sky-500/20 text-sky-600 dark:text-sky-400'
                                                 )}>
                                                     {item.type === 'SPARE' ? <Wrench className="w-5 h-5" /> : <Package className="w-5 h-5" />}
                                                 </div>
                                                 <div>
-                                                    <p className="font-semibold text-white">{item.name}</p>
-                                                    <p className="text-xs text-[var(--text-muted)]">{new Date(item.createdAt).toLocaleDateString()}</p>
+                                                    <p className="font-semibold text-[var(--text-primary)]">{item.name}</p>
+                                                    <p className="text-xs text-[var(--text-secondary)]">{new Date(item.createdAt).toLocaleDateString()}</p>
                                                 </div>
                                             </div>
                                         </td>
                                         <td className="p-5">
-                                            <p className="font-mono text-sm mb-1">{item.sku}</p>
+                                            <p className="font-mono text-sm mb-1 text-[var(--text-primary)]">{item.sku}</p>
                                             <span className={cn(
                                                 "px-2 py-0.5 rounded text-[10px] font-bold uppercase",
-                                                item.type === 'PRODUCT' ? 'bg-sky-500/10 text-sky-400' : 'bg-orange-500/10 text-orange-400'
+                                                item.type === 'PRODUCT'
+                                                    ? 'bg-sky-500/10 dark:bg-sky-500/20 text-sky-600 dark:text-sky-400'
+                                                    : 'bg-orange-500/10 dark:bg-orange-500/20 text-orange-600 dark:text-orange-400'
                                             )}>
                                                 {item.type}
                                             </span>
                                         </td>
                                         <td className="p-5">
                                             <div className="flex items-center gap-3">
-                                                <div className="w-20 h-1.5 bg-[#27272a] rounded-full overflow-hidden">
+                                                <div className="w-20 h-1.5 bg-[var(--bg-overlay)] rounded-full overflow-hidden">
                                                     <div
                                                         className={cn(
                                                             "h-full rounded-full",
@@ -231,21 +242,21 @@ export function Inventory() {
                                                 </div>
                                                 <span className={cn(
                                                     "font-bold",
-                                                    item.quantity < 10 ? 'text-red-400' : 'text-white'
+                                                    item.quantity < 10 ? 'text-red-600 dark:text-red-400' : 'text-[var(--text-primary)]'
                                                 )}>{item.quantity}</span>
                                             </div>
                                         </td>
-                                        <td className="p-5 text-right font-mono text-[var(--text-muted)]">
+                                        <td className="p-5 text-right font-mono text-[var(--text-secondary)]">
                                             {formatCurrency(item.unitCost)}
                                         </td>
-                                        <td className="p-5 text-right font-bold text-white">
+                                        <td className="p-5 text-right font-bold text-[var(--text-primary)]">
                                             {formatCurrency(item.unitCost * item.quantity)}
                                         </td>
                                     </tr>
                                 ))
                             ) : (
                                 <tr>
-                                    <td colSpan={5} className="p-12 text-center text-[var(--text-muted)]">
+                                    <td colSpan={5} className="p-12 text-center text-[var(--text-secondary)]">
                                         <Package className="w-12 h-12 mx-auto mb-4 opacity-30" />
                                         <p>No items found.</p>
                                     </td>
@@ -264,7 +275,7 @@ export function Inventory() {
                             initial={{ scale: 0.95, opacity: 0 }}
                             animate={{ scale: 1, opacity: 1 }}
                             exit={{ scale: 0.95, opacity: 0 }}
-                            className="bg-[#18181b] border border-white/10 p-8 rounded-3xl w-full max-w-lg shadow-2xl relative"
+                            className="bg-[var(--bg-card)] border border-[var(--border-color)] p-8 rounded-3xl w-full max-w-lg shadow-2xl relative"
                             onClick={e => e.stopPropagation()}
                         >
                             <button onClick={() => setShowModal(false)} className="absolute top-6 right-6 p-2 rounded-full hover:bg-white/5 text-[var(--text-muted)]">
@@ -280,10 +291,10 @@ export function Inventory() {
 
                             <form onSubmit={handleSubmit} className="space-y-5">
                                 <div>
-                                    <label className="block text-xs font-bold text-[var(--text-muted)] uppercase tracking-wider mb-2">Item Name</label>
+                                    <label className="block text-xs font-bold text-[var(--text-secondary)] uppercase tracking-wider mb-2">Item Name</label>
                                     <input
                                         type="text"
-                                        className="w-full bg-[#27272a] border border-white/5 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-[var(--primary)]"
+                                        className="w-full bg-[var(--bg-overlay)] border border-[var(--border-color)] rounded-xl px-4 py-3 text-[var(--text-primary)] focus:outline-none focus:border-[var(--primary)]"
                                         placeholder="e.g., RAM 16GB DDR4"
                                         value={formData.name}
                                         onChange={e => setFormData({ ...formData, name: e.target.value })}
@@ -293,9 +304,9 @@ export function Inventory() {
 
                                 <div className="grid grid-cols-2 gap-4">
                                     <div>
-                                        <label className="block text-xs font-bold text-[var(--text-muted)] uppercase tracking-wider mb-2">Type</label>
+                                        <label className="block text-xs font-bold text-[var(--text-secondary)] uppercase tracking-wider mb-2">Type</label>
                                         <select
-                                            className="w-full bg-[#27272a] border border-white/5 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-[var(--primary)]"
+                                            className="w-full bg-[var(--bg-overlay)] border border-[var(--border-color)] rounded-xl px-4 py-3 text-[var(--text-primary)] focus:outline-none focus:border-[var(--primary)]"
                                             value={formData.type}
                                             onChange={e => setFormData({ ...formData, type: e.target.value as 'PRODUCT' | 'SPARE' })}
                                         >
@@ -304,10 +315,10 @@ export function Inventory() {
                                         </select>
                                     </div>
                                     <div>
-                                        <label className="block text-xs font-bold text-[var(--text-muted)] uppercase tracking-wider mb-2">SKU</label>
+                                        <label className="block text-xs font-bold text-[var(--text-secondary)] uppercase tracking-wider mb-2">SKU</label>
                                         <input
                                             type="text"
-                                            className="w-full bg-[#27272a] border border-white/5 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-[var(--primary)]"
+                                            className="w-full bg-[var(--bg-overlay)] border border-[var(--border-color)] rounded-xl px-4 py-3 text-[var(--text-primary)] focus:outline-none focus:border-[var(--primary)]"
                                             placeholder="Auto-generate"
                                             value={formData.sku}
                                             onChange={e => setFormData({ ...formData, sku: e.target.value })}
@@ -318,12 +329,12 @@ export function Inventory() {
                                 {/* Office Selection - Only show for SUPER_ADMIN */}
                                 {user?.role === 'SUPER_ADMIN' && offices.length > 0 && (
                                     <div>
-                                        <label className="block text-xs font-bold text-[var(--text-muted)] uppercase tracking-wider mb-2">
+                                        <label className="block text-xs font-bold text-[var(--text-secondary)] uppercase tracking-wider mb-2">
                                             <Building2 className="w-3 h-3 inline mr-1" />
                                             Office
                                         </label>
                                         <select
-                                            className="w-full bg-[#27272a] border border-white/5 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-[var(--primary)]"
+                                            className="w-full bg-[var(--bg-overlay)] border border-[var(--border-color)] rounded-xl px-4 py-3 text-[var(--text-primary)] focus:outline-none focus:border-[var(--primary)]"
                                             value={formData.officeId}
                                             onChange={e => setFormData({ ...formData, officeId: e.target.value })}
                                             required
@@ -340,11 +351,11 @@ export function Inventory() {
 
                                 <div className="grid grid-cols-2 gap-4">
                                     <div>
-                                        <label className="block text-xs font-bold text-[var(--text-muted)] uppercase tracking-wider mb-2">Quantity</label>
+                                        <label className="block text-xs font-bold text-[var(--text-secondary)] uppercase tracking-wider mb-2">Quantity</label>
                                         <input
                                             type="text"
                                             inputMode="numeric"
-                                            className="w-full bg-[#27272a] border border-white/5 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-[var(--primary)]"
+                                            className="w-full bg-[var(--bg-overlay)] border border-[var(--border-color)] rounded-xl px-4 py-3 text-[var(--text-primary)] focus:outline-none focus:border-[var(--primary)]"
                                             placeholder="Enter quantity"
                                             value={formData.quantity}
                                             onChange={e => handleNumberChange(e.target.value, 'quantity')}
@@ -352,11 +363,11 @@ export function Inventory() {
                                         />
                                     </div>
                                     <div>
-                                        <label className="block text-xs font-bold text-[var(--text-muted)] uppercase tracking-wider mb-2">Unit Cost (INR)</label>
+                                        <label className="block text-xs font-bold text-[var(--text-secondary)] uppercase tracking-wider mb-2">Unit Cost (INR)</label>
                                         <input
                                             type="text"
                                             inputMode="decimal"
-                                            className="w-full bg-[#27272a] border border-white/5 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-[var(--primary)]"
+                                            className="w-full bg-[var(--bg-overlay)] border border-[var(--border-color)] rounded-xl px-4 py-3 text-[var(--text-primary)] focus:outline-none focus:border-[var(--primary)]"
                                             placeholder="Enter cost"
                                             value={formData.unitCost}
                                             onChange={e => handleNumberChange(e.target.value, 'unitCost')}
@@ -377,6 +388,6 @@ export function Inventory() {
                     </div>
                 )}
             </AnimatePresence>
-        </div>
+        </div >
     );
 }

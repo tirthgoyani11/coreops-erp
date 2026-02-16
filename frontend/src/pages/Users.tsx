@@ -86,7 +86,7 @@ export function Users() {
             case 'VIEWER':
                 return 'bg-emerald-500/20 text-emerald-400';
             default:
-                return 'bg-zinc-700 text-zinc-300';
+                return 'bg-[var(--bg-card-hover)] text-[var(--text-muted)] border border-[var(--border-color)]';
         }
     };
 
@@ -95,8 +95,8 @@ export function Users() {
             {/* Header */}
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                 <div>
-                    <h1 className="text-2xl font-bold text-white">Users</h1>
-                    <p className="text-zinc-500 text-sm mt-1">
+                    <h1 className="text-2xl font-bold text-[var(--text-primary)]">Users</h1>
+                    <p className="text-[var(--text-secondary)] text-sm mt-1">
                         Manage system users and their permissions
                     </p>
                 </div>
@@ -111,13 +111,13 @@ export function Users() {
 
             {/* Search */}
             <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--text-secondary)]" />
                 <input
                     type="text"
                     placeholder="Search users..."
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
-                    className="w-full sm:w-80 pl-10 pr-4 py-2 bg-zinc-900 border border-zinc-800 rounded-lg text-white placeholder-zinc-600 focus:outline-none focus:border-[var(--primary)]"
+                    className="w-full sm:w-80 pl-10 pr-4 py-2 bg-[var(--bg-card)] border border-[var(--border-color)] rounded-lg text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-[var(--primary)]"
                 />
             </div>
 
@@ -128,10 +128,10 @@ export function Users() {
                 </div>
             ) : users.length === 0 ? (
                 <div className="text-center py-12">
-                    <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-zinc-900 flex items-center justify-center">
-                        <UsersIcon className="w-8 h-8 text-zinc-600" />
+                    <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-[var(--bg-overlay)] flex items-center justify-center">
+                        <UsersIcon className="w-8 h-8 text-[var(--text-secondary)]" />
                     </div>
-                    <p className="text-zinc-500 mb-4">
+                    <p className="text-[var(--text-muted)] mb-4">
                         User listing requires a dedicated API endpoint.
                         <br />
                         You can create new users using the button above.
@@ -145,15 +145,15 @@ export function Users() {
                             initial={{ opacity: 0, y: 20 }}
                             animate={{ opacity: 1, y: 0 }}
                             transition={{ delay: index * 0.05 }}
-                            className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-5"
+                            className="bg-[var(--bg-card)] border border-[var(--border-color)] rounded-xl p-5"
                         >
                             <div className="flex items-start gap-3">
                                 <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[var(--primary)] to-cyan-500 flex items-center justify-center text-black font-bold">
                                     {user.name.charAt(0).toUpperCase()}
                                 </div>
                                 <div className="flex-1 min-w-0">
-                                    <h3 className="font-semibold text-white truncate">{user.name}</h3>
-                                    <div className="flex items-center gap-1.5 text-xs text-zinc-500 mt-0.5">
+                                    <h3 className="font-semibold text-[var(--text-primary)] truncate">{user.name}</h3>
+                                    <div className="flex items-center gap-1.5 text-xs text-[var(--text-secondary)] mt-0.5">
                                         <Mail className="w-3 h-3" />
                                         <span className="truncate">{user.email}</span>
                                     </div>
@@ -165,7 +165,7 @@ export function Users() {
                                     {user.role.replace('_', ' ')}
                                 </span>
                                 {user.officeId && (
-                                    <span className="flex items-center gap-1 px-2 py-0.5 bg-zinc-800 rounded text-xs text-zinc-400">
+                                    <span className="flex items-center gap-1 px-2 py-0.5 bg-[var(--bg-overlay)] rounded text-xs text-[var(--text-secondary)]">
                                         <Building2 className="w-3 h-3" />
                                         {user.officeId.code}
                                     </span>
@@ -182,9 +182,9 @@ export function Users() {
                     <motion.div
                         initial={{ opacity: 0, scale: 0.95 }}
                         animate={{ opacity: 1, scale: 1 }}
-                        className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 w-full max-w-md"
+                        className="bg-[var(--bg-card)] border border-[var(--border-color)] rounded-xl p-6 w-full max-w-md"
                     >
-                        <h2 className="text-xl font-bold text-white mb-4">Create New User</h2>
+                        <h2 className="text-xl font-bold text-[var(--text-primary)] mb-4">Create New User</h2>
 
                         {error && (
                             <div className="mb-4 p-3 bg-red-500/10 border border-red-500/20 rounded-lg text-red-400 text-sm">
@@ -194,42 +194,42 @@ export function Users() {
 
                         <form onSubmit={handleCreate} className="space-y-4">
                             <div>
-                                <label className="block text-sm text-zinc-400 mb-1.5">Full Name</label>
+                                <label className="block text-sm text-[var(--text-secondary)] mb-1.5">Full Name</label>
                                 <input
                                     type="text"
                                     value={formData.name}
                                     onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                                    className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-white focus:outline-none focus:border-[var(--primary)]"
+                                    className="w-full px-3 py-2 bg-[var(--bg-overlay)] border border-[var(--border-color)] rounded-lg text-[var(--text-primary)] focus:outline-none focus:border-[var(--primary)]"
                                     required
                                 />
                             </div>
                             <div>
-                                <label className="block text-sm text-zinc-400 mb-1.5">Email</label>
+                                <label className="block text-sm text-[var(--text-secondary)] mb-1.5">Email</label>
                                 <input
                                     type="email"
                                     value={formData.email}
                                     onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                                    className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-white focus:outline-none focus:border-[var(--primary)]"
+                                    className="w-full px-3 py-2 bg-[var(--bg-overlay)] border border-[var(--border-color)] rounded-lg text-[var(--text-primary)] focus:outline-none focus:border-[var(--primary)]"
                                     required
                                 />
                             </div>
                             <div>
-                                <label className="block text-sm text-zinc-400 mb-1.5">Password</label>
+                                <label className="block text-sm text-[var(--text-secondary)] mb-1.5">Password</label>
                                 <input
                                     type="password"
                                     value={formData.password}
                                     onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                                    className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-white focus:outline-none focus:border-[var(--primary)]"
+                                    className="w-full px-3 py-2 bg-[var(--bg-overlay)] border border-[var(--border-color)] rounded-lg text-[var(--text-primary)] focus:outline-none focus:border-[var(--primary)]"
                                     placeholder="Min 6 characters"
                                     required
                                 />
                             </div>
                             <div>
-                                <label className="block text-sm text-zinc-400 mb-1.5">Role</label>
+                                <label className="block text-sm text-[var(--text-secondary)] mb-1.5">Role</label>
                                 <select
                                     value={formData.role}
                                     onChange={(e) => setFormData({ ...formData, role: e.target.value as any })}
-                                    className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-white focus:outline-none focus:border-[var(--primary)]"
+                                    className="w-full px-3 py-2 bg-[var(--bg-overlay)] border border-[var(--border-color)] rounded-lg text-[var(--text-primary)] focus:outline-none focus:border-[var(--primary)]"
                                 >
                                     <option value="SUPER_ADMIN">Super Admin</option>
                                     <option value="MANAGER">Manager</option>
@@ -240,11 +240,11 @@ export function Users() {
                             </div>
                             {formData.role !== 'SUPER_ADMIN' && (
                                 <div>
-                                    <label className="block text-sm text-zinc-400 mb-1.5">Office</label>
+                                    <label className="block text-sm text-[var(--text-secondary)] mb-1.5">Office</label>
                                     <select
                                         value={formData.officeId}
                                         onChange={(e) => setFormData({ ...formData, officeId: e.target.value })}
-                                        className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-white focus:outline-none focus:border-[var(--primary)]"
+                                        className="w-full px-3 py-2 bg-[var(--bg-overlay)] border border-[var(--border-color)] rounded-lg text-[var(--text-primary)] focus:outline-none focus:border-[var(--primary)]"
                                         required
                                     >
                                         <option value="">Select an office</option>
@@ -260,7 +260,7 @@ export function Users() {
                                 <button
                                     type="button"
                                     onClick={() => setShowCreateModal(false)}
-                                    className="flex-1 px-4 py-2 bg-zinc-800 text-white rounded-lg hover:bg-zinc-700 transition-colors"
+                                    className="flex-1 px-4 py-2 bg-[var(--bg-overlay)] text-[var(--text-primary)] rounded-lg hover:bg-[var(--bg-card-hover)] transition-colors"
                                 >
                                     Cancel
                                 </button>

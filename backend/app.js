@@ -1,5 +1,6 @@
 const express = require('express');
 const cors = require('cors');
+const cookieParser = require('cookie-parser');
 const helmet = require('helmet');
 const compression = require('compression');
 const morgan = require('morgan');
@@ -73,9 +74,12 @@ app.use(
     })
 );
 
+// Cookie parser (for httpOnly refresh tokens)
+app.use(cookieParser());
+
 // Body parser with limits
-app.use(express.json({ limit: '10kb' }));
-app.use(express.urlencoded({ extended: true, limit: '10kb' }));
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // HTTP request logging
 const morganFormat = process.env.NODE_ENV === 'production'

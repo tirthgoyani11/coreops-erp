@@ -30,7 +30,7 @@ export function StatCard({ title, value, icon: Icon, trend, trendUp, color = "em
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay, duration: 0.4 }}
-            className={`relative overflow-hidden rounded-xl border p-6 backdrop-blur-md bg-zinc-900/50 hover:bg-zinc-800/50 transition-colors group ${colorClasses.split(' ')[2]}`} // Use border class
+            className={`relative overflow-hidden rounded-xl border p-6 backdrop-blur-md bg-[var(--bg-card)] hover:bg-[var(--bg-card-hover)] transition-colors group shadow-[var(--shadow-card)] hover:shadow-[var(--shadow-card-hover)] ${colorClasses.split(' ')[2]}`} // Use border class
         >
             <div className="flex items-center justify-between mb-4">
                 <div className={`p-2 rounded-lg ${colorClasses}`}>
@@ -44,8 +44,8 @@ export function StatCard({ title, value, icon: Icon, trend, trendUp, color = "em
             </div>
 
             <div className="space-y-1">
-                <h3 className="text-zinc-500 text-sm font-medium tracking-wide uppercase">{title}</h3>
-                <div className="text-2xl font-bold font-mono text-white tracking-tight">
+                <h3 className="text-[var(--text-secondary)] text-sm font-medium tracking-wide uppercase">{title}</h3>
+                <div className="text-2xl font-bold font-mono text-[var(--text-primary)] tracking-tight">
                     {value}
                 </div>
             </div>

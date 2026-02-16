@@ -99,59 +99,88 @@ export const exportToPDF = (options: ExportOptions): void => {
 export const exportToExcel = (options: ExportOptions): void => {
     const { title, filename, columns, data } = options;
 
-    // Create workbook and worksheet
     const wb = XLSX.utils.book_new();
 
-    // Header row with styles
-    const headerRow = columns.map(col => ({
-        v: col.header,
-        t: 's',
-        s: {
-            font: { bold: true, color: { rgb: 'FFFFFF' } },
-            fill: { fgColor: { rgb: '667EEA' } },
-            alignment: { horizontal: 'center' },
-            border: {
-                bottom: { style: 'thin', color: { rgb: '000000' } },
-            },
-        },
-    }));
-
-    // Data rows
-    const dataRows = data.map(row =>
+    // Build plain value arrays first (aoa_to_sheet needs raw values)
+    const titleRow = [title];
+    const headerValues = columns.map(col => col.header);
+    const dataValues = data.map(row =>
         columns.map(col => {
             const value = row[col.key];
-            if (value === null || value === undefined) return { v: '', t: 's' };
-            if (typeof value === 'number') return { v: value, t: 'n' };
-            if (typeof value === 'object') return { v: JSON.stringify(value), t: 's' };
-            return { v: String(value), t: 's' };
+            if (value === null || value === undefined) return '';
+            if (typeof value === 'object') return JSON.stringify(value);
+            return value;
         })
     );
 
-    // Combine header and data
-    const wsData = [headerRow, ...dataRows];
+    // Combine: title row → header row → data rows
+    const allRows = [titleRow, headerValues, ...dataValues];
+    const ws = XLSX.utils.aoa_to_sheet(allRows);
 
-    // Create worksheet
-    const ws = XLSX.utils.aoa_to_sheet(wsData.map(row =>
-        row.map(cell => (typeof cell === 'object' && 'v' in cell ? cell : { v: cell, t: 's' }))
-    ));
+    // Style the title cell (A1)
+    if (ws['A1']) {
+        ws['A1'].s = { font: { bold: true, sz: 14 } };
+    }
+
+    // Style header cells (row 2, index 1)
+    columns.forEach((_col, i) => {
+        const cellRef = XLSX.utils.encode_cell({ r: 1, c: i });
+        if (ws[cellRef]) {
+            ws[cellRef].s = {
+                font: { bold: true, color: { rgb: 'FFFFFF' } },
+                fill: { fgColor: { rgb: '667EEA' } },
+                alignment: { horizontal: 'center' },
+                border: {
+                    bottom: { style: 'thin', color: { rgb: '000000' } },
+                },
+            };
+        }
+    });
 
     // Set column widths
     ws['!cols'] = columns.map(col => ({ wch: col.width || 15 }));
 
-    // Add title row at top
-    XLSX.utils.sheet_add_aoa(ws, [[{ v: title, t: 's', s: { font: { bold: true, sz: 14 } } }]], { origin: 'A1' });
-
-    // Add worksheet to workbook
     XLSX.utils.book_append_sheet(wb, ws, 'Report');
-
-    // Save file
     XLSX.writeFile(wb, `${filename}.xlsx`);
 };
 
 /**
+ * Export data to CSV
+ */
+export const exportToCSV = (options: ExportOptions): void => {
+    const { filename, columns, data } = options;
+
+    const escapeCSV = (val: unknown): string => {
+        if (val === null || val === undefined) return '';
+        const str = String(val);
+        if (str.includes(',') || str.includes('"') || str.includes('\n')) {
+            return `"${str.replace(/"/g, '""')}"`;
+        }
+        return str;
+    };
+
+    const headerLine = columns.map(col => escapeCSV(col.header)).join(',');
+    const dataLines = data.map(row =>
+        columns.map(col => escapeCSV(row[col.key])).join(',')
+    );
+
+    const csv = [headerLine, ...dataLines].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `${filename}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+};
+
+
+/**
  * Export assets data
  */
-export const exportAssets = (assets: Record<string, unknown>[], format: 'pdf' | 'excel'): void => {
+export const exportAssets = (assets: Record<string, unknown>[], format: 'pdf' | 'excel' | 'csv'): void => {
     const options: ExportOptions = {
         title: 'Asset Report',
         filename: `assets_report_${new Date().toISOString().split('T')[0]}`,
@@ -167,25 +196,23 @@ export const exportAssets = (assets: Record<string, unknown>[], format: 'pdf' | 
         data: assets.map(asset => ({
             ...asset,
             currentBookValue: asset.depreciation && typeof asset.depreciation === 'object'
-                ? `$${((asset.depreciation as Record<string, number>).currentBookValue || 0).toLocaleString()}`
-                : '$0',
+                ? `₹${((asset.depreciation as Record<string, number>).currentBookValue || 0).toLocaleString()}`
+                : '₹0',
             officeName: asset.officeId && typeof asset.officeId === 'object'
                 ? (asset.officeId as Record<string, string>).name || 'N/A'
                 : 'N/A',
         })),
     };
 
-    if (format === 'pdf') {
-        exportToPDF(options);
-    } else {
-        exportToExcel(options);
-    }
+    if (format === 'pdf') exportToPDF(options);
+    else if (format === 'csv') exportToCSV(options);
+    else exportToExcel(options);
 };
 
 /**
  * Export maintenance tickets
  */
-export const exportMaintenance = (tickets: Record<string, unknown>[], format: 'pdf' | 'excel'): void => {
+export const exportMaintenance = (tickets: Record<string, unknown>[], format: 'pdf' | 'excel' | 'csv'): void => {
     const options: ExportOptions = {
         title: 'Maintenance Report',
         filename: `maintenance_report_${new Date().toISOString().split('T')[0]}`,
@@ -203,21 +230,19 @@ export const exportMaintenance = (tickets: Record<string, unknown>[], format: 'p
             assetName: ticket.asset && typeof ticket.asset === 'object'
                 ? (ticket.asset as Record<string, string>).name || 'N/A'
                 : 'N/A',
-            estimatedCost: `$${((ticket.estimatedCost as number) || 0).toLocaleString()}`,
+            estimatedCost: `₹${((ticket.estimatedCost as number) || 0).toLocaleString()}`,
         })),
     };
 
-    if (format === 'pdf') {
-        exportToPDF(options);
-    } else {
-        exportToExcel(options);
-    }
+    if (format === 'pdf') exportToPDF(options);
+    else if (format === 'csv') exportToCSV(options);
+    else exportToExcel(options);
 };
 
 /**
  * Export inventory
  */
-export const exportInventory = (inventory: Record<string, unknown>[], format: 'pdf' | 'excel'): void => {
+export const exportInventory = (inventory: Record<string, unknown>[], format: 'pdf' | 'excel' | 'csv'): void => {
     const options: ExportOptions = {
         title: 'Inventory Report',
         filename: `inventory_report_${new Date().toISOString().split('T')[0]}`,
@@ -241,17 +266,15 @@ export const exportInventory = (inventory: Record<string, unknown>[], format: 'p
         })),
     };
 
-    if (format === 'pdf') {
-        exportToPDF(options);
-    } else {
-        exportToExcel(options);
-    }
+    if (format === 'pdf') exportToPDF(options);
+    else if (format === 'csv') exportToCSV(options);
+    else exportToExcel(options);
 };
 
 /**
  * Export audit logs
  */
-export const exportAuditLogs = (logs: Record<string, unknown>[], format: 'pdf' | 'excel'): void => {
+export const exportAuditLogs = (logs: Record<string, unknown>[], format: 'pdf' | 'excel' | 'csv'): void => {
     const options: ExportOptions = {
         title: 'Audit Log Report',
         filename: `audit_logs_${new Date().toISOString().split('T')[0]}`,
@@ -274,9 +297,7 @@ export const exportAuditLogs = (logs: Record<string, unknown>[], format: 'pdf' |
         })),
     };
 
-    if (format === 'pdf') {
-        exportToPDF(options);
-    } else {
-        exportToExcel(options);
-    }
+    if (format === 'pdf') exportToPDF(options);
+    else if (format === 'csv') exportToCSV(options);
+    else exportToExcel(options);
 };

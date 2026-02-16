@@ -113,7 +113,8 @@ export function withRoleGuard<P extends object>(
  * Higher number = more permissions
  */
 export const ROLE_HIERARCHY: Record<UserRole, number> = {
-    SUPER_ADMIN: 5,
+    SUPER_ADMIN: 6,
+    ADMIN: 5,
     MANAGER: 4,
     STAFF: 3,
     TECHNICIAN: 2,

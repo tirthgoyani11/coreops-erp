@@ -59,7 +59,7 @@ export function ScanQR() {
 
                             <div>
                                 <h2 className="text-xl font-bold text-white mb-2">Scan Asset QR</h2>
-                                <p className="text-zinc-400 text-sm">Align the QR code within the frame to scan.</p>
+                                <p className="text-[var(--text-muted)] text-sm">Align the QR code within the frame to scan.</p>
                             </div>
 
                             <button
@@ -85,10 +85,10 @@ export function ScanQR() {
                             </div>
                             <div>
                                 <h3 className="font-bold text-lg">Asset Found!</h3>
-                                <p className="text-sm text-zinc-600">ID: {scannedData}</p>
+                                <p className="text-sm text-[var(--text-secondary)]">ID: {scannedData}</p>
                             </div>
                         </div>
-                        <p className="text-xs text-zinc-500 text-center">Redirecting to details...</p>
+                        <p className="text-xs text-[var(--text-muted)] text-center">Redirecting to details...</p>
                     </motion.div>
                 )}
             </div>

@@ -195,6 +195,16 @@ const AssetSchema = new mongoose.Schema(
                 },
             ],
         },
+        // Generic History
+        history: {
+            type: [{
+                date: { type: Date, default: Date.now },
+                action: String,
+                changedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+                details: String
+            }],
+            select: false
+        },
         // Legacy fields for backwards compatibility
         purchaseCost: {
             type: Number,
@@ -211,13 +221,17 @@ const AssetSchema = new mongoose.Schema(
             maxlength: 50000, // Base64 QR codes can be large
         },
         images: {
-            type: [String],
+            type: [{
+                url: { type: String, required: true },
+                caption: { type: String, default: '' },
+                uploadedAt: { type: Date, default: Date.now }
+            }],
             validate: [
                 {
                     validator: function (v) {
                         return v.length <= 10;
                     },
-                    message: 'Cannot have more than 10 images',
+                    message: 'Cannot have more than 10 images/documents',
                 },
             ],
         },

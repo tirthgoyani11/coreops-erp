@@ -29,13 +29,13 @@ const ExportButton = memo(function ExportButton({
     format: string;
 }) {
     return (
-        <button className="flex items-center gap-3 p-4 bg-white/5 border border-white/5 rounded-xl hover:bg-white/10 hover:border-white/10 transition-all group">
+        <button className="flex items-center gap-3 p-4 bg-[var(--bg-overlay)] border border-[var(--border-color)] rounded-xl hover:bg-[var(--bg-card-hover)] hover:border-[var(--primary)]/30 transition-all group">
             <div className="w-10 h-10 rounded-lg bg-[var(--primary)]/10 flex items-center justify-center group-hover:bg-[var(--primary)]/20 transition-colors">
                 <Icon className="w-5 h-5 text-[var(--primary)]" />
             </div>
             <div className="text-left">
-                <p className="text-sm font-medium text-white">{label}</p>
-                <p className="text-xs text-[var(--text-muted)]">{format}</p>
+                <p className="text-sm font-medium text-[var(--text-primary)]">{label}</p>
+                <p className="text-xs text-[var(--text-secondary)]">{format}</p>
             </div>
         </button>
     );
@@ -80,8 +80,8 @@ export const ViewerDashboard = memo(function ViewerDashboard() {
             {/* Header */}
             <div className="flex items-center justify-between">
                 <div>
-                    <h1 className="text-2xl lg:text-3xl font-bold text-white">Reports Dashboard</h1>
-                    <p className="text-[var(--text-muted)] mt-1">View-only access • Data as of today</p>
+                    <h1 className="text-2xl lg:text-3xl font-bold text-[var(--text-primary)]">Reports Dashboard</h1>
+                    <p className="text-[var(--text-secondary)] mt-1">View-only access • Data as of today</p>
                 </div>
                 <div className="flex items-center gap-2 px-3 py-1.5 bg-blue-500/10 border border-blue-500/20 rounded-full">
                     <span className="w-2 h-2 rounded-full bg-blue-500" />
@@ -134,11 +134,11 @@ export const ViewerDashboard = memo(function ViewerDashboard() {
             <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="bg-[#18181b] border border-white/5 rounded-2xl p-6"
+                className="bg-[var(--bg-card)] border border-[var(--border-color)] rounded-2xl p-6"
             >
                 <div className="flex items-center gap-3 mb-4">
                     <Download className="w-5 h-5 text-[var(--primary)]" />
-                    <h3 className="text-white font-medium">Export Reports</h3>
+                    <h3 className="text-[var(--text-primary)] font-medium">Export Reports</h3>
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">

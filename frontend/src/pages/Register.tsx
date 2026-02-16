@@ -118,7 +118,7 @@ export const Register = memo(function Register() {
     // Loading state
     if (formState === 'validating') {
         return (
-            <div className="min-h-screen bg-[#030304] flex items-center justify-center">
+            <div className="min-h-screen bg-[var(--bg-background)] flex items-center justify-center">
                 <div className="text-center">
                     <Loader2 className="w-8 h-8 text-[var(--primary)] animate-spin mx-auto mb-4" />
                     <p className="text-[var(--text-muted)]">Validating invitation...</p>
@@ -130,7 +130,7 @@ export const Register = memo(function Register() {
     // Invalid token state
     if (formState === 'invalid-token') {
         return (
-            <div className="min-h-screen bg-[#030304] flex items-center justify-center p-4">
+            <div className="min-h-screen bg-[var(--bg-background)] flex items-center justify-center p-4">
                 <motion.div
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
@@ -139,7 +139,7 @@ export const Register = memo(function Register() {
                     <div className="w-16 h-16 mx-auto mb-6 rounded-full bg-red-500/10 flex items-center justify-center">
                         <AlertCircle className="w-8 h-8 text-red-400" />
                     </div>
-                    <h1 className="text-2xl font-bold text-white mb-2">Invalid Invitation</h1>
+                    <h1 className="text-2xl font-bold text-[var(--text-primary)] mb-2">Invalid Invitation</h1>
                     <p className="text-[var(--text-muted)] mb-6">
                         This invitation link is invalid or has expired. Please contact your administrator for a new invitation.
                     </p>
@@ -155,7 +155,7 @@ export const Register = memo(function Register() {
     }
 
     return (
-        <div className="min-h-screen bg-[#030304] flex items-center justify-center p-4 py-12">
+        <div className="min-h-screen bg-[var(--bg-background)] flex items-center justify-center p-4 py-12">
             <div className="absolute inset-0 bg-gradient-to-br from-[#B9FF66]/5 via-transparent to-transparent" />
 
             <motion.div
@@ -165,13 +165,13 @@ export const Register = memo(function Register() {
             >
                 <Link
                     to="/login"
-                    className="inline-flex items-center gap-2 text-[var(--text-muted)] hover:text-white mb-8 transition-colors group"
+                    className="inline-flex items-center gap-2 text-[var(--text-secondary)] hover:text-[var(--text-primary)] mb-8 transition-colors group"
                 >
                     <ArrowLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform" />
                     Back to Login
                 </Link>
 
-                <div className="bg-[#0a0a0b] border border-white/10 rounded-2xl p-8 shadow-2xl">
+                <div className="bg-[var(--bg-card)] border border-[var(--border-color)] rounded-2xl p-8 shadow-2xl">
                     <AnimatePresence mode="wait">
                         {formState === 'success' ? (
                             <SuccessState />
@@ -186,7 +186,7 @@ export const Register = memo(function Register() {
                                     <User className="w-8 h-8 text-[var(--primary)]" />
                                 </div>
 
-                                <h1 className="text-2xl font-bold text-white text-center mb-2">
+                                <h1 className="text-2xl font-bold text-[var(--text-primary)] text-center mb-2">
                                     Complete Your Profile
                                 </h1>
                                 <p className="text-[var(--text-muted)] text-center mb-2">
@@ -215,7 +215,7 @@ export const Register = memo(function Register() {
                                     {/* Name fields */}
                                     <div className="grid grid-cols-2 gap-4">
                                         <div>
-                                            <label htmlFor="firstName" className="block text-sm font-medium text-white mb-2">
+                                            <label htmlFor="firstName" className="block text-sm font-medium text-[var(--text-primary)] mb-2">
                                                 First Name *
                                             </label>
                                             <input
@@ -224,13 +224,13 @@ export const Register = memo(function Register() {
                                                 value={firstName}
                                                 onChange={(e) => setFirstName(e.target.value)}
                                                 placeholder="John"
-                                                className="w-full bg-[#18181b] border border-white/10 rounded-xl px-4 py-3 text-white placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--primary)] transition-all"
+                                                className="w-full bg-[var(--bg-overlay)] border border-[var(--border-color)] rounded-xl px-4 py-3 text-[var(--text-primary)] placeholder:text-[var(--text-secondary)] focus:outline-none focus:border-[var(--primary)] transition-all"
                                                 required
                                                 disabled={formState === 'loading'}
                                             />
                                         </div>
                                         <div>
-                                            <label htmlFor="lastName" className="block text-sm font-medium text-white mb-2">
+                                            <label htmlFor="lastName" className="block text-sm font-medium text-[var(--text-primary)] mb-2">
                                                 Last Name *
                                             </label>
                                             <input
@@ -239,7 +239,7 @@ export const Register = memo(function Register() {
                                                 value={lastName}
                                                 onChange={(e) => setLastName(e.target.value)}
                                                 placeholder="Doe"
-                                                className="w-full bg-[#18181b] border border-white/10 rounded-xl px-4 py-3 text-white placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--primary)] transition-all"
+                                                className="w-full bg-[var(--bg-overlay)] border border-[var(--border-color)] rounded-xl px-4 py-3 text-[var(--text-primary)] placeholder:text-[var(--text-secondary)] focus:outline-none focus:border-[var(--primary)] transition-all"
                                                 required
                                                 disabled={formState === 'loading'}
                                             />
@@ -248,16 +248,16 @@ export const Register = memo(function Register() {
 
                                     {/* Email (read-only) */}
                                     <div>
-                                        <label htmlFor="email" className="block text-sm font-medium text-white mb-2">
+                                        <label htmlFor="email" className="block text-sm font-medium text-[var(--text-primary)] mb-2">
                                             Email Address
                                         </label>
                                         <div className="relative">
-                                            <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-[var(--text-muted)]" />
+                                            <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-[var(--text-secondary)]" />
                                             <input
                                                 id="email"
                                                 type="email"
                                                 value={inviteData?.email || ''}
-                                                className="w-full bg-[#18181b]/50 border border-white/5 rounded-xl pl-12 pr-4 py-3 text-[var(--text-muted)] cursor-not-allowed"
+                                                className="w-full bg-[var(--bg-overlay)]/50 border border-[var(--border-color)] rounded-xl pl-12 pr-4 py-3 text-[var(--text-secondary)] cursor-not-allowed"
                                                 readOnly
                                                 disabled
                                             />
@@ -269,18 +269,18 @@ export const Register = memo(function Register() {
 
                                     {/* Phone (optional) */}
                                     <div>
-                                        <label htmlFor="phone" className="block text-sm font-medium text-white mb-2">
-                                            Phone Number <span className="text-[var(--text-muted)]">(optional)</span>
+                                        <label htmlFor="phone" className="block text-sm font-medium text-[var(--text-primary)] mb-2">
+                                            Phone Number <span className="text-[var(--text-secondary)]">(optional)</span>
                                         </label>
                                         <div className="relative">
-                                            <Phone className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-[var(--text-muted)]" />
+                                            <Phone className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-[var(--text-secondary)]" />
                                             <input
                                                 id="phone"
                                                 type="tel"
                                                 value={phone}
                                                 onChange={(e) => setPhone(e.target.value)}
                                                 placeholder="+1 (555) 123-4567"
-                                                className="w-full bg-[#18181b] border border-white/10 rounded-xl pl-12 pr-4 py-3 text-white placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--primary)] transition-all"
+                                                className="w-full bg-[var(--bg-overlay)] border border-[var(--border-color)] rounded-xl pl-12 pr-4 py-3 text-[var(--text-primary)] placeholder:text-[var(--text-secondary)] focus:outline-none focus:border-[var(--primary)] transition-all"
                                                 disabled={formState === 'loading'}
                                             />
                                         </div>
@@ -288,25 +288,25 @@ export const Register = memo(function Register() {
 
                                     {/* Password */}
                                     <div>
-                                        <label htmlFor="password" className="block text-sm font-medium text-white mb-2">
+                                        <label htmlFor="password" className="block text-sm font-medium text-[var(--text-primary)] mb-2">
                                             Password *
                                         </label>
                                         <div className="relative">
-                                            <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-[var(--text-muted)]" />
+                                            <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-[var(--text-secondary)]" />
                                             <input
                                                 id="password"
                                                 type={showPassword ? 'text' : 'password'}
                                                 value={password}
                                                 onChange={(e) => setPassword(e.target.value)}
                                                 placeholder="••••••••"
-                                                className="w-full bg-[#18181b] border border-white/10 rounded-xl pl-12 pr-12 py-3 text-white placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--primary)] transition-all"
+                                                className="w-full bg-[var(--bg-overlay)] border border-[var(--border-color)] rounded-xl pl-12 pr-12 py-3 text-[var(--text-primary)] placeholder:text-[var(--text-secondary)] focus:outline-none focus:border-[var(--primary)] transition-all"
                                                 required
                                                 disabled={formState === 'loading'}
                                             />
                                             <button
                                                 type="button"
                                                 onClick={() => setShowPassword(!showPassword)}
-                                                className="absolute right-4 top-1/2 -translate-y-1/2 text-[var(--text-muted)] hover:text-white transition-colors"
+                                                className="absolute right-4 top-1/2 -translate-y-1/2 text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors"
                                             >
                                                 {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                                             </button>
@@ -333,18 +333,18 @@ export const Register = memo(function Register() {
 
                                     {/* Confirm Password */}
                                     <div>
-                                        <label htmlFor="confirmPassword" className="block text-sm font-medium text-white mb-2">
+                                        <label htmlFor="confirmPassword" className="block text-sm font-medium text-[var(--text-primary)] mb-2">
                                             Confirm Password *
                                         </label>
                                         <div className="relative">
-                                            <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-[var(--text-muted)]" />
+                                            <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-[var(--text-secondary)]" />
                                             <input
                                                 id="confirmPassword"
                                                 type="password"
                                                 value={confirmPassword}
                                                 onChange={(e) => setConfirmPassword(e.target.value)}
                                                 placeholder="••••••••"
-                                                className="w-full bg-[#18181b] border border-white/10 rounded-xl pl-12 pr-4 py-3 text-white placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--primary)] transition-all"
+                                                className="w-full bg-[var(--bg-overlay)] border border-[var(--border-color)] rounded-xl pl-12 pr-4 py-3 text-[var(--text-primary)] placeholder:text-[var(--text-secondary)] focus:outline-none focus:border-[var(--primary)] transition-all"
                                                 required
                                                 disabled={formState === 'loading'}
                                             />
@@ -372,9 +372,9 @@ export const Register = memo(function Register() {
                             </motion.div>
                         )}
                     </AnimatePresence>
-                </div>
-            </motion.div>
-        </div>
+                </div >
+            </motion.div >
+        </div >
     );
 });
 

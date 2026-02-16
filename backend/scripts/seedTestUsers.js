@@ -14,6 +14,7 @@ const User = require('../src/models/User');
 
 const testUsers = [
     { name: 'Super Admin', email: 'admin@coreops.com', role: 'SUPER_ADMIN' },
+    { name: 'Admin User', email: 'orgadmin@coreops.com', role: 'ADMIN' },
     { name: 'Manager User', email: 'manager@coreops.com', role: 'MANAGER' },
     { name: 'Staff User', email: 'staff@coreops.com', role: 'STAFF' },
     { name: 'Technician User', email: 'tech@coreops.com', role: 'TECHNICIAN' },

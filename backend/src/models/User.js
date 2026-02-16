@@ -53,7 +53,7 @@ const UserSchema = new mongoose.Schema(
         role: {
             type: String,
             enum: {
-                values: ['SUPER_ADMIN', 'MANAGER', 'STAFF', 'TECHNICIAN', 'VIEWER'],
+                values: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'TECHNICIAN', 'STAFF', 'VIEWER'],
                 message: '{VALUE} is not a valid role',
             },
             default: 'STAFF',
@@ -172,6 +172,15 @@ UserSchema.pre('save', function () {
 
     const rolePermissions = {
         SUPER_ADMIN: {
+            canApproveTickets: true,
+            canManageAssets: true,
+            canManageInventory: true,
+            canViewFinancials: true,
+            canManageUsers: true,
+            canManageVendors: true,
+            approvalLimit: MAX_APPROVAL_LIMIT, // -1 = unlimited
+        },
+        ADMIN: {
             canApproveTickets: true,
             canManageAssets: true,
             canManageInventory: true,

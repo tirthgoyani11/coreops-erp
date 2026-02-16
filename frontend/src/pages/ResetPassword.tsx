@@ -104,7 +104,7 @@ export const ResetPassword = memo(function ResetPassword() {
     // Loading state while validating token
     if (formState === 'validating') {
         return (
-            <div className="min-h-screen bg-[#030304] flex items-center justify-center">
+            <div className="min-h-screen bg-[var(--bg-background)] flex items-center justify-center">
                 <Loader2 className="w-8 h-8 text-[var(--primary)] animate-spin" />
             </div>
         );
@@ -113,7 +113,7 @@ export const ResetPassword = memo(function ResetPassword() {
     // Invalid token state
     if (formState === 'invalid-token') {
         return (
-            <div className="min-h-screen bg-[#030304] flex items-center justify-center p-4">
+            <div className="min-h-screen bg-[var(--bg-background)] flex items-center justify-center p-4">
                 <motion.div
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
@@ -122,7 +122,7 @@ export const ResetPassword = memo(function ResetPassword() {
                     <div className="w-16 h-16 mx-auto mb-6 rounded-full bg-red-500/10 flex items-center justify-center">
                         <AlertCircle className="w-8 h-8 text-red-400" />
                     </div>
-                    <h1 className="text-2xl font-bold text-white mb-2">Invalid or Expired Link</h1>
+                    <h1 className="text-2xl font-bold text-[var(--text-primary)] mb-2">Invalid or Expired Link</h1>
                     <p className="text-[var(--text-muted)] mb-6">
                         This password reset link is invalid or has expired. Please request a new one.
                     </p>
@@ -138,7 +138,7 @@ export const ResetPassword = memo(function ResetPassword() {
     }
 
     return (
-        <div className="min-h-screen bg-[#030304] flex items-center justify-center p-4">
+        <div className="min-h-screen bg-[var(--bg-background)] flex items-center justify-center p-4">
             <div className="absolute inset-0 bg-gradient-to-br from-[#B9FF66]/5 via-transparent to-transparent" />
 
             <motion.div
@@ -148,13 +148,13 @@ export const ResetPassword = memo(function ResetPassword() {
             >
                 <Link
                     to="/login"
-                    className="inline-flex items-center gap-2 text-[var(--text-muted)] hover:text-white mb-8 transition-colors group"
+                    className="inline-flex items-center gap-2 text-[var(--text-muted)] hover:text-[var(--text-primary)] mb-8 transition-colors group"
                 >
                     <ArrowLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform" />
                     Back to Login
                 </Link>
 
-                <div className="bg-[#0a0a0b] border border-white/10 rounded-2xl p-8 shadow-2xl">
+                <div className="bg-[var(--bg-card)] border border-[var(--border-color)] rounded-2xl p-8 shadow-2xl">
                     <AnimatePresence mode="wait">
                         {formState === 'success' ? (
                             <SuccessState />
@@ -169,7 +169,7 @@ export const ResetPassword = memo(function ResetPassword() {
                                     <Lock className="w-8 h-8 text-[var(--primary)]" />
                                 </div>
 
-                                <h1 className="text-2xl font-bold text-white text-center mb-2">
+                                <h1 className="text-2xl font-bold text-[var(--text-primary)] text-center mb-2">
                                     Set New Password
                                 </h1>
                                 <p className="text-[var(--text-muted)] text-center mb-8">
@@ -190,25 +190,25 @@ export const ResetPassword = memo(function ResetPassword() {
                                 <form onSubmit={handleSubmit}>
                                     {/* Password Field */}
                                     <div className="mb-4">
-                                        <label htmlFor="password" className="block text-sm font-medium text-white mb-2">
+                                        <label htmlFor="password" className="block text-sm font-medium text-[var(--text-primary)] mb-2">
                                             New Password
                                         </label>
                                         <div className="relative">
-                                            <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-[var(--text-muted)]" />
+                                            <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-[var(--text-secondary)]" />
                                             <input
                                                 id="password"
                                                 type={showPassword ? 'text' : 'password'}
                                                 value={password}
                                                 onChange={(e) => setPassword(e.target.value)}
                                                 placeholder="••••••••"
-                                                className="w-full bg-[#18181b] border border-white/10 rounded-xl pl-12 pr-12 py-3 text-white placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--primary)] focus:ring-2 focus:ring-[var(--primary)]/20 transition-all"
+                                                className="w-full bg-[var(--bg-overlay)] border border-[var(--border-color)] rounded-xl pl-12 pr-12 py-3 text-[var(--text-primary)] placeholder:text-[var(--text-secondary)] focus:outline-none focus:border-[var(--primary)] focus:ring-2 focus:ring-[var(--primary)]/20 transition-all"
                                                 required
                                                 disabled={formState === 'loading'}
                                             />
                                             <button
                                                 type="button"
                                                 onClick={() => setShowPassword(!showPassword)}
-                                                className="absolute right-4 top-1/2 -translate-y-1/2 text-[var(--text-muted)] hover:text-white transition-colors"
+                                                className="absolute right-4 top-1/2 -translate-y-1/2 text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"
                                                 aria-label={showPassword ? 'Hide password' : 'Show password'}
                                             >
                                                 {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
@@ -227,7 +227,7 @@ export const ResetPassword = memo(function ResetPassword() {
                                                 {[1, 2, 3, 4, 5].map((i) => (
                                                     <div
                                                         key={i}
-                                                        className={`h-1.5 flex-1 rounded-full transition-all ${i <= passwordStrength.score ? strengthColor : 'bg-white/10'
+                                                        className={`h-1.5 flex-1 rounded-full transition-all ${i <= passwordStrength.score ? strengthColor : 'bg-[var(--border-color)]'
                                                             }`}
                                                     />
                                                 ))}
@@ -251,25 +251,25 @@ export const ResetPassword = memo(function ResetPassword() {
 
                                     {/* Confirm Password */}
                                     <div className="mb-6">
-                                        <label htmlFor="confirmPassword" className="block text-sm font-medium text-white mb-2">
+                                        <label htmlFor="confirmPassword" className="block text-sm font-medium text-[var(--text-primary)] mb-2">
                                             Confirm Password
                                         </label>
                                         <div className="relative">
-                                            <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-[var(--text-muted)]" />
+                                            <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-[var(--text-secondary)]" />
                                             <input
                                                 id="confirmPassword"
                                                 type={showConfirmPassword ? 'text' : 'password'}
                                                 value={confirmPassword}
                                                 onChange={(e) => setConfirmPassword(e.target.value)}
                                                 placeholder="••••••••"
-                                                className="w-full bg-[#18181b] border border-white/10 rounded-xl pl-12 pr-12 py-3 text-white placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--primary)] focus:ring-2 focus:ring-[var(--primary)]/20 transition-all"
+                                                className="w-full bg-[var(--bg-overlay)] border border-[var(--border-color)] rounded-xl pl-12 pr-12 py-3 text-[var(--text-primary)] placeholder:text-[var(--text-secondary)] focus:outline-none focus:border-[var(--primary)] focus:ring-2 focus:ring-[var(--primary)]/20 transition-all"
                                                 required
                                                 disabled={formState === 'loading'}
                                             />
                                             <button
                                                 type="button"
                                                 onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                                                className="absolute right-4 top-1/2 -translate-y-1/2 text-[var(--text-muted)] hover:text-white transition-colors"
+                                                className="absolute right-4 top-1/2 -translate-y-1/2 text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"
                                                 aria-label={showConfirmPassword ? 'Hide password' : 'Show password'}
                                             >
                                                 {showConfirmPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
@@ -328,7 +328,7 @@ const SuccessState = memo(function SuccessState() {
                 <CheckCircle className="w-8 h-8 text-emerald-400" />
             </motion.div>
 
-            <h2 className="text-xl font-bold text-white mb-2">Password Reset!</h2>
+            <h2 className="text-xl font-bold text-[var(--text-primary)] mb-2">Password Reset!</h2>
             <p className="text-[var(--text-muted)] mb-6">
                 Your password has been successfully reset. You can now sign in with your new password.
             </p>
