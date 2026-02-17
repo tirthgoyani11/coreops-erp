@@ -1,27 +1,38 @@
 const express = require('express');
 const router = express.Router();
 const {
-    createItem,
-    getItems,
+    getInventory,
     getItem,
+    createItem,
     updateItem,
-    deleteItem,
+    adjustStock,
+    transferStock,
+    getLowStock,
+    getStockValuation
 } = require('../controllers/inventoryController');
-const verifyToken = require('../middleware/verifyToken');
-const authorize = require('../middleware/authorize');
-const { filterByOffice } = require('../middleware/filterByOffice');
-const { inventoryValidation, paginationValidation } = require('../middleware/validation');
 
-// All routes require authentication
-router.use(verifyToken);
+const { protect, authorize } = require('../middleware/authMiddleware');
 
-// GET routes - all authenticated users (filtered by office)
-router.get('/', filterByOffice, paginationValidation, getItems);
-router.get('/:id', inventoryValidation.getById, getItem);
+router.use(protect);
 
-// Mutation routes - MANAGER or higher with validation
-router.post('/', authorize('MANAGER', 'SUPER_ADMIN'), inventoryValidation.create, createItem);
-router.patch('/:id', authorize('MANAGER', 'SUPER_ADMIN'), inventoryValidation.update, updateItem);
-router.delete('/:id', authorize('MANAGER', 'SUPER_ADMIN'), inventoryValidation.getById, deleteItem);
+router.route('/')
+    .get(getInventory)
+    .post(authorize('SUPER_ADMIN', 'ADMIN', 'MANAGER'), createItem);
+
+router.route('/alerts/low-stock')
+    .get(getLowStock);
+
+router.route('/reports/valuation')
+    .get(authorize('SUPER_ADMIN', 'ADMIN', 'MANAGER'), getStockValuation);
+
+router.route('/transfer')
+    .post(authorize('SUPER_ADMIN', 'ADMIN', 'MANAGER'), transferStock);
+
+router.route('/:id')
+    .get(getItem)
+    .put(authorize('SUPER_ADMIN', 'ADMIN', 'MANAGER'), updateItem);
+
+router.route('/:id/adjust')
+    .post(adjustStock);
 
 module.exports = router;

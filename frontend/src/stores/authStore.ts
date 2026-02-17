@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import api from '../lib/api';
 import { setAccessToken } from '../lib/api';
 import type { User, LoginCredentials, AuthResponse } from '../types';
+import { hasPermission } from '../config/roleConfig';
 
 interface AuthState {
     user: User | null;
@@ -16,6 +17,7 @@ interface AuthState {
     logout: () => Promise<void>;
     checkAuth: () => Promise<void>;
     clearError: () => void;
+    hasPermission: (feature: string) => boolean;
 }
 
 /**
@@ -97,6 +99,16 @@ export const useAuthStore = create<AuthState>()(
             }
             setAccessToken(null);
             set({ isAuthenticated: false, user: null, token: null, isInitializing: false });
+        },
+
+        hasPermission: (feature: string) => {
+            const { user } = _get();
+            if (!user) return false;
+            // Import dynamically or move helper here? 
+            // Better to rely on the roleConfig helper but we need to import it.
+            // Since this is inside a hook, let's just duplicate the logic or import at top.
+            // Let's import at top.
+            return hasPermission(user.role, feature);
         },
 
         clearError: () => set({ error: null }),

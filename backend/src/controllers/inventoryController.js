@@ -1,161 +1,294 @@
 const Inventory = require('../models/Inventory');
-const { asyncHandler, AppError } = require('../utils/errorHandler');
-const { paginateQuery } = require('../utils/pagination');
-const emailService = require('../services/emailService');
-const User = require('../models/User');
+const Office = require('../models/Office');
+const mongoose = require('mongoose');
 
-/**
- * @desc    Create new inventory item
- * @route   POST /api/inventory
- * @access  MANAGER, SUPER_ADMIN
- */
-exports.createItem = asyncHandler(async (req, res, next) => {
-    const { type, name, sku, quantity, unitCost, officeId } = req.body;
+// @desc    Get all inventory items
+// @route   GET /api/inventory
+// @access  Private
+exports.getInventory = async (req, res) => {
+    try {
+        const { type, category, lowStock, officeId } = req.query;
+        let query = {};
 
-    // Determine office
-    let targetOfficeId = officeId;
-    if (req.user.role !== 'SUPER_ADMIN') {
-        targetOfficeId = req.user.officeId._id || req.user.officeId;
+        // Role-based filtering
+        if (req.user.role !== 'SUPER_ADMIN') {
+            query.officeId = req.user.officeId;
+        } else if (officeId) {
+            query.officeId = officeId;
+        }
+
+        if (type) query.type = type.toUpperCase();
+        if (category) query.category = category;
+
+        const items = await Inventory.find(query)
+            .populate('officeId', 'name')
+            .populate('vendor', 'name')
+            .sort({ name: 1 });
+
+        // Post-query filtering for low stock (virtual field)
+        let results = items;
+        if (lowStock === 'true') {
+            results = items.filter(item => item.isLowStock);
+        }
+
+        res.status(200).json({
+            success: true,
+            count: results.length,
+            data: results
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: 'Server Error',
+            error: error.message
+        });
     }
+};
 
-    if (!targetOfficeId) {
-        return next(new AppError('Office is required', 400));
+// @desc    Get single inventory item
+// @route   GET /api/inventory/:id
+// @access  Private
+exports.getItem = async (req, res) => {
+    try {
+        const item = await Inventory.findById(req.params.id)
+            .populate('officeId', 'name')
+            .populate('vendor', 'name')
+            .populate('usageHistory.maintenanceTicket', 'ticketNumber')
+            .populate('usageHistory.asset', 'name')
+            .populate('usageHistory.technician', 'name')
+            .populate('stockMovements.performedBy', 'name');
+
+        if (!item) {
+            return res.status(404).json({ success: false, message: 'Item not found' });
+        }
+
+        res.status(200).json({
+            success: true,
+            data: item
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: 'Server Error',
+            error: error.message
+        });
     }
+};
 
-    const item = await Inventory.create({
-        type,
-        name,
-        sku,
-        quantity,
-        unitCost,
-        officeId: targetOfficeId,
-        createdBy: req.user._id,
-    });
+// @desc    Create new inventory item
+// @route   POST /api/inventory
+// @access  Private (Manager/Admin)
+exports.createItem = async (req, res) => {
+    try {
+        const officeId = req.user.officeId || req.body.officeId;
 
-    res.status(201).json({
-        success: true,
-        message: 'Inventory item created successfully',
-        data: item,
-    });
-});
+        const item = new Inventory({
+            ...req.body,
+            officeId,
+            createdBy: req.user._id
+        });
 
-/**
- * @desc    Get all inventory items (filtered by office, with pagination)
- * @route   GET /api/inventory?page=1&limit=20
- * @access  ALL authenticated
- */
-exports.getItems = asyncHandler(async (req, res, next) => {
-    const filter = { ...req.officeFilter };
+        await item.save();
 
-    // Optional filters
-    if (req.query.type) filter.type = req.query.type;
-    if (req.query.name) filter.name = new RegExp(req.query.name, 'i');
-
-    const { data, pagination } = await paginateQuery(
-        Inventory,
-        filter,
-        req,
-        [
-            { path: 'officeId', select: 'name code' },
-            { path: 'createdBy', select: 'name email' }
-        ]
-    );
-
-    res.status(200).json({
-        success: true,
-        count: data.length,
-        pagination,
-        data,
-    });
-});
-
-/**
- * @desc    Get single inventory item
- * @route   GET /api/inventory/:id
- * @access  ALL authenticated
- */
-exports.getItem = asyncHandler(async (req, res, next) => {
-    const item = await Inventory.findById(req.params.id)
-        .populate('officeId', 'name code')
-        .populate('createdBy', 'name email');
-
-    if (!item) {
-        return next(new AppError('Inventory item not found', 404));
+        res.status(201).json({
+            success: true,
+            data: item
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: 'Server Error',
+            error: error.message
+        });
     }
+};
 
-    // Office isolation check
-    if (
-        req.user.role !== 'SUPER_ADMIN' &&
-        item.officeId._id.toString() !== req.user.officeId.toString()
-    ) {
-        return next(new AppError('Access denied to this item', 403));
+// @desc    Update inventory item
+// @route   PUT /api/inventory/:id
+// @access  Private (Manager/Admin)
+exports.updateItem = async (req, res) => {
+    try {
+        let item = await Inventory.findById(req.params.id);
+        if (!item) return res.status(404).json({ success: false, message: 'Item not found' });
+
+        // Prevent updating stock quantity directly via update
+        delete req.body.stock;
+        delete req.body.quantity;
+
+        Object.assign(item, req.body);
+        await item.save();
+
+        res.status(200).json({
+            success: true,
+            data: item
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: 'Server Error',
+            error: error.message
+        });
     }
+};
 
-    res.status(200).json({
-        success: true,
-        data: item,
-    });
-});
+// @desc    Adjust stock (In/Out)
+// @route   POST /api/inventory/:id/adjust
+// @access  Private
+exports.adjustStock = async (req, res) => {
+    try {
+        const { type, quantity, reason, notes, reference } = req.body;
+        // type: 'stock_in' | 'stock_out' | 'adjustment'
 
-/**
- * @desc    Update inventory item (quantity adjustment)
- * @route   PATCH /api/inventory/:id
- * @access  MANAGER, SUPER_ADMIN
- */
-exports.updateItem = asyncHandler(async (req, res, next) => {
-    const { name, quantity, unitCost } = req.body;
+        const item = await Inventory.findById(req.params.id);
+        if (!item) return res.status(404).json({ success: false, message: 'Item not found' });
 
-    let item = await Inventory.findById(req.params.id);
+        item.recordMovement(type, Number(quantity), reference, notes || reason, req.user._id);
+        await item.save();
 
-    if (!item) {
-        return next(new AppError('Inventory item not found', 404));
+        res.status(200).json({
+            success: true,
+            data: item
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: 'Server Error',
+            error: error.message
+        });
     }
+};
 
-    // Office isolation check
-    if (
-        req.user.role !== 'SUPER_ADMIN' &&
-        item.officeId.toString() !== req.user.officeId.toString()
-    ) {
-        return next(new AppError('Access denied to this item', 403));
+// @desc    Transfer stock between offices
+// @route   POST /api/inventory/transfer
+// @access  Private (Manager/Admin)
+exports.transferStock = async (req, res) => {
+    const session = await mongoose.startSession();
+    session.startTransaction();
+
+    try {
+        const { sourceItemId, targetOfficeId, quantity, notes } = req.body;
+
+        const sourceItem = await Inventory.findById(sourceItemId).session(session);
+        if (!sourceItem) throw new Error('Source item not found');
+
+        if (sourceItem.stock.currentQuantity < quantity) {
+            throw new Error('Insufficient stock for transfer');
+        }
+
+        // Deduct from source
+        sourceItem.recordMovement('stock_out', quantity, 'TRANSFER', `Transfer to office ${targetOfficeId}`, req.user._id);
+        await sourceItem.save({ session });
+
+        // Find or create item in target office
+        let targetItem = await Inventory.findOne({
+            sku: sourceItem.sku, // Assuming SKU is unique per item type, but wait SKU is unique gloablly? 
+            // SKU is generated per item. If transferring, we might match by name/partNumber + officeId
+            // Or we strictly look for same 'partNumber' or 'name' in target office
+            name: sourceItem.name,
+            partNumber: sourceItem.partNumber,
+            officeId: targetOfficeId
+        }).session(session);
+
+        if (!targetItem) {
+            // Clone item for new office
+            const itemData = sourceItem.toObject();
+            delete itemData._id;
+            delete itemData.id;
+            delete itemData.officeId;
+            delete itemData.stock;
+            delete itemData.quantity;
+            delete itemData.stockMovements;
+            delete itemData.usageHistory;
+            delete itemData.createdAt;
+            delete itemData.updatedAt;
+            delete itemData.sku; // Let it regenerate or share? Usually unique. Let it regen.
+
+            targetItem = new Inventory({
+                ...itemData,
+                officeId: targetOfficeId,
+                stock: { ...sourceItem.stock, currentQuantity: 0 },
+                quantity: 0
+            });
+        }
+
+        // Add to target
+        targetItem.recordMovement('stock_in', quantity, 'TRANSFER', `Transfer from ${sourceItem.officeId}`, req.user._id);
+        await targetItem.save({ session });
+
+        await session.commitTransaction();
+        res.status(200).json({
+            success: true,
+            message: 'Transfer successful'
+        });
+
+    } catch (error) {
+        await session.abortTransaction();
+        res.status(500).json({
+            success: false,
+            message: error.message
+        });
+    } finally {
+        session.endSession();
     }
+};
 
-    item = await Inventory.findByIdAndUpdate(
-        req.params.id,
-        { name, quantity, unitCost },
-        { new: true, runValidators: true }
-    );
+// @desc    Get low stock items
+// @route   GET /api/inventory/alerts/low-stock
+// @access  Private
+exports.getLowStock = async (req, res) => {
+    try {
+        const query = req.user.role !== 'SUPER_ADMIN' ? { officeId: req.user.officeId } : {};
 
-    res.status(200).json({
-        success: true,
-        message: 'Inventory item updated successfully',
-        data: item,
-    });
-});
+        // Mongo doesn't easily query virtuals, so we fetch all valid for office and filter in JS
+        // Optimization: Query where quantity < reorderPoint (heuristic) if possible, but schema structure makes it hard
+        // We'll rely on the getInventory filter logic or just do it here.
 
-/**
- * @desc    Delete inventory item
- * @route   DELETE /api/inventory/:id
- * @access  MANAGER, SUPER_ADMIN
- */
-exports.deleteItem = asyncHandler(async (req, res, next) => {
-    const item = await Inventory.findById(req.params.id);
+        const items = await Inventory.find(query).select('name stock quantity partNumber officeId type');
+        const lowStockItems = items.filter(item => item.isLowStock);
 
-    if (!item) {
-        return next(new AppError('Inventory item not found', 404));
+        res.status(200).json({
+            success: true,
+            count: lowStockItems.length,
+            data: lowStockItems
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: 'Server Error',
+            error: error.message
+        });
     }
+};
 
-    // Office isolation check
-    if (
-        req.user.role !== 'SUPER_ADMIN' &&
-        item.officeId.toString() !== req.user.officeId.toString()
-    ) {
-        return next(new AppError('Access denied to this item', 403));
+// @desc    Get stock valuation report
+// @route   GET /api/inventory/reports/valuation
+// @access  Private (Admin/Manager)
+exports.getStockValuation = async (req, res) => {
+    try {
+        const query = req.user.role !== 'SUPER_ADMIN' ? { officeId: req.user.officeId } : {};
+
+        const items = await Inventory.find(query);
+
+        const valuation = items.reduce((acc, item) => {
+            const val = item.totalValue || 0;
+            if (item.type === 'PRODUCT') acc.products += val;
+            if (item.type === 'SPARE') acc.spares += val;
+            acc.total += val;
+            return acc;
+        }, { total: 0, products: 0, spares: 0 });
+
+        res.status(200).json({
+            success: true,
+            data: {
+                ...valuation,
+                itemCount: items.length
+            }
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: 'Server Error',
+            error: error.message
+        });
     }
-
-    await Inventory.findByIdAndDelete(req.params.id);
-
-    res.status(200).json({
-        success: true,
-        message: 'Inventory item deleted successfully',
-    });
-});
+};

@@ -6,7 +6,8 @@ import { useThemeStore } from '../../stores/themeStore';
 import { useAuthStore } from '../../stores/authStore';
 import { getRoleLabel, getRoleColor, getRoleConfig, hasPermission } from '../../config/roleConfig';
 import type { UserRole } from '../../types';
-import api from '../../lib/api';
+import { useSocket } from '../../hooks/useSocket';
+import { useNotificationStore } from '../../stores/notificationStore';
 
 // Scope icons mapping
 const SCOPE_ICONS = {
@@ -53,9 +54,12 @@ export const Header = memo(function Header() {
     const { setMobileSidebarOpen } = useUIStore();
     const { isDarkMode, toggleTheme } = useThemeStore();
     const { user } = useAuthStore();
-    const [unreadCount, setUnreadCount] = useState(0);
+    const { unreadCount, fetchUnreadCount } = useNotificationStore();
     const [searchQuery, setSearchQuery] = useState('');
     const [isSearchFocused, setIsSearchFocused] = useState(false);
+
+    // Initialize Socket.IO connection
+    useSocket();
 
     // Memoize role-related values
     const roleInfo = useMemo(() => {
@@ -79,19 +83,9 @@ export const Header = memo(function Header() {
             .join(' ');
     }, [location.pathname]);
 
-    // Fetch unread notification count
-    const fetchUnreadCount = useCallback(async () => {
-        try {
-            const res = await api.get('/notifications/unread-count');
-            setUnreadCount(res.data.data?.count || 0);
-        } catch {
-            // Silently fail - not critical
-        }
-    }, []);
-
     useEffect(() => {
         fetchUnreadCount();
-        const interval = setInterval(fetchUnreadCount, 30000);
+        const interval = setInterval(fetchUnreadCount, 60000); // Poll every minute as backup
         return () => clearInterval(interval);
     }, [fetchUnreadCount]);
 

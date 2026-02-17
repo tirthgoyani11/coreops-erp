@@ -1,62 +1,34 @@
 const express = require('express');
 const router = express.Router();
 const {
-    createRequest,
-    processDecision,
-    startMaintenance,
-    completeMaintenance,
-    closeMaintenance,
-    getMaintenance
+    createTicket,
+    getTickets,
+    getTicket,
+    updateTicket,
+    addWorkLog,
+    consumePart,
+    getStats
 } = require('../controllers/maintenanceController');
-const verifyToken = require('../middleware/verifyToken');
-const authorize = require('../middleware/authorize');
-const { maintenanceValidation, paginationValidation } = require('../middleware/validation');
 
-// Protect all routes
-router.use(verifyToken);
+const { protect, authorize } = require('../middleware/authMiddleware');
+
+router.use(protect); // All routes require login
 
 router.route('/')
-    .post(maintenanceValidation.create, createRequest)
-    .get(paginationValidation, getMaintenance);
+    .post(createTicket)
+    .get(getTickets);
 
-router.post('/:id/approve',
-    authorize('MANAGER', 'SUPER_ADMIN'),
-    maintenanceValidation.getById,
-    (req, res, next) => {
-        req.params.action = 'approve';
-        next();
-    },
-    processDecision
-);
+router.route('/stats')
+    .get(getStats);
 
-router.post('/:id/reject',
-    authorize('MANAGER', 'SUPER_ADMIN'),
-    maintenanceValidation.getById,
-    (req, res, next) => {
-        req.params.action = 'reject';
-        next();
-    },
-    processDecision
-);
+router.route('/:id')
+    .get(getTicket)
+    .put(authorize('SUPER_ADMIN', 'ADMIN', 'MANAGER'), updateTicket);
 
+router.route('/:id/worklog')
+    .post(addWorkLog);
 
-
-router.post('/:id/start',
-    authorize('TECHNICIAN', 'MANAGER', 'SUPER_ADMIN'),
-    maintenanceValidation.getById,
-    startMaintenance
-);
-
-router.post('/:id/complete',
-    authorize('TECHNICIAN', 'MANAGER', 'SUPER_ADMIN'),
-    maintenanceValidation.getById,
-    completeMaintenance
-);
-
-router.post('/:id/close',
-    authorize('MANAGER', 'SUPER_ADMIN'),
-    maintenanceValidation.getById,
-    closeMaintenance
-);
+router.route('/:id/parts')
+    .post(consumePart);
 
 module.exports = router;

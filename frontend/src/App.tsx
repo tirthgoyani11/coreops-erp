@@ -19,13 +19,24 @@ import AssetDetail from './pages/AssetDetail';
 import { Inventory } from './pages/Inventory';
 import { Maintenance } from './pages/Maintenance';
 import TicketDetails from './pages/TicketDetails';
+import { TicketWizard } from './pages/TicketWizard';
 import { ScanQR } from './pages/ScanQR';
 import { Offices } from './pages/Offices';
 import { Users } from './pages/Users';
+import { InventoryDetail } from './pages/InventoryDetail';
+import { StockOperations } from './pages/StockOperations';
+import { AssetMap } from './pages/AssetMap';
 import { Vendors } from './pages/Vendors';
 import { Analytics } from './pages/Analytics';
 import { PurchaseOrders } from './pages/PurchaseOrders';
 import { Notifications } from './pages/Notifications';
+import NotificationPreferences from './pages/NotificationPreferences';
+import Profile from './pages/Profile';
+import ChangePassword from './pages/ChangePassword';
+import Settings from './pages/Settings';
+import Documents from './pages/Documents';
+import DocumentUpload from './pages/DocumentUpload';
+import DocumentViewer from './pages/DocumentViewer';
 import AuditLogs from './pages/AuditLogs';
 import AccessDenied from './pages/AccessDenied';
 import { NotFound } from './pages/NotFound';
@@ -129,13 +140,20 @@ function App() {
             <Route path="/assets/new" element={<RoleGuard allowedRoles={['SUPER_ADMIN', 'ADMIN', 'MANAGER']}><AssetWizard /></RoleGuard>} />
             <Route path="/assets/:id" element={<AssetDetail />} />
             <Route path="/assets/:id/edit" element={<RoleGuard allowedRoles={['SUPER_ADMIN', 'ADMIN', 'MANAGER']}><AssetWizard /></RoleGuard>} />
+            <Route path="/assets/map" element={<RoleGuard allowedRoles={['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF', 'TECHNICIAN', 'VIEWER']}><AssetMap /></RoleGuard>} />
 
 
             {/* Inventory - All roles (CRUD scope varies by role) */}
             <Route path="/inventory" element={<Inventory />} />
 
+            {/* Inventory - All roles can view */}
+            <Route path="/inventory" element={<RoleGuard allowedRoles={['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF', 'TECHNICIAN', 'VIEWER']}><Inventory /></RoleGuard>} />
+            <Route path="/inventory/:id" element={<RoleGuard allowedRoles={['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF', 'TECHNICIAN', 'VIEWER']}><InventoryDetail /></RoleGuard>} />
+            <Route path="/inventory/operations" element={<RoleGuard allowedRoles={['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF']}><StockOperations /></RoleGuard>} />
+
             {/* Maintenance - All roles can view (Tech can create, Managers approve) */}
             <Route path="/maintenance" element={<RoleGuard allowedRoles={['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF', 'TECHNICIAN']}><Maintenance /></RoleGuard>} />
+            <Route path="/maintenance/new" element={<RoleGuard allowedRoles={['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF', 'TECHNICIAN']}><TicketWizard /></RoleGuard>} />
             <Route path="/maintenance/:id" element={<RoleGuard allowedRoles={['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF', 'TECHNICIAN']}><TicketDetails /></RoleGuard>} />
 
             {/* QR Scan - Tech primarily */}
@@ -173,7 +191,25 @@ function App() {
 
             {/* Notifications - Everyone */}
             <Route path="/notifications" element={<Notifications />} />
+            <Route path="/notifications/preferences" element={<NotificationPreferences />} />
 
+            {/* Documents */}
+            <Route path="/documents" element={<Documents />} />
+            <Route path="/documents/upload" element={
+              <RoleGuard allowedRoles={['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF']}>
+                <DocumentUpload />
+              </RoleGuard>
+            } />
+            <Route path="/documents/:id" element={<DocumentViewer />} />
+
+            {/* Profile & Settings */}
+            <Route path="/profile" element={<Profile />} />
+            <Route path="/profile/password" element={<ChangePassword />} />
+            <Route path="/settings" element={
+              <RoleGuard allowedRoles={['SUPER_ADMIN']}>
+                <Settings />
+              </RoleGuard>
+            } />
             {/* Audit Logs - Managers + Viewer (read-only) */}
             <Route
               path="/audit-logs"
@@ -205,18 +241,15 @@ function App() {
             />
 
             {/* TODO: Add these routes as pages are created */}
-            {/* <Route path="/profile" element={<Profile />} /> */}
-            {/* <Route path="/settings" element={<RoleGuard allowedRoles={['SUPER_ADMIN']}><Settings /></RoleGuard>} /> */}
             {/* <Route path="/financial" element={<RoleGuard allowedRoles={['SUPER_ADMIN', 'REGIONAL_MANAGER', 'BRANCH_MANAGER', 'VIEWER']}><Financial /></RoleGuard>} /> */}
             {/* <Route path="/reports" element={<RoleGuard allowedRoles={['SUPER_ADMIN', 'REGIONAL_MANAGER', 'BRANCH_MANAGER', 'VIEWER']}><Reports /></RoleGuard>} /> */}
-            {/* <Route path="/my-tickets" element={<RoleGuard allowedRoles={['TECHNICIAN']}><MyTickets /></RoleGuard>} /> */}
           </Route>
 
           {/* 404 — Not Found */}
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>
-    </ErrorBoundary>
+    </ErrorBoundary >
   );
 }
 

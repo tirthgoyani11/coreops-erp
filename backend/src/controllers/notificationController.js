@@ -1,4 +1,5 @@
 const Notification = require('../models/Notification');
+const { notifyUser, getIO } = require('../config/socketServer');
 
 /**
  * Notification Controller
@@ -185,6 +186,9 @@ exports.createNotification = async (req, res) => {
             actionUrl,
         });
 
+        // Real-time notification
+        notifyUser(recipient, notification);
+
         res.status(201).json({
             success: true,
             data: notification,
@@ -222,6 +226,11 @@ exports.broadcastNotification = async (req, res) => {
         }));
 
         const result = await Notification.insertMany(notifications);
+
+        // Real-time broadcast (iterate or use room if available)
+        result.forEach(note => {
+            notifyUser(note.recipient, note);
+        });
 
         res.status(201).json({
             success: true,

@@ -12,9 +12,10 @@ import {
     Shield,
     Settings,
     Bell,
+    FileText,
+    User,
     Ticket,
     DollarSign,
-    FileText,
     type LucideIcon
 } from 'lucide-react';
 
@@ -272,6 +273,22 @@ export const NAV_ITEMS: NavItem[] = [
         path: '/settings',
         icon: Settings,
         roles: ['SUPER_ADMIN']
+    },
+
+    // Documents - All roles
+    {
+        label: 'Documents',
+        path: '/documents',
+        icon: FileText,
+        roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF', 'TECHNICIAN', 'VIEWER']
+    },
+
+    // Profile - All roles
+    {
+        label: 'Profile',
+        path: '/profile',
+        icon: User,
+        roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF', 'TECHNICIAN', 'VIEWER']
     }
 ];
 

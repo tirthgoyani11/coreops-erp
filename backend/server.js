@@ -1,8 +1,10 @@
 require('dotenv').config();
+const http = require('http');
 const app = require('./app');
 // Restart Triggered
 const connectDB = require('./src/config/db');
 const logger = require('./src/utils/logger');
+const socketServer = require('./src/config/socketServer');
 
 const PORT = process.env.PORT || 5000;
 
@@ -27,7 +29,13 @@ const startServer = async () => {
     try {
         await connectDB();
 
-        const server = app.listen(PORT, () => {
+        // Wrap Express app with HTTP server for Socket.IO
+        const server = http.createServer(app);
+
+        // Initialize Socket.IO
+        socketServer.init(server);
+
+        server.listen(PORT, () => {
             logger.info(`
 ╔════════════════════════════════════════════════════╗
 ║                                                    ║
@@ -35,6 +43,7 @@ const startServer = async () => {
 ║                                                    ║
 ║   Environment: ${(process.env.NODE_ENV || 'development').padEnd(20)}      ║
 ║   Port:        ${String(PORT).padEnd(20)}          ║
+║   Socket.IO:   Enabled                             ║
 ║   Status:      Running                             ║
 ║                                                    ║
 ╚════════════════════════════════════════════════════╝

@@ -1,313 +1,355 @@
+const mongoose = require('mongoose');
 const Maintenance = require('../models/Maintenance');
 const Asset = require('../models/Asset');
 const Inventory = require('../models/Inventory');
-const FinanceLog = require('../models/FinanceLog');
-const { asyncHandler, AppError } = require('../utils/errorHandler');
-const { paginateQuery } = require('../utils/pagination');
-const emailService = require('../services/emailService');
 const User = require('../models/User');
 
-// Exchange Rates (Static for Phase 2)
-const EXCHANGE_RATES = {
-    'USD': 83,
-    'EUR': 90,
-    'INR': 1
+/**
+ * Maintenance Controller
+ * Handles all ticket management, approval workflows, and algorithmic decision making
+ */
+
+// @desc    Create new maintenance ticket
+// @route   POST /api/maintenance
+// @access  Private
+exports.createTicket = async (req, res) => {
+    try {
+        const { assetId, issueDescription, priority, issueType, estimatedCost, images } = req.body;
+
+        // Verify asset exists
+        const asset = await Asset.findById(assetId);
+        if (!asset) {
+            return res.status(404).json({
+                success: false,
+                message: 'Asset not found'
+            });
+        }
+
+        // Create ticket
+        const ticket = new Maintenance({
+            assetId,
+            officeId: req.user.officeId || asset.officeId, // Use asset office if super admin
+            issueDescription,
+            priority,
+            issueType,
+            estimatedCost: estimatedCost || 0,
+            requestedBy: req.user._id,
+            attachments: images || [],
+            status: 'REQUESTED'
+        });
+
+        // Run algorithm if cost is provided
+        if (estimatedCost > 0) {
+            await ticket.runAlgorithm();
+        }
+
+        await ticket.save();
+
+        // Update asset status
+        asset.status = 'MAINTENANCE';
+        await asset.save();
+
+        res.status(201).json({
+            success: true,
+            data: ticket
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: 'Server Error',
+            error: error.message
+        });
+    }
 };
 
-/**
- * @desc    Create Maintenance Request (Rule Engine Applied)
- * @route   POST /api/maintenance
- * @access  STAFF, MANAGER, SUPER_ADMIN
- */
-exports.createRequest = asyncHandler(async (req, res, next) => {
-    const { assetId, issueDescription, repairCost, currency = 'INR', sparePartsUsed = [] } = req.body;
-
-    const asset = await Asset.findById(assetId);
-    if (!asset) {
-        return next(new AppError('Asset not found', 404));
-    }
-
-    // Office Isolation Check (Unless Admin)
-    if (req.user.role !== 'SUPER_ADMIN' && asset.officeId.toString() !== req.user.officeId.toString()) {
-        return next(new AppError('Access denied: Asset belongs to another office', 403));
-    }
-
-    // 🧠 Rule Engine: Repair vs Replace
-    // Logic: If repair cost > 60% of purchase cost -> REPLACE
-    // Normalize costs to INR for comparison if needed, assuming asset cost is same currency for simplicity or using normalized.
-    // Ideally, we normalize both.
-
-    const assetCurrency = asset.purchaseInfo?.currency || 'INR';
-    const assetRate = EXCHANGE_RATES[assetCurrency] || 1;
-    const repairRate = EXCHANGE_RATES[currency] || 1;
-
-    const assetValueNormalized = (asset.purchaseInfo?.purchasePrice || 0) * assetRate;
-    const repairCostNormalized = repairCost * repairRate;
-
-    let decision = 'REPAIR';
-    if (repairCostNormalized > (assetValueNormalized * 0.6)) {
-        decision = 'REPLACE';
-    }
-
-    const maintenance = await Maintenance.create({
-        assetId,
-        officeId: asset.officeId,
-        issueDescription,
-        repairCost,
-        currency,
-        decision,
-        sparePartsUsed,
-        requestedBy: req.user._id,
-        status: 'REQUESTED'
-    });
-
-    // Auto-update Asset Status
-    asset.status = 'MAINTENANCE';
-    await asset.save();
-
-    res.status(201).json({
-        success: true,
-        data: maintenance,
-        meta: {
-            ruleApplied: 'Repair vs Replace (>60%)',
-            decision
-        }
-    });
-});
-
-/**
- * @desc    Approve/Reject Maintenance Request
- * @route   POST /api/maintenance/:id/:action (approve/reject)
- * @access  MANAGER, SUPER_ADMIN
- */
-exports.processDecision = asyncHandler(async (req, res, next) => {
-    const { id, action } = req.params; // action: 'approve' | 'reject'
-    const maintenance = await Maintenance.findById(id);
-
-    if (!maintenance) {
-        return next(new AppError('Maintenance request not found', 404));
-    }
-
-    // Office Check
-    if (req.user.role !== 'SUPER_ADMIN' && maintenance.officeId.toString() !== req.user.officeId.toString()) {
-        return next(new AppError('Access denied', 403));
-    }
-
-    // Self-approval Check
-    if (maintenance.requestedBy.toString() === req.user._id.toString() && req.user.role !== 'SUPER_ADMIN') {
-        return next(new AppError('You cannot approve your own request', 403));
-    }
-
-    if (action === 'reject') {
-        maintenance.status = 'REJECTED';
-        await maintenance.save();
-
-        // Revert Asset Status
-        await Asset.findByIdAndUpdate(maintenance.assetId, { status: 'ACTIVE' });
-
-        // Send rejection email
-        try {
-            const requester = await User.findById(maintenance.requestedBy);
-            const assetData = await Asset.findById(maintenance.assetId); // Fetch asset for name
-
-            if (requester && requester.email) {
-                await emailService.sendTicketRejectedEmail(
-                    requester.email,
-                    maintenance.ticketNumber || `TICK-${maintenance._id.toString().substring(18)}`, // Fallback if no ticket number
-                    assetData ? assetData.name : 'Unknown Asset',
-                    'Request rejected by manager' // Default reason if not provided in params
-                );
-            }
-        } catch (emailError) {
-            console.error('Failed to send rejection email:', emailError);
-        }
-
-        return res.status(200).json({ success: true, message: 'Request rejected' });
-    }
-
-    // Handle Approval Logic
-    // Simple Rule: If cost > 50000 INR, might need DIRECTOR (For now, MANAGER approves all for simplicity unless specified)
-
-    maintenance.status = 'APPROVED';
-    maintenance.approvedBy = req.user._id;
-    await maintenance.save();
-
-    // Send approval email
+// @desc    Get all tickets
+// @route   GET /api/maintenance
+// @access  Private
+exports.getTickets = async (req, res) => {
     try {
-        const requester = await User.findById(maintenance.requestedBy);
-        const assetData = await Asset.findById(maintenance.assetId); // Fetch asset for name
+        const { status, priority, technician, assetId, view } = req.query;
+        let query = {};
 
-        if (requester && requester.email) {
-            await emailService.sendTicketApprovedEmail(
-                requester.email,
-                maintenance.ticketNumber || `TICK-${maintenance._id.toString().substring(18)}`,
-                assetData ? assetData.name : 'Unknown Asset',
-                req.user.name
-            );
-        }
-    } catch (emailError) {
-        console.error('Failed to send approval email:', emailError);
-    }
-
-    res.status(200).json({ success: true, data: maintenance });
-});
-
-/**
- * @desc    Start Maintenance (Technician)
- * @route   POST /api/maintenance/:id/start
- * @access  TECHNICIAN, MANAGER, SUPER_ADMIN
- */
-exports.startMaintenance = asyncHandler(async (req, res, next) => {
-    const { id } = req.params;
-    const maintenance = await Maintenance.findById(id);
-
-    if (!maintenance) return next(new AppError('Request not found', 404));
-
-    // Status check
-    if (maintenance.status !== 'APPROVED' && maintenance.status !== 'assigned') { // Handle legacy 'assigned' if any, but mostly APPROVED
-        // Actually, flow is REQUESTED -> APPROVED -> IN_PROGRESS
-    }
-
-    // Allow starting if APPROVED or pending (if auto-assigned?)
-    // Strictly, should be APPROVED.
-    if (maintenance.status !== 'APPROVED' && maintenance.status !== 'PENDING') {
-        // Relaxed check for now
-    }
-
-    maintenance.status = 'IN_PROGRESS';
-    maintenance.assignedTo = req.user._id; // Self-assign if not assigned
-    maintenance.assignedDate = new Date();
-
-    await maintenance.save();
-
-    res.status(200).json({ success: true, data: maintenance });
-});
-
-/**
- * @desc    Complete Maintenance (Technician)
- * @route   POST /api/maintenance/:id/complete
- * @access  TECHNICIAN, MANAGER, SUPER_ADMIN
- */
-exports.completeMaintenance = asyncHandler(async (req, res, next) => {
-    const { id } = req.params;
-    const { notes } = req.body;
-    const maintenance = await Maintenance.findById(id);
-
-    if (!maintenance) return next(new AppError('Request not found', 404));
-
-    maintenance.status = 'COMPLETED';
-    maintenance.completedDate = new Date();
-
-    // Add work log
-    if (notes) {
-        maintenance.addWorkLog(req.user._id, maintenance.assignedDate || new Date(), new Date(), notes);
-    }
-
-    await maintenance.save();
-
-    res.status(200).json({ success: true, data: maintenance });
-});
-
-/**
- * @desc    Close Maintenance (Deduct Inventory + Log Finance)
- * @route   POST /api/maintenance/:id/close
- * @access  MANAGER, SUPER_ADMIN
- */
-exports.closeMaintenance = asyncHandler(async (req, res, next) => {
-    const { id } = req.params;
-    const maintenance = await Maintenance.findById(id);
-
-    if (!maintenance) return next(new AppError('Request not found', 404));
-    if (maintenance.status !== 'APPROVED') return next(new AppError('Request must be APPROVED to close', 400));
-
-    // 1. Deduct Spare Parts
-    for (const part of maintenance.sparePartsUsed) {
-        const inventory = await Inventory.findById(part.inventoryId);
-
-        if (!inventory) {
-            return next(new AppError(`Inventory item ${part.inventoryId} not found`, 404));
-        }
-        if (inventory.type !== 'SPARE') {
-            return next(new AppError(`Item ${inventory.name} is not a SPARE`, 400));
-        }
-        if (inventory.quantity < part.quantity) {
-            return next(new AppError(`Insufficient stock for ${inventory.name}`, 400));
+        // Role-based filtering
+        if (req.user.role !== 'SUPER_ADMIN') {
+            query.officeId = req.user.officeId;
         }
 
-        inventory.quantity -= part.quantity;
-        await inventory.save();
+        // Apply filters
+        if (status) query.status = status;
+        if (priority) query.priority = priority;
+        if (technician) query.assignedTo = technician;
+        if (assetId) query.assetId = assetId;
+
+        // Calendar view date range filter
+        if (view === 'calendar' && req.query.start && req.query.end) {
+            query.reportedDate = {
+                $gte: new Date(req.query.start),
+                $lte: new Date(req.query.end)
+            };
+        }
+
+        const tickets = await Maintenance.find(query)
+            .populate('assetId', 'name serialNumber category location')
+            .populate('assignedTo', 'name')
+            .populate('requestedBy', 'name')
+            .sort({ createdAt: -1 });
+
+        res.status(200).json({
+            success: true,
+            count: tickets.length,
+            data: tickets
+        });
+
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: 'Server Error',
+            error: error.message
+        });
     }
+};
 
-    // 2. Log Finance
-    const rate = EXCHANGE_RATES[maintenance.currency] || 1;
-    const normalizedAmount = maintenance.repairCost * rate;
+// @desc    Get single ticket
+// @route   GET /api/maintenance/:id
+// @access  Private
+exports.getTicket = async (req, res) => {
+    try {
+        const ticket = await Maintenance.findById(req.params.id)
+            .populate('assetId')
+            .populate('assignedTo', 'name email')
+            .populate('requestedBy', 'name email')
+            .populate('approvedBy', 'name')
+            .populate('workLog.technician', 'name')
+            .populate('sparePartsUsed.inventoryId', 'name partNumber');
 
-    await FinanceLog.create({
-        type: 'maintenance',
-        source: 'MAINTENANCE',
-        sourceId: maintenance._id,
-        amount: maintenance.repairCost,
-        currency: maintenance.currency,
-        normalizedAmount,
-        officeId: maintenance.officeId
-    });
+        if (!ticket) {
+            return res.status(404).json({
+                success: false,
+                message: 'Ticket not found'
+            });
+        }
 
-    // 3. Update Status
-    maintenance.status = 'CLOSED';
-    await maintenance.save();
-
-    // 4. Update Asset Final Status & Log History
-    const finalAssetStatus = maintenance.decision === 'REPLACE' ? 'RETIRED' : 'ACTIVE';
-
-    const asset = await Asset.findById(maintenance.assetId);
-    if (asset) {
-        asset.status = finalAssetStatus;
-        await asset.addMaintenanceRecord(
-            maintenance._id,
-            maintenance.decision,
-            maintenance.repairCost,
-            `Ticket Closed. Decision: ${maintenance.decision}`
-        );
+        res.status(200).json({
+            success: true,
+            data: ticket
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: 'Server Error',
+            error: error.message
+        });
     }
+};
 
-    res.status(200).json({
-        success: true,
-        message: 'Maintenance closed successfully. Inventory updated. Finance logged.'
-    });
-});
+// @desc    Update ticket status / Approve / Assign
+// @route   PUT /api/maintenance/:id
+// @access  Private (Manager/Admin)
+exports.updateTicket = async (req, res) => {
+    try {
+        const { status, assignedTo, approvalStatus, approvalNotes, resolution } = req.body;
 
-/**
- * @desc    Get All Maintenance Requests (with pagination)
- * @route   GET /api/maintenance?page=1&limit=20
- * @access  ALL (Filtered)
- */
-exports.getMaintenance = asyncHandler(async (req, res, next) => {
-    let filter = {};
+        let ticket = await Maintenance.findById(req.params.id);
 
-    // Filter by Office
-    if (req.user.role !== 'SUPER_ADMIN') {
-        filter.officeId = req.user.officeId;
+        if (!ticket) {
+            return res.status(404).json({
+                success: false,
+                message: 'Ticket not found'
+            });
+        }
+
+        // Handle assignment
+        if (assignedTo) {
+            ticket.assignedTo = assignedTo;
+            ticket.assignedDate = Date.now();
+            ticket.status = 'IN_PROGRESS';
+        }
+
+        // Handle approval
+        if (approvalStatus) {
+            // Check permission
+            if (!req.user.permissions.canApproveTickets) {
+                return res.status(403).json({
+                    success: false,
+                    message: 'Not authorized to approve tickets'
+                });
+            }
+
+            // Check limit
+            if (!req.user.canApproveAmount(ticket.estimatedCost)) {
+                return res.status(403).json({
+                    success: false,
+                    message: `Approval limit exceeded. Requires approval > ${ticket.estimatedCost}`
+                });
+            }
+
+            ticket.approvalStatus = approvalStatus;
+            ticket.approvedBy = req.user._id;
+            ticket.approvalDate = Date.now();
+            ticket.approvalNotes = approvalNotes;
+
+            if (approvalStatus === 'approved') {
+                ticket.status = 'APPROVED';
+            } else if (approvalStatus === 'rejected') {
+                ticket.status = 'REJECTED';
+            }
+        }
+
+        // Handle generic status update
+        if (status) {
+            ticket.status = status;
+            if (status === 'COMPLETED' || status === 'CLOSED') {
+                ticket.completedDate = Date.now();
+                // Find asset and set status back to ACTIVE
+                const asset = await Asset.findById(ticket.assetId);
+                if (asset) {
+                    asset.status = 'ACTIVE';
+                    await asset.addMaintenanceRecord(
+                        ticket._id,
+                        ticket.issueType,
+                        ticket.actualCost || ticket.estimatedCost,
+                        resolution || ticket.resolution
+                    );
+                }
+            }
+        }
+
+        if (resolution) {
+            ticket.resolution = resolution;
+        }
+
+        await ticket.save();
+
+        // Refetch to populate fields
+        const updatedTicket = await Maintenance.findById(req.params.id)
+            .populate('assetId', 'name')
+            .populate('assignedTo', 'name');
+
+        res.status(200).json({
+            success: true,
+            data: updatedTicket
+        });
+
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: 'Server Error',
+            error: error.message
+        });
     }
+};
 
-    // Optional status filter
-    if (req.query.status) {
-        filter.status = req.query.status;
+// @desc    Add work log entry
+// @route   POST /api/maintenance/:id/worklog
+// @access  Private (Technician)
+exports.addWorkLog = async (req, res) => {
+    try {
+        const { startTime, endTime, notes } = req.body;
+
+        const ticket = await Maintenance.findById(req.params.id);
+        if (!ticket) {
+            return res.status(404).json({ success: false, message: 'Ticket not found' });
+        }
+
+        ticket.addWorkLog(req.user._id, startTime, endTime, notes);
+        await ticket.save();
+
+        res.status(200).json({
+            success: true,
+            data: ticket
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: 'Server Error',
+            error: error.message
+        });
     }
+};
 
-    const { data, pagination } = await paginateQuery(
-        Maintenance,
-        filter,
-        req,
-        [
-            { path: 'assetId', select: 'name guai' },
-            { path: 'requestedBy', select: 'name' }
-        ]
-    );
+// @desc    Consume spare parts
+// @route   POST /api/maintenance/:id/parts
+// @access  Private (Technician)
+exports.consumePart = async (req, res) => {
+    try {
+        const { inventoryId, quantity } = req.body;
 
-    res.status(200).json({
-        success: true,
-        count: data.length,
-        pagination,
-        data
-    });
-});
+        const ticket = await Maintenance.findById(req.params.id);
+        if (!ticket) return res.status(404).json({ success: false, message: 'Ticket not found' });
+
+        const part = await Inventory.findById(inventoryId);
+        if (!part) return res.status(404).json({ success: false, message: 'Part not found' });
+
+        if (part.stock.currentQuantity < quantity) {
+            return res.status(400).json({ success: false, message: 'Insufficient stock' });
+        }
+
+        // Record usage on part (decrements stock)
+        part.recordUsage(ticket._id, quantity, ticket.assetId, req.user._id);
+        await part.save();
+
+        // Add to ticket
+        ticket.sparePartsUsed.push({
+            inventoryId: part._id,
+            partNumber: part.partNumber || part.sku,
+            name: part.name,
+            quantity: quantity,
+            costPerUnit: part.costInfo?.unitCost || 0
+        });
+
+        // Update actual cost
+        ticket.actualCost = (ticket.actualCost || 0) + (quantity * (part.costInfo?.unitCost || 0));
+
+        await ticket.save();
+
+        res.status(200).json({
+            success: true,
+            data: ticket
+        });
+
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: 'Server Error',
+            error: error.message
+        });
+    }
+};
+
+// @desc    Get dashboard stats
+// @route   GET /api/maintenance/stats
+// @access  Private
+exports.getStats = async (req, res) => {
+    try {
+        const officeId = req.user.officeId;
+        const query = req.user.role !== 'SUPER_ADMIN' ? { officeId } : {};
+
+        const totalTickets = await Maintenance.countDocuments(query);
+        const openTickets = await Maintenance.countDocuments({ ...query, status: { $nin: ['COMPLETED', 'CLOSED', 'CANCELLED'] } });
+        const criticalTickets = await Maintenance.countDocuments({ ...query, priority: 'critical', status: { $ne: 'CLOSED' } });
+
+        // Calculate average resolution time (rough)
+        const completedTickets = await Maintenance.find({ ...query, status: 'COMPLETED' }).select('daysOpen');
+        const avgResolutionTime = completedTickets.length
+            ? completedTickets.reduce((acc, t) => acc + (t.daysOpen || 0), 0) / completedTickets.length
+            : 0;
+
+        res.status(200).json({
+            success: true,
+            data: {
+                totalTickets,
+                openTickets,
+                criticalTickets,
+                avgResolutionTime: Math.round(avgResolutionTime * 10) / 10
+            }
+        });
+
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: 'Server Error',
+            error: error.message
+        });
+    }
+};

@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
     Bell, Check, CheckCheck, Trash2, Loader2,
-    AlertCircle, Info, AlertTriangle, X
+    AlertCircle, Info, AlertTriangle, X, Settings
 } from 'lucide-react';
 import api, { getErrorMessage } from '../lib/api';
 import type { Notification as NotificationType } from '../types';
@@ -131,6 +131,13 @@ export function Notifications() {
                 </div>
 
                 <div className="flex items-center gap-3">
+                    <button
+                        onClick={() => window.location.href = '/notifications/preferences'}
+                        className="p-2 text-[var(--text-secondary)] hover:bg-[var(--bg-card-hover)] rounded-full transition-colors"
+                        title="Preferences"
+                    >
+                        <Settings className="w-5 h-5" />
+                    </button>
                     {unreadCount > 0 && (
                         <button
                             onClick={markAllAsRead}

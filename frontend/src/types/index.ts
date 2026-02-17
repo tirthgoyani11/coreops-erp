@@ -13,6 +13,16 @@ export interface User {
     officeId?: string;
     isActive: boolean;
     approvalLimit?: number;
+    phone?: string;
+    avatar?: string;
+    preferences?: {
+        language?: string;
+        timezone?: string;
+        notifications?: {
+            email: boolean;
+            inApp: boolean;
+        };
+    };
 }
 
 

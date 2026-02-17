@@ -23,6 +23,9 @@ const purchaseOrderRoutes = require('./src/routes/purchaseOrderRoutes');
 const auditLogRoutes = require('./src/routes/auditLogRoutes');
 const ocrRoutes = require('./src/routes/ocrRoutes');
 const setupRoutes = require('./src/routes/setupRoutes');
+const profileRoutes = require('./src/routes/profileRoutes');
+const settingsRoutes = require('./src/routes/settingsRoutes');
+const documentRoutes = require('./src/routes/documentRoutes');
 
 // Services
 const currencyService = require('./src/services/currencyService');
@@ -128,6 +131,13 @@ app.use('/api/purchase-orders', purchaseOrderRoutes);
 app.use('/api/audit-logs', auditLogRoutes);
 app.use('/api/ocr', ocrRoutes);
 app.use('/api/setup', setupRoutes);
+app.use('/api/profile', profileRoutes);
+app.use('/api/settings', settingsRoutes);
+app.use('/api/documents', documentRoutes);
+
+// Serve uploaded files (local storage — dev mode)
+const path = require('path');
+app.use('/uploads', require('express').static(path.join(__dirname, 'uploads')));
 
 // Initialize currency rate updates (runs every 4 hours)
 currencyService.scheduleRateUpdates();
