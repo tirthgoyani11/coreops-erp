@@ -83,7 +83,7 @@ export function InventoryTableView({ items, type }: InventoryTableViewProps) {
                                         </div>
                                     </td>
                                     <td className="px-4 py-3 text-right font-medium">
-                                        ₹{item.unitPrice.toLocaleString()}
+                                        ₹{item.unitPrice?.toLocaleString() ?? '0'}
                                     </td>
                                     <td className="px-4 py-3 text-gray-500">{item.location || '-'}</td>
                                     <td className="px-4 py-3 text-right" onClick={(e) => e.stopPropagation()}>

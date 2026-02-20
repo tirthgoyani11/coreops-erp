@@ -106,7 +106,7 @@ export default function Settings() {
                     <button
                         type="submit"
                         disabled={isSubmitting}
-                        className="flex items-center gap-2 px-8 py-3 bg-[var(--primary)] text-white rounded-md hover:bg-[var(--primary)]/90 disabled:opacity-50 font-medium"
+                        className="flex items-center gap-2 px-8 py-3 bg-[var(--primary)] text-black font-bold shadow-[0_0_10px_var(--primary-glow)] rounded-md hover:bg-[var(--primary)]/90 disabled:opacity-50"
                     >
                         {isSubmitting ? <Loader2 className="animate-spin" size={16} /> : <Save size={16} />}
                         Save System Settings

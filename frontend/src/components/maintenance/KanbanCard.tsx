@@ -1,9 +1,7 @@
 import { useDraggable } from '@dnd-kit/core';
 import { useNavigate } from 'react-router-dom';
 import { Card } from '../ui/Card';
-import { Badge } from '../ui/Badge';
-import { Clock, User } from 'lucide-react';
-import { format } from 'date-fns';
+import { User } from 'lucide-react';
 
 interface KanbanCardProps {
     ticket: any;

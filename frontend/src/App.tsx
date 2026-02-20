@@ -18,17 +18,25 @@ import { AssetWizard } from './pages/AssetWizard';
 import AssetDetail from './pages/AssetDetail';
 import { Inventory } from './pages/Inventory';
 import { Maintenance } from './pages/Maintenance';
+import { PreventiveMaintenance } from './pages/PreventiveMaintenance';
+import { MaintenanceAnalytics } from './pages/MaintenanceAnalytics';
 import TicketDetails from './pages/TicketDetails';
 import { TicketWizard } from './pages/TicketWizard';
 import { ScanQR } from './pages/ScanQR';
+import { MyTickets } from './pages/MyTickets';
 import { Offices } from './pages/Offices';
 import { Users } from './pages/Users';
 import { InventoryDetail } from './pages/InventoryDetail';
 import { StockOperations } from './pages/StockOperations';
 import { AssetMap } from './pages/AssetMap';
-import { Vendors } from './pages/Vendors';
+import { VendorList } from './pages/procurement/VendorList';
+import { VendorForm } from './pages/procurement/VendorForm';
+import { VendorDetail } from './pages/procurement/VendorDetail';
+import { PurchaseOrderList } from './pages/procurement/PurchaseOrderList';
+import { CreatePO } from './pages/procurement/CreatePO';
+import { PurchaseOrderDetail } from './pages/procurement/PurchaseOrderDetail';
+import { Financial } from './pages/financial/Financial';
 import { Analytics } from './pages/Analytics';
-import { PurchaseOrders } from './pages/PurchaseOrders';
 import { Notifications } from './pages/Notifications';
 import NotificationPreferences from './pages/NotificationPreferences';
 import Profile from './pages/Profile';
@@ -155,29 +163,35 @@ function App() {
             <Route path="/maintenance" element={<RoleGuard allowedRoles={['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF', 'TECHNICIAN']}><Maintenance /></RoleGuard>} />
             <Route path="/maintenance/new" element={<RoleGuard allowedRoles={['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF', 'TECHNICIAN']}><TicketWizard /></RoleGuard>} />
             <Route path="/maintenance/:id" element={<RoleGuard allowedRoles={['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF', 'TECHNICIAN']}><TicketDetails /></RoleGuard>} />
+            <Route path="/maintenance/preventive" element={<RoleGuard allowedRoles={['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF']}><PreventiveMaintenance /></RoleGuard>} />
+            <Route path="/maintenance/analytics" element={<RoleGuard allowedRoles={['SUPER_ADMIN', 'ADMIN', 'MANAGER']}><MaintenanceAnalytics /></RoleGuard>} />
+
+            {/* Technician Mode */}
+            <Route path="/my-tickets" element={<RoleGuard allowedRoles={['TECHNICIAN']}><MyTickets /></RoleGuard>} />
 
             {/* QR Scan - Tech primarily */}
             <Route path="/scan" element={<RoleGuard allowedRoles={['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF', 'TECHNICIAN']}><ScanQR /></RoleGuard>} />
 
-            {/* Vendors - Managers + Viewer (Branch Mgr = view-only for global vendors) */}
-            <Route
-              path="/vendors"
-              element={
-                <RoleGuard allowedRoles={['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF', 'VIEWER']}>
-                  <Vendors />
-                </RoleGuard>
-              }
-            />
+            {/* Vendors - Managers + Viewer */}
+            <Route path="/vendors" element={<RoleGuard allowedRoles={['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF', 'VIEWER']}><VendorList /></RoleGuard>} />
+            <Route path="/vendors/new" element={<RoleGuard allowedRoles={['SUPER_ADMIN', 'ADMIN', 'MANAGER']}><VendorForm /></RoleGuard>} />
+            <Route path="/vendors/:id" element={<RoleGuard allowedRoles={['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF', 'VIEWER']}><VendorDetail /></RoleGuard>} />
+            <Route path="/vendors/:id/edit" element={<RoleGuard allowedRoles={['SUPER_ADMIN', 'ADMIN', 'MANAGER']}><VendorForm /></RoleGuard>} />
+            <Route path="/procurement/orders" element={<RoleGuard allowedRoles={['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF']}><PurchaseOrderList /></RoleGuard>} />
+            <Route path="/procurement/orders/new" element={<RoleGuard allowedRoles={['SUPER_ADMIN', 'ADMIN', 'MANAGER']}><CreatePO /></RoleGuard>} />
+            <Route path="/procurement/orders/:id" element={<RoleGuard allowedRoles={['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF']}><PurchaseOrderDetail /></RoleGuard>} />
 
-            {/* Purchase Orders - Managers only (no Technician/Viewer) */}
-            <Route
-              path="/purchase-orders"
-              element={
-                <RoleGuard allowedRoles={['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF']}>
-                  <PurchaseOrders />
-                </RoleGuard>
-              }
-            />
+            {/* Procurement Redirects (for safety) */}
+            <Route path="/procurement/vendors" element={<VendorList />} />
+            <Route path="/procurement/vendors/new" element={<VendorForm />} />
+            <Route path="/procurement/vendors/:id" element={<VendorDetail />} />
+            {/* Purchase Orders - Managers only */}
+            <Route path="/purchase-orders" element={<RoleGuard allowedRoles={['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF']}><PurchaseOrderList /></RoleGuard>} />
+            <Route path="/purchase-orders/new" element={<RoleGuard allowedRoles={['SUPER_ADMIN', 'ADMIN', 'MANAGER']}><CreatePO /></RoleGuard>} />
+            <Route path="/purchase-orders/:id" element={<RoleGuard allowedRoles={['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF']}><PurchaseOrderDetail /></RoleGuard>} />
+
+            {/* Financial - Managers + Viewer */}
+            <Route path="/financial" element={<RoleGuard allowedRoles={['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF', 'VIEWER']}><Financial /></RoleGuard>} />
 
             {/* Analytics - Not for Technician */}
             <Route

@@ -11,7 +11,8 @@ const {
     getStockValuation
 } = require('../controllers/inventoryController');
 
-const { protect, authorize } = require('../middleware/authMiddleware');
+const protect = require('../middleware/verifyToken');
+const authorize = require('../middleware/authorize');
 
 router.use(protect);
 

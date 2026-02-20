@@ -10,9 +10,9 @@ export interface ButtonProps
 const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
     ({ className, variant = 'default', size = 'default', ...props }, ref) => {
         const variants = {
-            default: "bg-primary-600 text-white hover:bg-primary-700 dark:bg-primary-600 dark:hover:bg-primary-700",
-            destructive: "bg-red-500 text-white hover:bg-red-600 dark:hover:bg-red-600",
-            outline: "border border-gray-200 bg-white hover:bg-gray-100 hover:text-gray-900 dark:border-gray-800 dark:bg-gray-950 dark:hover:bg-gray-800 dark:hover:text-gray-50",
+            default: "bg-[var(--primary)] text-black hover:bg-[var(--primary)]/90 shadow-[0_0_15px_var(--primary-glow)]",
+            destructive: "bg-red-500 text-white hover:bg-red-600 dark:bg-red-900 dark:hover:bg-red-800",
+            outline: "border border-gray-200 bg-transparent hover:bg-gray-100 hover:text-gray-900 dark:border-white/10 dark:text-white dark:hover:bg-white/10",
             secondary: "bg-gray-100 text-gray-900 hover:bg-gray-100/80 dark:bg-gray-800 dark:text-gray-50 dark:hover:bg-gray-800/80",
             ghost: "hover:bg-gray-100 hover:text-gray-900 dark:hover:bg-gray-800 dark:hover:text-gray-50",
             link: "text-primary-900 underline-offset-4 hover:underline dark:text-gray-50",

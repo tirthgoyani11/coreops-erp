@@ -6,15 +6,10 @@ import { useToast } from '../hooks/useToast';
 import {
     ArrowLeft,
     CheckCircle,
-    XCircle,
     User,
-    Calendar,
-    Clock,
     AlertTriangle,
     FileText,
-    Wrench,
-    DollarSign,
-    Package
+    DollarSign
 } from 'lucide-react';
 import { format } from 'date-fns';
 
@@ -28,7 +23,7 @@ import { Input } from '../components/ui/Input';
 export default function TicketDetails() {
     const { id } = useParams();
     const navigate = useNavigate();
-    const { user, hasPermission } = useAuthStore();
+    const { user } = useAuthStore();
     const toast = useToast();
     const [ticket, setTicket] = useState<any>(null);
     const [loading, setLoading] = useState(true);
@@ -36,7 +31,7 @@ export default function TicketDetails() {
 
     // Approval state
     const [approvalNote, setApprovalNote] = useState('');
-    const [actionLoading, setActionLoading] = useState(false);
+    // const [actionLoading, setActionLoading] = useState(false); // Unused
 
     // Fetch ticket
     const fetchTicket = async () => {
@@ -61,7 +56,7 @@ export default function TicketDetails() {
             return;
         }
 
-        setActionLoading(true);
+        // setActionLoading(true);
         try {
             await api.put(`/maintenance/${id}`, {
                 approvalStatus: status,
@@ -72,14 +67,11 @@ export default function TicketDetails() {
         } catch (error: any) {
             toast.error(error.response?.data?.message || 'Action failed');
         } finally {
-            setActionLoading(false);
+            // setActionLoading(false);
         }
     };
 
-    const handleAssign = async (userId: string) => {
-        // Implementation for assigning user dialog would go here
-        // For MVP, simplistic
-    };
+
 
     if (loading) return <div className="p-8 text-center">Loading...</div>;
     if (!ticket) return <div className="p-8 text-center">Ticket not found</div>;

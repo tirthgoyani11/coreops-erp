@@ -51,7 +51,7 @@ export function Sidebar() {
             {/* Navigation */}
             <nav className="flex-1 py-6 px-3 space-y-1 overflow-y-auto">
                 {(!isSidebarCollapsed || isMobileSidebarOpen) && (
-                    <p className="px-4 text-[10px] font-bold text-[var(--sidebar-text-muted)] uppercase tracking-wider mb-4 truncate">
+                    <p className="px-4 text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-4 truncate">
                         Main Menu
                     </p>
                 )}

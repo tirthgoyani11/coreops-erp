@@ -45,7 +45,8 @@ export function AssetWizard() {
         purchaseDate: new Date().toISOString().split('T')[0], // Default today
         vendorName: '',
         warrantyExpiryDate: '',
-        status: 'ACTIVE'
+        status: 'ACTIVE',
+        assignedTo: ''
     });
 
     // Fetch Data for Edit Mode
@@ -72,7 +73,8 @@ export function AssetWizard() {
                         purchaseDate: asset.purchaseInfo?.purchaseDate ? new Date(asset.purchaseInfo.purchaseDate).toISOString().split('T')[0] : '',
                         vendorName: '', // Cannot securely recover string vendor name from description easily without regex, leaving empty for now
                         warrantyExpiryDate: asset.purchaseInfo?.warranty?.endDate ? new Date(asset.purchaseInfo.warranty.endDate).toISOString().split('T')[0] : '',
-                        status: asset.status || 'ACTIVE'
+                        status: asset.status || 'ACTIVE',
+                        assignedTo: asset.assignedTo || ''
                     });
                 } catch (error) {
                     console.error("Failed to load asset for editing", error);

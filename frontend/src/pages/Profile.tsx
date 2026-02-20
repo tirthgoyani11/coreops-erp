@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { useAuthStore } from '../stores/authStore';
 import api from '../lib/api';
@@ -169,7 +169,7 @@ export default function Profile() {
                             <button
                                 type="submit"
                                 disabled={isSubmitting}
-                                className="flex items-center gap-2 px-6 py-2 bg-[var(--primary)] text-white rounded-md hover:opacity-90 disabled:opacity-50"
+                                className="flex items-center gap-2 px-6 py-2 bg-[var(--primary)] text-black font-semibold shadow-[0_0_10px_var(--primary-glow)] rounded-md hover:bg-[var(--primary)]/90 disabled:opacity-50"
                             >
                                 {isSubmitting ? <Loader2 className="animate-spin" size={16} /> : <Save size={16} />}
                                 Save Changes

@@ -7,8 +7,10 @@ import {
     AlertTriangle,
     History,
     Edit,
-    Trash2
+    Trash2,
+    Printer
 } from 'lucide-react';
+import QRCode from 'react-qr-code';
 
 // Components
 import { Button } from '../components/ui/Button';
@@ -76,36 +78,51 @@ export function InventoryDetail() {
                 </div>
             </div>
 
+
+
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                {/* Main Info */}
+                {/* QR Code & Main Info */}
                 <div className="md:col-span-2 space-y-6">
                     <Card className="p-6">
-                        <h3 className="font-semibold mb-4 text-lg">Product Information</h3>
-                        <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-6 text-sm">
-                            <div>
-                                <dt className="text-gray-500">Stock Quantity</dt>
-                                <dd className="font-medium text-lg mt-1 flex items-center gap-2">
-                                    {item.quantity} {item.unit}
-                                    {isLowStock && <AlertTriangle className="w-4 h-4 text-red-500" />}
-                                </dd>
+                        <div className="flex flex-col sm:flex-row gap-6">
+                            <div className="flex flex-col items-center gap-2 p-4 border rounded-lg bg-white dark:bg-gray-800">
+                                <div className="bg-white p-2 rounded">
+                                    <QRCode value={JSON.stringify({ id: item._id, sku: item.sku })} size={128} />
+                                </div>
+                                <span className="text-xs font-mono text-gray-500">{item.sku}</span>
+                                <Button size="sm" variant="outline" onClick={() => window.print()}>
+                                    <Printer className="w-3 h-3 mr-2" /> Print Label
+                                </Button>
                             </div>
-                            <div>
-                                <dt className="text-gray-500">Minimum Quantity</dt>
-                                <dd className="font-medium mt-1">{item.minQuantity} {item.unit}</dd>
+                            <div className="flex-1 space-y-4">
+                                <h3 className="font-semibold text-lg">Product Information</h3>
+                                <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-4 text-sm">
+                                    <div>
+                                        <dt className="text-gray-500">Stock Quantity</dt>
+                                        <dd className="font-medium text-lg mt-1 flex items-center gap-2">
+                                            {item.quantity} {item.unit}
+                                            {isLowStock && <AlertTriangle className="w-4 h-4 text-red-500" />}
+                                        </dd>
+                                    </div>
+                                    <div>
+                                        <dt className="text-gray-500">Minimum Quantity</dt>
+                                        <dd className="font-medium mt-1">{item.minQuantity} {item.unit}</dd>
+                                    </div>
+                                    <div>
+                                        <dt className="text-gray-500">Unit Price</dt>
+                                        <dd className="font-medium mt-1">₹{(item.unitPrice ?? 0).toLocaleString()}</dd>
+                                    </div>
+                                    <div>
+                                        <dt className="text-gray-500">Total Value</dt>
+                                        <dd className="font-medium mt-1">₹{((item.unitPrice ?? 0) * (item.quantity ?? 0)).toLocaleString()}</dd>
+                                    </div>
+                                    <div className="sm:col-span-2">
+                                        <dt className="text-gray-500">Description</dt>
+                                        <dd className="font-medium mt-1">{item.description || 'No description provided.'}</dd>
+                                    </div>
+                                </dl>
                             </div>
-                            <div>
-                                <dt className="text-gray-500">Unit Price</dt>
-                                <dd className="font-medium mt-1">₹{item.unitPrice.toLocaleString()}</dd>
-                            </div>
-                            <div>
-                                <dt className="text-gray-500">Total Value</dt>
-                                <dd className="font-medium mt-1">₹{(item.unitPrice * item.quantity).toLocaleString()}</dd>
-                            </div>
-                            <div className="sm:col-span-2">
-                                <dt className="text-gray-500">Description</dt>
-                                <dd className="font-medium mt-1">{item.description || 'No description provided.'}</dd>
-                            </div>
-                        </dl>
+                        </div>
                     </Card>
 
                     <Card className="p-6">
@@ -115,11 +132,103 @@ export function InventoryDetail() {
                             </h3>
                             <Button variant="outline" size="sm">View All</Button>
                         </div>
-                        {/* Placeholder for history table */}
-                        <div className="text-center py-8 text-gray-500 border-2 border-dashed border-gray-100 dark:border-gray-800 rounded-lg">
-                            Stock movement history will appear here
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-sm text-left">
+                                <thead className="text-gray-500 font-medium border-b border-gray-100 dark:border-gray-800">
+                                    <tr>
+                                        <th className="pb-3 pl-2">Date</th>
+                                        <th className="pb-3">Type</th>
+                                        <th className="pb-3 text-right">Qty</th>
+                                        <th className="pb-3 text-right">Performed By</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
+                                    {item.stockMovements?.slice().reverse().map((movement: any, index: number) => (
+                                        <tr key={index} className="group hover:bg-gray-50 dark:hover:bg-gray-800/50">
+                                            <td className="py-3 pl-2 text-gray-500">
+                                                {new Date(movement.date).toLocaleDateString()}
+                                            </td>
+                                            <td className="py-3 capitalize font-medium">
+                                                <Badge variant={
+                                                    movement.type === 'stock_in' ? 'success' :
+                                                        movement.type === 'stock_out' ? 'destructive' : 'outline'
+                                                } className="text-xs">
+                                                    {movement.type.replace('_', ' ')}
+                                                </Badge>
+                                            </td>
+                                            <td className={`py-3 text-right font-medium ${movement.type === 'stock_in' ? 'text-green-600' : 'text-red-600'
+                                                }`}>
+                                                {movement.type === 'stock_in' ? '+' : '-'}{movement.quantity}
+                                            </td>
+                                            <td className="py-3 text-right text-gray-500">
+                                                {movement.performedBy?.name || 'System'}
+                                            </td>
+                                        </tr>
+                                    ))}
+                                    {(!item.stockMovements || item.stockMovements.length === 0) && (
+                                        <tr>
+                                            <td colSpan={4} className="py-8 text-center text-gray-500">
+                                                No stock movements recorded
+                                            </td>
+                                        </tr>
+                                    )}
+                                </tbody>
+                            </table>
                         </div>
                     </Card>
+
+                    {/* Advanced Tracking Lists */}
+                    {item.trackingType === 'SERIAL' && item.serials && item.serials.length > 0 && (
+                        <Card className="p-6">
+                            <h3 className="font-semibold mb-4 text-lg">Serial Numbers</h3>
+                            <div className="overflow-x-auto max-h-60 overflow-y-auto">
+                                <table className="w-full text-sm text-left">
+                                    <thead className="text-gray-500 border-b border-gray-100 dark:border-gray-800">
+                                        <tr>
+                                            <th className="pb-2">Serial #</th>
+                                            <th className="pb-2">Status</th>
+                                            <th className="pb-2">Location</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
+                                        {item.serials.map((s: any, i: number) => (
+                                            <tr key={i}>
+                                                <td className="py-2 font-mono">{s.serialNumber}</td>
+                                                <td className="py-2"><Badge variant="secondary" className="text-xs">{s.status}</Badge></td>
+                                                <td className="py-2 text-gray-500">{s.location || '-'}</td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </Card>
+                    )}
+
+                    {item.trackingType === 'BATCH' && item.batches && item.batches.length > 0 && (
+                        <Card className="p-6">
+                            <h3 className="font-semibold mb-4 text-lg">Batch Information</h3>
+                            <div className="overflow-x-auto max-h-60 overflow-y-auto">
+                                <table className="w-full text-sm text-left">
+                                    <thead className="text-gray-500 border-b border-gray-100 dark:border-gray-800">
+                                        <tr>
+                                            <th className="pb-2">Batch #</th>
+                                            <th className="pb-2 text-right">Qty</th>
+                                            <th className="pb-2">Expiry</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
+                                        {item.batches.map((b: any, i: number) => (
+                                            <tr key={i}>
+                                                <td className="py-2 font-mono">{b.batchNumber}</td>
+                                                <td className="py-2 text-right">{b.quantity}</td>
+                                                <td className="py-2 text-red-500">{new Date(b.expiryDate).toLocaleDateString()}</td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </Card>
+                    )}
                 </div>
 
                 {/* Quick Actions / Suppliers */}

@@ -11,7 +11,7 @@ const authorize = require('../middleware/authorize');
  */
 
 // Get audit logs with pagination and filters
-router.get('/', verifyToken, authorize('SUPER_ADMIN', 'MANAGER'), async (req, res) => {
+router.get('/', verifyToken, authorize('SUPER_ADMIN', 'ADMIN', 'MANAGER'), async (req, res) => {
     try {
         const {
             page = 1,
@@ -86,7 +86,7 @@ router.get('/', verifyToken, authorize('SUPER_ADMIN', 'MANAGER'), async (req, re
 });
 
 // Get audit log by ID
-router.get('/:id', verifyToken, authorize('SUPER_ADMIN', 'MANAGER'), async (req, res) => {
+router.get('/:id', verifyToken, authorize('SUPER_ADMIN', 'ADMIN', 'MANAGER'), async (req, res) => {
     try {
         const log = await AuditLog.findById(req.params.id)
             .populate('user', 'name email role')
@@ -113,7 +113,7 @@ router.get('/:id', verifyToken, authorize('SUPER_ADMIN', 'MANAGER'), async (req,
 });
 
 // Get audit log statistics
-router.get('/stats/summary', verifyToken, authorize('SUPER_ADMIN', 'MANAGER'), async (req, res) => {
+router.get('/stats/summary', verifyToken, authorize('SUPER_ADMIN', 'ADMIN', 'MANAGER'), async (req, res) => {
     try {
         const { days = 7 } = req.query;
         const startDate = new Date();

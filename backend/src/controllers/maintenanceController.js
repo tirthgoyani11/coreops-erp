@@ -353,3 +353,105 @@ exports.getStats = async (req, res) => {
         });
     }
 };
+
+// @desc    Digital Twin Preview — shows exact state changes before closing a ticket
+// @route   GET /api/maintenance/:id/preview
+// @access  Private (Manager+)
+exports.getDigitalTwinPreview = async (req, res) => {
+    try {
+        const ticket = await Maintenance.findById(req.params.id)
+            .populate('assetId', 'name guaiNumber status purchaseCost totalMaintenanceCost')
+            .populate('sparePartsUsed.inventoryId', 'name stock.currentQuantity');
+
+        if (!ticket) return res.status(404).json({ success: false, message: 'Ticket not found' });
+
+        const asset = ticket.assetId;
+        const closeCost = ticket.actualCost || ticket.estimatedCost || ticket.repairCost || 0;
+
+        // Build state diff preview
+        const preview = {
+            ticketId: ticket.ticketNumber,
+            assetChanges: {
+                field: 'status',
+                before: asset?.status || 'UNKNOWN',
+                after: 'ACTIVE',
+                label: `Asset ${asset?.guaiNumber || asset?.name} will return to ACTIVE`,
+            },
+            financeImpact: {
+                expenseAmount: closeCost,
+                currency: ticket.currency || 'INR',
+                budgetCategory: 'MAINTENANCE',
+                label: `₹${closeCost.toLocaleString('en-IN')} will be recorded as maintenance expense`,
+            },
+            inventoryChanges: (ticket.sparePartsUsed || []).map(part => ({
+                partName: part.name || part.inventoryId?.name || 'Unknown Part',
+                quantityDeducted: part.quantity,
+                currentStock: part.inventoryId?.stock?.currentQuantity ?? 'N/A',
+                afterStock: part.inventoryId?.stock?.currentQuantity != null
+                    ? part.inventoryId.stock.currentQuantity - part.quantity
+                    : 'N/A',
+            })),
+            maintenanceHistory: {
+                totalPriorCost: asset?.totalMaintenanceCost || 0,
+                totalAfterClose: (asset?.totalMaintenanceCost || 0) + closeCost,
+            },
+            reversible: true,
+            warning: closeCost > 50000 ? 'High value maintenance — manager approval recommended.' : null,
+        };
+
+        res.json({ success: true, data: preview });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+};
+
+// @desc    Check anomaly on maintenance cost before closing
+// @route   GET /api/maintenance/:id/anomaly-check
+// @access  Private
+exports.checkAnomaly = async (req, res) => {
+    try {
+        const { calculateZScore, rollingAverage } = require('../utils/anomaly');
+
+        const ticket = await Maintenance.findById(req.params.id);
+        if (!ticket) return res.status(404).json({ success: false, message: 'Ticket not found' });
+
+        const cost = ticket.actualCost || ticket.estimatedCost || ticket.repairCost || 0;
+
+        // Get historical costs for same asset category
+        const asset = await Asset.findById(ticket.assetId);
+        const historicalTickets = await Maintenance.find({
+            officeId: ticket.officeId,
+            status: { $in: ['COMPLETED', 'CLOSED'] },
+            $or: [
+                { actualCost: { $gt: 0 } },
+                { estimatedCost: { $gt: 0 } },
+                { repairCost: { $gt: 0 } },
+            ],
+        }).select('actualCost estimatedCost repairCost createdAt');
+
+        const historyCosts = historicalTickets.map(t => t.actualCost || t.estimatedCost || t.repairCost);
+        const zScoreResult = calculateZScore(cost, historyCosts);
+        const rolling = rollingAverage(historicalTickets.map(t => ({
+            amount: t.actualCost || t.estimatedCost || t.repairCost,
+            date: t.createdAt,
+        })));
+
+        res.json({
+            success: true,
+            data: {
+                ticketNumber: ticket.ticketNumber,
+                cost,
+                anomaly: zScoreResult,
+                rollingAverage: rolling,
+                assetName: asset?.name,
+                recommendation: zScoreResult.isAnomaly
+                    ? 'ESCALATE — Cost significantly exceeds historical pattern'
+                    : zScoreResult.isElevated
+                        ? 'REVIEW — Cost is above average, consider manual review'
+                        : 'APPROVE — Cost is within normal range',
+            },
+        });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+};

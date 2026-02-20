@@ -61,6 +61,28 @@ const InventorySchema = new mongoose.Schema(
             bin: { type: String },
             shelf: { type: String },
         },
+        // Advanced Tracking
+        trackingType: {
+            type: String,
+            enum: ['QUANTITY', 'SERIAL', 'BATCH'],
+            default: 'QUANTITY',
+        },
+        // For Serialized Items (e.g., high-value spares)
+        serials: [{
+            serialNumber: { type: String, unique: true, sparse: true },
+            status: { type: String, enum: ['AVAILABLE', 'IN_USE', 'MAINTENANCE', 'SOLD', 'DEFECTIVE'], default: 'AVAILABLE' },
+            location: { type: String }, // Specific bin if different
+            purchaseDate: { type: Date },
+            notes: String
+        }],
+        // For Batch/Lot Items (e.g., chemicals, perishable)
+        batches: [{
+            batchNumber: { type: String },
+            quantity: { type: Number },
+            expiryDate: { type: Date },
+            receivedDate: { type: Date, default: Date.now },
+            supplier: String
+        }],
         // Stock levels
         stock: {
             currentQuantity: { type: Number, default: 0, min: 0 },
@@ -245,6 +267,19 @@ InventorySchema.pre('save', async function () {
     if (this.unitCost && this.type === 'PRODUCT') {
         if (!this.pricing) this.pricing = {};
         this.pricing.costPrice = this.unitCost;
+    }
+
+    // Sync quantity for Advanced Tracking types
+    if (this.trackingType === 'SERIAL' && this.serials) {
+        // Count available serials
+        const availableCount = this.serials.filter(s => s.status === 'AVAILABLE').length;
+        this.quantity = availableCount;
+        if (this.stock) this.stock.currentQuantity = availableCount;
+    } else if (this.trackingType === 'BATCH' && this.batches) {
+        // Sum batch quantities
+        const totalBatchQty = this.batches.reduce((sum, b) => sum + (b.quantity || 0), 0);
+        this.quantity = totalBatchQty;
+        if (this.stock) this.stock.currentQuantity = totalBatchQty;
     }
 
     // Generate SKU using atomic counter if not provided

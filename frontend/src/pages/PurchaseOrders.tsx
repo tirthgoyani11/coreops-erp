@@ -76,7 +76,7 @@ export function PurchaseOrders() {
         setFormLoading(true);
         try {
             const payload = {
-                vendor: formData.vendor,
+                vendorId: formData.vendor,
                 items: formData.items.map(item => ({
                     itemType: 'product', // Default item type
                     name: item.name,
@@ -122,7 +122,7 @@ export function PurchaseOrders() {
 
     const submitForApproval = async (id: string) => {
         try {
-            await api.post(`/purchase-orders/${id}/submit`);
+            await api.put(`/purchase-orders/${id}`, { status: 'PENDING_APPROVAL' });
             fetchOrders();
         } catch (error: any) {
             alert(error.response?.data?.message || 'Failed to submit');
@@ -224,7 +224,7 @@ export function PurchaseOrders() {
                                                     {order.poNumber}
                                                 </h4>
                                                 <p className="text-sm text-[var(--text-secondary)]">
-                                                    {order.vendor?.name || 'Unknown Vendor'}
+                                                    {(order as any).vendorId?.name || order.vendor?.name || 'Unknown Vendor'}
                                                 </p>
                                             </div>
                                         </div>

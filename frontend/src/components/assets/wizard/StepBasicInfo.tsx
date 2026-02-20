@@ -124,6 +124,19 @@ export function StepBasicInfo({ data, updateData, errors }: StepBasicInfoProps) 
                         placeholder="SN-12345678"
                     />
                 </div>
+
+                {/* Assigned To */}
+                <div className="space-y-2">
+                    <label className="text-sm font-medium text-[var(--text-secondary)]">Assigned To (User)</label>
+                    <input
+                        type="text"
+                        name="assignedTo"
+                        value={data.assignedTo || ''}
+                        onChange={handleChange}
+                        className="w-full px-4 py-3 bg-[var(--bg-background)] border border-[var(--border-color)] rounded-xl focus:outline-none focus:border-[var(--primary)] transition-colors text-[var(--text-primary)] placeholder-[var(--text-secondary)]"
+                        placeholder="User Name or ID"
+                    />
+                </div>
             </div>
 
             {/* Description */}

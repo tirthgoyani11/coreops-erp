@@ -1,0 +1,258 @@
+# CoreOps Ultimate ERP — Master Implementation Plan
+
+> Based on the [coreops-ultimate-master-plan.md](file:///c:/Users/tirth/Desktop/Mini%20project/coreops-erp/docs/coreops-ultimate-master-plan.md)
+
+## Goal
+
+Transform the current CoreOps ERP (Node.js/Express/MongoDB + React/Vite/Tailwind) into the **CoreOps Ultimate ERP** system covering **16 modules**, **6 AI agents**, and **250+ APIs** — while maintaining the existing proven architecture and progressively adding capabilities across 6 phases.
+
+---
+
+## Current State Audit
+
+### ✅ Already Built (Existing Coverage)
+
+| Master Plan Module | Status | Backend | Frontend |
+|---|---|---|---|
+| **2.1** Asset & Maintenance | ✅ Strong | [Asset.js](file:///c:/Users/tirth/Desktop/Mini%20project/coreops-erp/backend/src/models/Asset.js), [Maintenance.js](file:///c:/Users/tirth/Desktop/Mini%20project/coreops-erp/backend/src/models/Maintenance.js), `assetController`, `maintenanceController` | `AssetList`, `AssetDetail`, `AssetWizard`, [Maintenance](file:///c:/Users/tirth/Desktop/Mini%20project/coreops-erp/frontend/src/pages/Maintenance.tsx#33-197), `TicketWizard`, `TicketDetails`, [PreventiveMaintenance](file:///c:/Users/tirth/Desktop/Mini%20project/coreops-erp/frontend/src/pages/PreventiveMaintenance.tsx#50-210), [MaintenanceAnalytics](file:///c:/Users/tirth/Desktop/Mini%20project/coreops-erp/frontend/src/pages/MaintenanceAnalytics.tsx#32-195) |
+| **2.2** Finance & Accounting | ⚠️ Partial | [Transaction.js](file:///c:/Users/tirth/Desktop/Mini%20project/coreops-erp/backend/src/models/Transaction.js), [Budget.js](file:///c:/Users/tirth/Desktop/Mini%20project/coreops-erp/backend/src/models/Budget.js), [Invoice.js](file:///c:/Users/tirth/Desktop/Mini%20project/coreops-erp/backend/src/models/Invoice.js), [FinanceLog.js](file:///c:/Users/tirth/Desktop/Mini%20project/coreops-erp/backend/src/models/FinanceLog.js), `financeController` | [Financial.tsx](file:///c:/Users/tirth/Desktop/Mini%20project/coreops-erp/frontend/src/pages/financial/Financial.tsx), [FinancialReports.tsx](file:///c:/Users/tirth/Desktop/Mini%20project/coreops-erp/frontend/src/pages/financial/FinancialReports.tsx), [BudgetOverview.tsx](file:///c:/Users/tirth/Desktop/Mini%20project/coreops-erp/frontend/src/pages/financial/BudgetOverview.tsx), `InvoiceScanner.tsx` |
+| **2.3** Inventory & SCM | ⚠️ Partial | [Inventory.js](file:///c:/Users/tirth/Desktop/Mini%20project/coreops-erp/backend/src/models/Inventory.js), `inventoryController` | [Inventory.tsx](file:///c:/Users/tirth/Desktop/Mini%20project/coreops-erp/frontend/src/pages/Inventory.tsx), [InventoryDetail.tsx](file:///c:/Users/tirth/Desktop/Mini%20project/coreops-erp/frontend/src/pages/InventoryDetail.tsx), [StockOperations.tsx](file:///c:/Users/tirth/Desktop/Mini%20project/coreops-erp/frontend/src/pages/StockOperations.tsx) |
+| **2.7** Analytics & BI | ⚠️ Basic | `analyticsController` | [Analytics.tsx](file:///c:/Users/tirth/Desktop/Mini%20project/coreops-erp/frontend/src/pages/Analytics.tsx), role-specific dashboards |
+| **2.10** Procurement | ⚠️ Partial | [Vendor.js](file:///c:/Users/tirth/Desktop/Mini%20project/coreops-erp/backend/src/models/Vendor.js), [PurchaseOrder.js](file:///c:/Users/tirth/Desktop/Mini%20project/coreops-erp/backend/src/models/PurchaseOrder.js), `vendorController`, `purchaseOrderController` | [VendorList](file:///c:/Users/tirth/Desktop/Mini%20project/coreops-erp/frontend/src/pages/procurement/VendorList.tsx#14-129), [VendorDetail](file:///c:/Users/tirth/Desktop/Mini%20project/coreops-erp/frontend/src/pages/procurement/VendorDetail.tsx#25-199), [PurchaseOrderList](file:///c:/Users/tirth/Desktop/Mini%20project/coreops-erp/frontend/src/pages/procurement/PurchaseOrderList.tsx#12-122), [PurchaseOrderDetail](file:///c:/Users/tirth/Desktop/Mini%20project/coreops-erp/frontend/src/pages/procurement/PurchaseOrderDetail.tsx#117-325), [CreatePO](file:///c:/Users/tirth/Desktop/Mini%20project/coreops-erp/frontend/src/pages/procurement/CreatePO.tsx#9-175) |
+| **2.11** Security & Access | ⚠️ Partial | [User.js](file:///c:/Users/tirth/Desktop/Mini%20project/coreops-erp/backend/src/models/User.js), `authController`, JWT + RBAC middleware | Login, Register, Profile, Settings, RBAC role config |
+| **2.8** Documents | ⚠️ Basic | [Document.js](file:///c:/Users/tirth/Desktop/Mini%20project/coreops-erp/backend/src/models/Document.js), `documentController`, `ocrController` | [Documents.tsx](file:///c:/Users/tirth/Desktop/Mini%20project/coreops-erp/frontend/src/pages/Documents.tsx), [DocumentUpload.tsx](file:///c:/Users/tirth/Desktop/Mini%20project/coreops-erp/frontend/src/pages/DocumentUpload.tsx), [DocumentViewer.tsx](file:///c:/Users/tirth/Desktop/Mini%20project/coreops-erp/frontend/src/pages/DocumentViewer.tsx) |
+| **2.9** Audit & Compliance | ⚠️ Basic | [AuditLog.js](file:///c:/Users/tirth/Desktop/Mini%20project/coreops-erp/backend/src/models/AuditLog.js), `auditLogRoutes` | [AuditLogs.tsx](file:///c:/Users/tirth/Desktop/Mini%20project/coreops-erp/frontend/src/pages/AuditLogs.tsx) |
+
+### 🔴 Not Yet Built (New Modules)
+
+| Module | Priority |
+|---|---|
+| **2.4** HR & Payroll | Phase 4 |
+| **2.5** Sales, CRM & Orders | Phase 4 |
+| **2.6** Project Management | Phase 5 |
+| **2.13** Quality Management | Phase 5 |
+| **2.14** Real Estate & Facilities | Phase 6 |
+| **2.15** Customer Portal | Phase 6 |
+| **2.16** Regulatory Reporting | Phase 5 |
+| **3.x** AI Agent Pipeline (OpsPilot) | Phase 1–3 progressive |
+
+### 🔴 Architecture Gaps vs Master Plan
+
+| Capability | Current | Master Plan Target |
+|---|---|---|
+| Database | MongoDB (Mongoose) | PostgreSQL (recommended) or keep MongoDB |
+| AI/ML Runtime | Gemini API (cloud) | Ollama (local) + 6 specialized agents |
+| Vector Store | None | ChromaDB (embedded) |
+| Knowledge Graph | None | Neo4j AuraDB Free |
+| Task Queue | None | Bull/BullMQ (Redis-backed) |
+| Real-time | None | Socket.io WebSocket |
+| Agent Orchestration | None | LangGraph / custom pipeline |
+
+---
+
+## User Review Required
+
+> [!IMPORTANT]
+> **Architecture Decision: MongoDB vs PostgreSQL Migration**
+> The master plan specifies PostgreSQL. Your current system uses MongoDB. Both are viable paths:
+> - **Option A (Recommended):** Keep MongoDB for now, migrate later. This avoids rewrite risk and lets us ship features faster.
+> - **Option B:** Migrate to PostgreSQL first. Better for double-entry accounting and relational queries but adds 2-3 weeks.
+
+> [!IMPORTANT]
+> **AI Infrastructure Decision**
+> The master plan calls for local AI models via Ollama (DeepSeek-R1, Qwen2.5, Whisper). This requires significant GPU resources.
+> - **Option A (Recommended for dev):** Start with Gemini API (already integrated) for AI features, design agent interfaces to be model-agnostic, swap to local models when GPU is available.
+> - **Option B:** Set up Ollama immediately with smaller (1.5B-3B) models for laptop development.
+
+> [!WARNING]
+> **Scope Management**
+> This is a 22-week plan. Each phase should be treated as a complete deliverable. Do NOT start Phase N+1 until Phase N is verified and stable.
+
+---
+
+## Phase 1: Foundation Hardening & Centralized UI System (Weeks 1–3)
+
+> Current sprint. Focus on making existing modules bulletproof + building the scalable UI architecture the user requested.
+
+### UI Architecture Overhaul
+
+#### [NEW] [design-tokens.css](file:///c:/Users/tirth/Desktop/Mini%20project/coreops-erp/frontend/src/styles/design-tokens.css)
+- Extract ALL CSS variables from [index.css](file:///c:/Users/tirth/Desktop/Mini%20project/coreops-erp/frontend/src/index.css) into a dedicated design tokens file
+- Add semantic token layers: `--color-action-primary`, `--color-surface-*`, `--color-text-*`, `--radius-*`, `--spacing-*`, `--shadow-*`
+- Add animation tokens: `--transition-fast`, `--transition-normal`, `--ease-default`
+
+#### [MODIFY] [index.css](file:///c:/Users/tirth/Desktop/Mini%20project/coreops-erp/frontend/src/index.css)
+- Import design tokens
+- Remove hardcoded values, reference tokens everywhere
+- Add utility classes for the design system
+
+#### [MODIFY] UI Components — Centralized Theme System
+Every component in `components/ui/` will be updated to:
+- Use ONLY CSS variables (zero hardcoded colors)
+- Support `variant` and `size` props consistently
+- Export prop types for IDE autocomplete
+
+| Component | Changes |
+|---|---|
+| [Button.tsx](file:///c:/Users/tirth/Desktop/Mini%20project/coreops-erp/frontend/src/components/ui/Button.tsx) | Add `success`, `warning`, `info` variants. Ensure all use `--primary` |
+| [Card.tsx](file:///c:/Users/tirth/Desktop/Mini%20project/coreops-erp/frontend/src/components/ui/Card.tsx) | Add `variant` prop: `default`, `elevated`, `outlined`, `glass` |
+| [Input.tsx](file:///c:/Users/tirth/Desktop/Mini%20project/coreops-erp/frontend/src/components/ui/Input.tsx) | Add `error` state, `helperText` prop, consistent focus rings |
+| [Select.tsx](file:///c:/Users/tirth/Desktop/Mini%20project/coreops-erp/frontend/src/components/ui/Select.tsx) | Fix dark mode, add `error` state |
+| [Badge.tsx](file:///c:/Users/tirth/Desktop/Mini%20project/coreops-erp/frontend/src/components/ui/Badge.tsx) | Align all status variants with `--status-*` tokens |
+| [Tabs.tsx](file:///c:/Users/tirth/Desktop/Mini%20project/coreops-erp/frontend/src/components/ui/Tabs.tsx) | Already fixed. Verify consistency |
+| [Dialog.tsx](file:///c:/Users/tirth/Desktop/Mini%20project/coreops-erp/frontend/src/components/ui/Dialog.tsx) | Add dark mode backdrop, transition animations |
+| [Textarea.tsx](file:///c:/Users/tirth/Desktop/Mini%20project/coreops-erp/frontend/src/components/ui/Textarea.tsx) | Match Input styling system |
+| **[NEW]** `DataTable.tsx` | Reusable table with sort, filter, pagination — replaces ad-hoc tables |
+| **[NEW]** `PageHeader.tsx` | Standardized page header with title, subtitle, actions slot |
+| **[NEW]** `StatusBadge.tsx` | Unified status rendering across all modules |
+| **[NEW]** `EmptyState.tsx` | Consistent empty state with icon, message, action |
+| **[NEW]** `FilterBar.tsx` | Reusable search + filter chip bar |
+| **[NEW]** [StatCard.tsx](file:///c:/Users/tirth/Desktop/Mini%20project/coreops-erp/frontend/src/components/StatCard.tsx) | Standardized dashboard metric card with trend indicator |
+| **[NEW]** `FormField.tsx` | Label + Input + Error wrapper for consistent forms |
+| **[NEW]** `Tooltip.tsx` | Accessible tooltip component |
+| **[NEW]** `Dropdown.tsx` | Action menu dropdown |
+| **[NEW]** `Skeleton.tsx` | Loading skeleton for all component shapes |
+| **[NEW]** `Avatar.tsx` | User avatar with fallback initials |
+| **[NEW]** `ProgressBar.tsx` | Themed progress bar with glow |
+| **[NEW]** `Breadcrumb.tsx` | Navigation breadcrumb |
+
+---
+
+### Existing Module Hardening
+
+#### Asset & Maintenance (Module 2.1)
+- Add Z-score anomaly detection on repair costs (backend utility)
+- Add digital twin preview before maintenance close
+- Add 90-day rolling average display on maintenance analytics
+
+#### Finance (Module 2.2)
+- Complete the missing Reports page (Budget vs Actual, P&L)
+- Add duplicate transaction detection
+- Add budget variance alerts (real-time)
+
+#### Procurement (Module 2.10)
+- Complete 3-way matching engine (PO + GRN + Invoice)
+- Add vendor reliability scoring algorithm
+
+---
+
+## Phase 2: Finance + Inventory Deep (Weeks 4–7)
+
+### Backend
+
+#### [NEW] General Ledger System
+- `GLAccount.js` model — Chart of accounts with hierarchy
+- `JournalEntry.js` model — Double-entry journal with debit/credit enforcement
+- `glController.js` — Trial balance, P&L, Balance Sheet generation
+- Auto-posting from AP/AR transactions
+
+#### [MODIFY] Finance Enhancement
+- Accounts Payable automation (invoice → GL posting plan)
+- Accounts Receivable (customer invoicing, aging reports)
+- Cash flow forecasting helper
+- GST calculation engine (basic)
+
+#### [MODIFY] Inventory Enhancement
+- Demand forecasting based on consumption history
+- Automatic reorder point calculation
+- Multi-warehouse transfers
+- FIFO/LIFO valuation support
+
+### Frontend
+- GL Dashboard with interactive chart of accounts
+- AP/AR aging reports
+- Cash flow visualization with 30/60/90 day projections
+- Enhanced inventory dashboard with reorder alerts
+
+---
+
+## Phase 3: Analytics, BI & Knowledge Base (Weeks 8–11)
+
+### Backend
+- **[NEW]** AI query engine — natural language → MongoDB/SQL query
+- **[NEW]** Weekly digest generator (summary of key events per module)
+- **[NEW]** ChromaDB integration for semantic document search
+- **[NEW]** Neo4j AuraDB setup for entity knowledge graph
+- **[NEW]** Anomaly surfacing service (proactive alerts across modules)
+- **[NEW]** WebSocket server (Socket.io) for real-time dashboard updates
+
+### Frontend
+- Executive KPI dashboard (CEO/CFO view)
+- Natural language query bar (ask any business question)
+- AI-generated chart insights ("so what" annotations)
+- Trend analysis with AI-identified breakpoints
+- Knowledge graph explorer (entity relationship visualization)
+
+---
+
+## Phase 4: HR, Payroll & CRM (Weeks 12–16)
+
+### Backend — HR & Payroll
+- **[NEW]** `Employee.js`, `Attendance.js`, `LeavePolicy.js`, `Payroll.js`, `PaySlip.js` models
+- **[NEW]** `hrController.js` — Employee CRUD, org hierarchy, skills matrix
+- **[NEW]** `attendanceController.js` — Check-in/out, shift management
+- **[NEW]** `leaveController.js` — Leave policy engine (CL/SL/EL/LOP)
+- **[NEW]** `payrollController.js` — Indian payroll (PF, ESI, TDS, PT, variable pay)
+
+### Backend — CRM & Sales
+- **[NEW]** `Lead.js`, `Opportunity.js`, `Quote.js`, `SalesOrder.js`, `Customer.js` models
+- **[NEW]** `crmController.js` — Lead-to-cash pipeline
+- **[NEW]** `salesController.js` — Order + invoicing + payment tracking
+
+### Frontend
+- Employee directory, profiles, org chart
+- Leave management (apply, approve, calendar view)
+- Payroll dashboard (run payroll, payslips, statutory)
+- CRM pipeline board (Kanban view)
+- Customer 360° view
+- Sales analytics dashboard
+
+---
+
+## Phase 5: Projects, Compliance & Quality (Weeks 17–20)
+
+### Backend
+- **[NEW]** `Project.js`, `Task.js`, `TimeEntry.js` models
+- **[NEW]** `projectController.js` — WBS, milestones, Earned Value
+- **[NEW]** `qualityController.js` — NCR, CAPA, inspection
+- **[NEW]** `complianceController.js` — GST returns, TDS, PF/ESI, regulatory calendar
+
+### Frontend
+- Gantt chart (WBS visualization)
+- Resource allocation heatmap
+- Quality NCR/CAPA workflow
+- Compliance calendar with auto-reminders
+- Regulatory submission dashboard
+
+---
+
+## Phase 6: Multi-Tenant, Integration & Production (Weeks 21–26)
+
+- Multi-tenant data isolation (tenant middleware)
+- Public REST API with OpenAPI 3.0 spec
+- GraphQL layer for cross-module queries
+- Banking integration (statement import)
+- WhatsApp/SMS notification engine
+- Docker Compose production deployment
+- Prometheus + Grafana monitoring
+- CI/CD via GitHub Actions
+- Customer self-service portal
+- Real estate / facilities module
+
+---
+
+## Verification Plan
+
+### Per-Phase Verification
+1. `npm run build` (zero errors)
+2. `tsc --noEmit` (TypeScript check)
+3. Browser walkthrough of all modified/new pages
+4. Dark mode + light mode visual verification
+5. Role-based access verification (Admin, Manager, Staff)
+
+### End-to-End Scenarios
+1. **Maintenance Flow:** Create ticket → assign → complete → close with bill → verify finance + inventory impact
+2. **Procurement Flow:** Vendor → PO → Receive goods → 3-way match → Payment
+3. **Finance Flow:** Invoice upload → OCR extraction → GL posting → P&L report
+4. **HR Flow (Phase 4):** Hire → Attendance → Leave → Payroll → Payslip
+5. **CRM Flow (Phase 4):** Lead → Opportunity → Quote → Order → Invoice

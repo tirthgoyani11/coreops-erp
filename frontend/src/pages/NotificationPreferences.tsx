@@ -116,7 +116,7 @@ export default function NotificationPreferences() {
                 <div className="p-6 bg-[var(--muted)]/50 border-t border-[var(--border)] flex justify-end">
                     <button
                         onClick={handleSave}
-                        className="flex items-center gap-2 px-6 py-2 bg-[var(--primary)] text-white rounded-md hover:opacity-90 transition-opacity"
+                        className="flex items-center gap-2 px-6 py-2 bg-[var(--primary)] text-black font-bold shadow-[0_0_10px_var(--primary-glow)] rounded-md hover:bg-[var(--primary)]/90 transition-opacity"
                     >
                         <Save size={16} /> Save Preferences
                     </button>

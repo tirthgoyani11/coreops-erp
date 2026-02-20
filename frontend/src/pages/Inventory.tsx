@@ -127,7 +127,7 @@ export function Inventory() {
                         </div>
                         <Select
                             value={filters.stockStatus}
-                            onValueChange={(val) => setFilters({ ...filters, stockStatus: val })}
+                            onValueChange={(val: string) => setFilters({ ...filters, stockStatus: val })}
                         >
                             <SelectTrigger className="w-full sm:w-40">
                                 <SelectValue placeholder="Stock Level" />

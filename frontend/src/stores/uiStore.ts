@@ -1,5 +1,6 @@
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
+import { persist, createJSONStorage } from 'zustand/middleware';
+import { safeLocalStorage } from '../lib/safeStorage';
 
 interface UIState {
     isSidebarCollapsed: boolean;
@@ -18,6 +19,7 @@ export const useUIStore = create<UIState>()(
         }),
         {
             name: 'ui-storage',
+            storage: createJSONStorage(() => safeLocalStorage),
             partialize: (state) => ({ isSidebarCollapsed: state.isSidebarCollapsed }), // Don't persist mobile state
         }
     )

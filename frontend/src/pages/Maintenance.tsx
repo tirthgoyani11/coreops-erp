@@ -3,11 +3,9 @@ import { useAuthStore } from '../stores/authStore';
 import api from '../lib/api';
 import { useToast } from '../hooks/useToast';
 import {
-    LayoutDashboard,
     List,
     Calendar as CalendarIcon,
     Plus,
-    Filter,
     Search,
     Kanban as KanbanIcon
 } from 'lucide-react';
@@ -24,8 +22,8 @@ import {
     SelectValue,
 } from '../components/ui/Select';
 import { Card } from '../components/ui/Card';
-import { Badge } from '../components/ui/Badge';
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '../components/ui/Tabs';
+// Badge unused
+import { Tabs, TabsList, TabsTrigger } from '../components/ui/Tabs'; // TabsContent unused
 
 // Views
 import { MaintenanceTableView } from '../components/maintenance/MaintenanceTableView';
@@ -33,7 +31,7 @@ import { MaintenanceKanbanView } from '../components/maintenance/MaintenanceKanb
 import { MaintenanceCalendarView } from '../components/maintenance/MaintenanceCalendarView';
 
 export function Maintenance() {
-    const { user, hasPermission } = useAuthStore();
+    const { hasPermission } = useAuthStore(); // user unused
     const navigate = useNavigate();
     const toast = useToast();
     const [view, setView] = useState<'table' | 'kanban' | 'calendar'>('table');
@@ -132,7 +130,7 @@ export function Maintenance() {
 
                         <Select
                             value={filters.status}
-                            onValueChange={(val) => setFilters({ ...filters, status: val })}
+                            onValueChange={(val: string) => setFilters({ ...filters, status: val })}
                         >
                             <SelectTrigger className="w-full sm:w-40">
                                 <SelectValue placeholder="Status" />
@@ -148,7 +146,7 @@ export function Maintenance() {
 
                         <Select
                             value={filters.priority}
-                            onValueChange={(val) => setFilters({ ...filters, priority: val })}
+                            onValueChange={(val: string) => setFilters({ ...filters, priority: val })}
                         >
                             <SelectTrigger className="w-full sm:w-40">
                                 <SelectValue placeholder="Priority" />

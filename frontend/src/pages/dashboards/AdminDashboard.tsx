@@ -149,19 +149,19 @@ export const AdminDashboard = memo(function AdminDashboard() {
 
                 // Fetch stats in parallel
                 const [assetsRes, logsRes] = await Promise.allSettled([
-                    api.get('/analytics/summary'),
+                    api.get('/analytics/dashboard'),
                     api.get('/audit-logs?limit=8'),
                 ]);
 
                 if (assetsRes.status === 'fulfilled' && assetsRes.value.data?.data) {
                     const data = assetsRes.value.data.data;
                     setStats({
-                        totalAssets: data.totalAssets || 1360,
-                        activeTickets: data.activeTickets || 87,
-                        pendingApprovals: data.pendingApprovals || 12,
-                        systemHealth: data.systemHealth || 99.9,
-                        assetsChange: data.assetsChange || 5,
-                        ticketsChange: data.ticketsChange || -12,
+                        totalAssets: data.assets?.total || 1360,
+                        activeTickets: data.maintenance?.openTickets || 87,
+                        pendingApprovals: data.maintenance?.pendingApprovals || 12,
+                        systemHealth: 98.5, // Mock for now
+                        assetsChange: 5, // Mock
+                        ticketsChange: -2, // Mock
                     });
                 } else {
                     // Use demo data if API fails

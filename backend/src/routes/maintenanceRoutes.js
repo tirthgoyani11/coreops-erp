@@ -7,10 +7,13 @@ const {
     updateTicket,
     addWorkLog,
     consumePart,
-    getStats
+    getStats,
+    getDigitalTwinPreview,
+    checkAnomaly
 } = require('../controllers/maintenanceController');
 
-const { protect, authorize } = require('../middleware/authMiddleware');
+const protect = require('../middleware/verifyToken');
+const authorize = require('../middleware/authorize');
 
 router.use(protect); // All routes require login
 
@@ -30,5 +33,12 @@ router.route('/:id/worklog')
 
 router.route('/:id/parts')
     .post(consumePart);
+
+// Phase 1A — AI-powered endpoints
+router.route('/:id/preview')
+    .get(authorize('SUPER_ADMIN', 'ADMIN', 'MANAGER'), getDigitalTwinPreview);
+
+router.route('/:id/anomaly-check')
+    .get(checkAnomaly);
 
 module.exports = router;

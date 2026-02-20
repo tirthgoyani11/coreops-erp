@@ -4,12 +4,10 @@ import {
     useSensor,
     useSensors,
     PointerSensor,
-    DragEndEvent,
     DragOverlay,
-    defaultDropAnimationSideEffects,
-    DragStartEvent
 } from '@dnd-kit/core';
-import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
+import type { DragStartEvent, DragEndEvent } from '@dnd-kit/core';
+
 import { KanbanColumn } from './KanbanColumn';
 import { KanbanCard } from './KanbanCard';
 import api from '../../lib/api';

@@ -15,13 +15,6 @@ import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
 import { Input } from '../components/ui/Input';
 import { Badge } from '../components/ui/Badge';
-import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from '../components/ui/Select';
 import { Textarea } from '../components/ui/Textarea';
 import { Label } from '../components/ui/Label';
 
@@ -85,19 +78,21 @@ export function StockOperations() {
         setLoading(true);
         try {
             // Determine endpoint based on type
-            const endpoint = `/inventory/${selectedItem._id}/${operationType.toLowerCase()}`;
+            // const endpoint = `/inventory/${selectedItem._id}/${operationType.toLowerCase()}`;
             // Payload varies slightly? Assuming unified or specific endpoints
             // Let's assume specific: /stock-in, /stock-out, /adjust
             // Actually usually it's better to have one 'transaction' endpoint or specific ones.
             // Let's go with specific endpoints on item:
             // POST /inventory/:id/stock-in { quantity, reason, reference }
 
-            let url = '';
-            if (operationType === 'IN') url = `/inventory/${selectedItem._id}/stock-in`;
-            else if (operationType === 'OUT') url = `/inventory/${selectedItem._id}/stock-out`;
-            else if (operationType === 'ADJUST') url = `/inventory/${selectedItem._id}/adjust`;
+            const url = `/inventory/${selectedItem._id}/adjust`;
+
+            let type = 'adjustment';
+            if (operationType === 'IN') type = 'stock_in';
+            if (operationType === 'OUT') type = 'stock_out';
 
             await api.post(url, {
+                type,
                 quantity: Number(quantity),
                 reason,
                 reference

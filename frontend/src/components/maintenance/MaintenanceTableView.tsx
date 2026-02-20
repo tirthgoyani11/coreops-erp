@@ -5,8 +5,6 @@ import { Button } from '../ui/Button';
 import {
     AlertCircle,
     CheckCircle2,
-    Clock,
-    MoreHorizontal,
     ArrowRight
 } from 'lucide-react';
 import { format } from 'date-fns';
@@ -16,7 +14,7 @@ interface MaintenanceTableViewProps {
     onRefresh: () => void;
 }
 
-export function MaintenanceTableView({ tickets, onRefresh }: MaintenanceTableViewProps) {
+export function MaintenanceTableView({ tickets }: MaintenanceTableViewProps) {
     const navigate = useNavigate();
 
     const getStatusColor = (status: string) => {
