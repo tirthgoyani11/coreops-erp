@@ -1,13 +1,12 @@
 const jwt = require('jsonwebtoken');
-const User = require('../models/User');
+const prisma = require('../config/prisma');
 
 /**
- * Verify JWT Token Middleware
+ * Verify JWT Token Middleware (Prisma version)
  * Attaches user object to req.user if valid
  */
 const verifyToken = async (req, res, next) => {
     try {
-        // Get token from header
         const authHeader = req.headers.authorization;
 
         if (!authHeader || !authHeader.startsWith('Bearer ')) {
@@ -18,12 +17,12 @@ const verifyToken = async (req, res, next) => {
         }
 
         const token = authHeader.split(' ')[1];
-
-        // Verify token
         const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
-        // Get user from database
-        const user = await User.findById(decoded.id).populate('officeId');
+        const user = await prisma.user.findUnique({
+            where: { id: decoded.id },
+            include: { office: true },
+        });
 
         if (!user) {
             return res.status(401).json({
@@ -39,8 +38,15 @@ const verifyToken = async (req, res, next) => {
             });
         }
 
-        // Attach user to request
-        req.user = user;
+        // Remove password from user object
+        const { password, passwordResetToken, passwordResetExpires, ...safeUser } = user;
+
+        // Map office for backward compat: req.user.officeId now holds the office object
+        // but also keep the raw string ID accessible
+        safeUser._id = safeUser.id; // Backward compat for code using _id
+        safeUser.officeId = safeUser.office || safeUser.officeId;
+
+        req.user = safeUser;
         next();
     } catch (error) {
         if (error.name === 'JsonWebTokenError') {

@@ -1,6 +1,5 @@
-const Office = require('../models/Office');
+const prisma = require('../config/prisma');
 const { asyncHandler, AppError } = require('../utils/errorHandler');
-const { paginateQuery } = require('../utils/pagination');
 
 /**
  * @desc    Create new office
@@ -10,11 +9,14 @@ const { paginateQuery } = require('../utils/pagination');
 exports.createOffice = asyncHandler(async (req, res, next) => {
     const { name, code, country, currency } = req.body;
 
-    const office = await Office.create({
-        name,
-        code,
-        country,
-        currency,
+    const office = await prisma.office.create({
+        data: {
+            name,
+            code: code?.toUpperCase()?.trim(),
+            country,
+            baseCurrency: currency || 'INR',
+            locationCode: code?.toUpperCase()?.trim(),
+        },
     });
 
     res.status(201).json({
@@ -25,25 +27,35 @@ exports.createOffice = asyncHandler(async (req, res, next) => {
 });
 
 /**
- * @desc    Get all offices (with pagination)
- * @route   GET /api/offices?page=1&limit=20
+ * @desc    Get all offices
+ * @route   GET /api/offices
  * @access  SUPER_ADMIN
  */
 exports.getOffices = asyncHandler(async (req, res, next) => {
-    const filter = { isActive: true };
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 20;
+    const skip = (page - 1) * limit;
 
-    const { data, pagination } = await paginateQuery(
-        Office,
-        filter,
-        req,
-        []
-    );
+    const [offices, total] = await Promise.all([
+        prisma.office.findMany({
+            where: { isActive: true },
+            skip,
+            take: limit,
+            orderBy: { createdAt: 'desc' },
+        }),
+        prisma.office.count({ where: { isActive: true } }),
+    ]);
 
     res.status(200).json({
         success: true,
-        count: data.length,
-        pagination,
-        data,
+        count: offices.length,
+        pagination: {
+            page,
+            limit,
+            totalPages: Math.ceil(total / limit),
+            totalResults: total,
+        },
+        data: offices,
     });
 });
 
@@ -53,16 +65,13 @@ exports.getOffices = asyncHandler(async (req, res, next) => {
  * @access  SUPER_ADMIN
  */
 exports.getOffice = asyncHandler(async (req, res, next) => {
-    const office = await Office.findById(req.params.id);
-
-    if (!office) {
-        return next(new AppError('Office not found', 404));
-    }
-
-    res.status(200).json({
-        success: true,
-        data: office,
+    const office = await prisma.office.findUnique({
+        where: { id: req.params.id },
     });
+
+    if (!office) return next(new AppError('Office not found', 404));
+
+    res.status(200).json({ success: true, data: office });
 });
 
 /**
@@ -73,15 +82,17 @@ exports.getOffice = asyncHandler(async (req, res, next) => {
 exports.updateOffice = asyncHandler(async (req, res, next) => {
     const { name, currency, isActive } = req.body;
 
-    const office = await Office.findByIdAndUpdate(
-        req.params.id,
-        { name, currency, isActive },
-        { new: true, runValidators: true }
-    );
+    const exists = await prisma.office.findUnique({ where: { id: req.params.id } });
+    if (!exists) return next(new AppError('Office not found', 404));
 
-    if (!office) {
-        return next(new AppError('Office not found', 404));
-    }
+    const office = await prisma.office.update({
+        where: { id: req.params.id },
+        data: {
+            ...(name !== undefined && { name }),
+            ...(currency !== undefined && { baseCurrency: currency }),
+            ...(isActive !== undefined && { isActive }),
+        },
+    });
 
     res.status(200).json({
         success: true,

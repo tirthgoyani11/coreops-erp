@@ -1,14 +1,27 @@
 const jwt = require('jsonwebtoken');
-const User = require('../models/User');
-const RefreshToken = require('../models/RefreshToken');
+const bcrypt = require('bcrypt');
+const crypto = require('crypto');
+const prisma = require('../config/prisma');
 const { asyncHandler, AppError } = require('../utils/errorHandler');
 const emailService = require('../services/emailService');
 const logger = require('../utils/logger');
 
-// ── Token Helpers ──────────────────────────────────────────
-
+// ── Constants ──────────────────────────────────────────
 const ACCESS_TOKEN_EXPIRY = '15m';
 const REFRESH_TOKEN_DAYS = 7;
+const BCRYPT_ROUNDS = 12;
+
+// ── Role-based default permissions ────────────────────
+const ROLE_PERMISSIONS = {
+    SUPER_ADMIN: { canApproveTickets: true, canManageAssets: true, canManageInventory: true, canViewFinancials: true, canManageUsers: true, canManageVendors: true, approvalLimit: -1 },
+    ADMIN: { canApproveTickets: true, canManageAssets: true, canManageInventory: true, canViewFinancials: true, canManageUsers: true, canManageVendors: true, approvalLimit: -1 },
+    MANAGER: { canApproveTickets: true, canManageAssets: true, canManageInventory: true, canViewFinancials: true, canManageUsers: false, canManageVendors: true, approvalLimit: 50000 },
+    STAFF: { canApproveTickets: false, canManageAssets: true, canManageInventory: true, canViewFinancials: false, canManageUsers: false, canManageVendors: false, approvalLimit: 0 },
+    TECHNICIAN: { canApproveTickets: false, canManageAssets: false, canManageInventory: false, canViewFinancials: false, canManageUsers: false, canManageVendors: false, approvalLimit: 0 },
+    VIEWER: { canApproveTickets: false, canManageAssets: false, canManageInventory: false, canViewFinancials: false, canManageUsers: false, canManageVendors: false, approvalLimit: 0 },
+};
+
+// ── Token Helpers ──────────────────────────────────────
 
 function generateAccessToken(userId) {
     return jwt.sign({ id: userId }, process.env.JWT_SECRET, {
@@ -16,13 +29,21 @@ function generateAccessToken(userId) {
     });
 }
 
+function generateToken() {
+    return crypto.randomBytes(40).toString('hex');
+}
+
+function generateFamily() {
+    return crypto.randomBytes(16).toString('hex');
+}
+
 function setRefreshCookie(res, token) {
     res.cookie('refreshToken', token, {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
         sameSite: 'strict',
-        maxAge: REFRESH_TOKEN_DAYS * 24 * 60 * 60 * 1000, // 7 days in ms
-        path: '/api/auth', // Only sent to auth endpoints
+        maxAge: REFRESH_TOKEN_DAYS * 24 * 60 * 60 * 1000,
+        path: '/api/auth',
     });
 }
 
@@ -35,6 +56,15 @@ function clearRefreshCookie(res) {
     });
 }
 
+// ── Helpers ────────────────────────────────────────────
+
+function sanitizeUser(user) {
+    const { password, passwordResetToken, passwordResetExpires, inviteToken, inviteTokenExpires, ...safe } = user;
+    return safe;
+}
+
+// ── Controllers ────────────────────────────────────────
+
 /**
  * @desc    Register new user
  * @route   POST /api/auth/register
@@ -43,23 +73,28 @@ function clearRefreshCookie(res) {
 exports.register = asyncHandler(async (req, res, next) => {
     const { name, email, password, role, officeId } = req.body;
 
-    // Validate SUPER_ADMIN doesn't need officeId
     if (role !== 'SUPER_ADMIN' && !officeId) {
         return next(new AppError('Office is required for non-admin users', 400));
     }
 
-    const user = await User.create({
-        name,
-        email,
-        password,
-        role: role || 'STAFF',
-        officeId: role === 'SUPER_ADMIN' ? null : officeId,
+    const hashedPassword = await bcrypt.hash(password, BCRYPT_ROUNDS);
+    const permissions = ROLE_PERMISSIONS[role || 'STAFF'] || ROLE_PERMISSIONS.STAFF;
+
+    const user = await prisma.user.create({
+        data: {
+            name,
+            email: email.toLowerCase().trim(),
+            password: hashedPassword,
+            role: role || 'STAFF',
+            officeId: role === 'SUPER_ADMIN' ? null : officeId,
+            ...permissions,
+        },
     });
 
     res.status(201).json({
         success: true,
         message: 'User created successfully',
-        data: user,
+        data: sanitizeUser(user),
     });
 });
 
@@ -71,13 +106,14 @@ exports.register = asyncHandler(async (req, res, next) => {
 exports.login = asyncHandler(async (req, res, next) => {
     const { email, password } = req.body;
 
-    // Check for email and password
     if (!email || !password) {
         return next(new AppError('Please provide email and password', 400));
     }
 
-    // Find user and include password
-    const user = await User.findOne({ email }).select('+password').populate('officeId');
+    const user = await prisma.user.findUnique({
+        where: { email: email.toLowerCase().trim() },
+        include: { office: true },
+    });
 
     if (!user) {
         return next(new AppError('Invalid credentials', 401));
@@ -87,24 +123,39 @@ exports.login = asyncHandler(async (req, res, next) => {
         return next(new AppError('Account has been deactivated', 401));
     }
 
-    // Check password
-    const isMatch = await user.comparePassword(password);
+    // Check lock
+    if (user.lockUntil && user.lockUntil > new Date()) {
+        return next(new AppError('Account is locked. Try again later.', 423));
+    }
+
+    const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) {
+        // Increment failed attempts
+        const failedAttempts = (user.failedLoginAttempts || 0) + 1;
+        const update = { failedLoginAttempts: failedAttempts };
+        if (failedAttempts >= 5) {
+            update.lockUntil = new Date(Date.now() + 30 * 60 * 1000);
+        }
+        await prisma.user.update({ where: { id: user.id }, data: update });
         return next(new AppError('Invalid credentials', 401));
     }
 
-    // Generate access token (short-lived, returned in body)
-    const accessToken = generateAccessToken(user._id);
+    // Reset failed attempts, update last login
+    await prisma.user.update({
+        where: { id: user.id },
+        data: { lastLogin: new Date(), failedLoginAttempts: 0, lockUntil: null },
+    });
 
-    // Generate refresh token (long-lived, set as httpOnly cookie)
-    const family = RefreshToken.generateFamily();
-    const refreshTokenValue = RefreshToken.generateToken();
+    const accessToken = generateAccessToken(user.id);
+    const family = generateFamily();
+    const refreshTokenValue = generateToken();
 
-    await RefreshToken.create({
-        token: refreshTokenValue,
-        userId: user._id,
-        family,
-        expiresAt: new Date(Date.now() + REFRESH_TOKEN_DAYS * 24 * 60 * 60 * 1000),
+    await prisma.refreshToken.create({
+        data: {
+            token: refreshTokenValue,
+            userId: user.id,
+            expiresAt: new Date(Date.now() + REFRESH_TOKEN_DAYS * 24 * 60 * 60 * 1000),
+        },
     });
 
     setRefreshCookie(res, refreshTokenValue);
@@ -114,22 +165,19 @@ exports.login = asyncHandler(async (req, res, next) => {
         message: 'Login successful',
         token: accessToken,
         user: {
-            id: user._id,
+            id: user.id,
             name: user.name,
             email: user.email,
             role: user.role,
-            office: user.officeId,
+            office: user.office,
         },
     });
 });
 
 /**
- * @desc    Refresh access token using httpOnly cookie
+ * @desc    Refresh access token
  * @route   POST /api/auth/refresh
  * @access  Public (cookie required)
- *
- * Security: Implements token rotation + reuse detection.
- * If a used token is presented, the entire family is revoked.
  */
 exports.refreshToken = asyncHandler(async (req, res, next) => {
     const incomingToken = req.cookies?.refreshToken;
@@ -138,71 +186,65 @@ exports.refreshToken = asyncHandler(async (req, res, next) => {
         return next(new AppError('Refresh token required', 401));
     }
 
-    // Find the token in DB
-    const storedToken = await RefreshToken.findOne({ token: incomingToken });
+    const storedToken = await prisma.refreshToken.findUnique({
+        where: { token: incomingToken },
+    });
 
     if (!storedToken) {
-        // Token not found — may have been revoked
         clearRefreshCookie(res);
         return next(new AppError('Invalid refresh token', 401));
     }
 
-    // Reuse detection: if this token was already used, revoke entire family
-    if (storedToken.isUsed) {
-        logger.warn(`Refresh token reuse detected! Revoking family: ${storedToken.family} for user: ${storedToken.userId}`);
-        await RefreshToken.revokeFamily(storedToken.family);
-        clearRefreshCookie(res);
-        return next(new AppError('Refresh token reuse detected. Please login again.', 401));
-    }
-
     // Check expiration
     if (storedToken.expiresAt < new Date()) {
-        await RefreshToken.deleteOne({ _id: storedToken._id });
+        await prisma.refreshToken.delete({ where: { id: storedToken.id } });
         clearRefreshCookie(res);
         return next(new AppError('Refresh token expired', 401));
     }
 
     // Verify user still exists and is active
-    const user = await User.findById(storedToken.userId).populate('officeId');
+    const user = await prisma.user.findUnique({
+        where: { id: storedToken.userId },
+        include: { office: true },
+    });
+
     if (!user || !user.isActive) {
-        await RefreshToken.revokeFamily(storedToken.family);
+        await prisma.refreshToken.deleteMany({ where: { userId: storedToken.userId } });
         clearRefreshCookie(res);
         return next(new AppError('User not found or deactivated', 401));
     }
 
-    // Rotate: mark current token as used, create new one in same family
-    const newTokenValue = RefreshToken.generateToken();
+    // Rotate: delete old, create new
+    const newTokenValue = generateToken();
 
-    storedToken.isUsed = true;
-    storedToken.replacedByToken = newTokenValue;
-    await storedToken.save();
+    await prisma.refreshToken.delete({ where: { id: storedToken.id } });
 
-    await RefreshToken.create({
-        token: newTokenValue,
-        userId: user._id,
-        family: storedToken.family,
-        expiresAt: new Date(Date.now() + REFRESH_TOKEN_DAYS * 24 * 60 * 60 * 1000),
+    await prisma.refreshToken.create({
+        data: {
+            token: newTokenValue,
+            userId: user.id,
+            expiresAt: new Date(Date.now() + REFRESH_TOKEN_DAYS * 24 * 60 * 60 * 1000),
+        },
     });
 
-    // Issue new access token + cookie
-    const accessToken = generateAccessToken(user._id);
+    const accessToken = generateAccessToken(user.id);
     setRefreshCookie(res, newTokenValue);
 
     res.status(200).json({
         success: true,
         token: accessToken,
         user: {
-            id: user._id,
+            id: user.id,
             name: user.name,
             email: user.email,
             role: user.role,
-            office: user.officeId,
+            office: user.office,
         },
     });
 });
 
 /**
- * @desc    Logout — clear refresh cookie and revoke token family
+ * @desc    Logout
  * @route   POST /api/auth/logout
  * @access  Public (cookie-based)
  */
@@ -210,10 +252,10 @@ exports.logout = asyncHandler(async (req, res) => {
     const incomingToken = req.cookies?.refreshToken;
 
     if (incomingToken) {
-        const storedToken = await RefreshToken.findOne({ token: incomingToken });
-        if (storedToken) {
-            await RefreshToken.revokeFamily(storedToken.family);
-        }
+        // Delete this specific token (or all for this user if we want)
+        await prisma.refreshToken.deleteMany({
+            where: { token: incomingToken },
+        });
     }
 
     clearRefreshCookie(res);
@@ -229,7 +271,7 @@ exports.logout = asyncHandler(async (req, res) => {
  * @route   GET /api/auth/me
  * @access  Private
  */
-exports.getMe = asyncHandler(async (req, res, next) => {
+exports.getMe = asyncHandler(async (req, res) => {
     res.status(200).json({
         success: true,
         data: req.user,
@@ -237,25 +279,20 @@ exports.getMe = asyncHandler(async (req, res, next) => {
 });
 
 /**
- * @desc    Seed initial SUPER_ADMIN (for setup only)
+ * @desc    Seed initial SUPER_ADMIN
  * @route   POST /api/auth/seed
  * @access  Public (only works if no users exist)
- * 
- * SECURITY: In production, set SEED_ADMIN_EMAIL and SEED_ADMIN_PASSWORD env vars
  */
 exports.seedAdmin = asyncHandler(async (req, res, next) => {
-    // Disable seed in production unless explicitly allowed
     if (process.env.NODE_ENV === 'production' && process.env.ALLOW_SEED !== 'true') {
         return next(new AppError('Seed endpoint is disabled in production', 403));
     }
 
-    const existingUsers = await User.countDocuments();
-
-    if (existingUsers > 0) {
+    const count = await prisma.user.count();
+    if (count > 0) {
         return next(new AppError('Seed not allowed. Users already exist.', 400));
     }
 
-    // Use environment variables for credentials (with secure defaults for dev only)
     const seedEmail = process.env.SEED_ADMIN_EMAIL ||
         (process.env.NODE_ENV !== 'production' ? 'admin@coreops.io' : null);
     const seedPassword = process.env.SEED_ADMIN_PASSWORD ||
@@ -265,33 +302,36 @@ exports.seedAdmin = asyncHandler(async (req, res, next) => {
         return next(new AppError('SEED_ADMIN_EMAIL and SEED_ADMIN_PASSWORD environment variables are required', 400));
     }
 
-    const admin = await User.create({
-        name: process.env.SEED_ADMIN_NAME || 'Super Admin',
-        email: seedEmail,
-        password: seedPassword,
-        role: 'SUPER_ADMIN',
-        officeId: null,
+    const hashedPassword = await bcrypt.hash(seedPassword, BCRYPT_ROUNDS);
+    const permissions = ROLE_PERMISSIONS.SUPER_ADMIN;
+
+    const admin = await prisma.user.create({
+        data: {
+            name: process.env.SEED_ADMIN_NAME || 'Super Admin',
+            email: seedEmail.toLowerCase().trim(),
+            password: hashedPassword,
+            role: 'SUPER_ADMIN',
+            officeId: null,
+            ...permissions,
+        },
     });
 
-    // Log admin creation (without password)
-    const logger = require('../utils/logger');
     logger.info(`Initial admin created: ${admin.email}`);
 
     res.status(201).json({
         success: true,
         message: 'Initial admin created. Please login with configured credentials and change password immediately.',
         data: {
-            id: admin._id,
+            id: admin.id,
             email: admin.email,
             name: admin.name,
             role: admin.role,
-            // SECURITY: Never expose password in response
         },
     });
 });
 
 /**
- * @desc    Request password reset email
+ * @desc    Request password reset
  * @route   POST /api/auth/forgot-password
  * @access  Public
  */
@@ -302,9 +342,8 @@ exports.forgotPassword = asyncHandler(async (req, res, next) => {
         return next(new AppError('Please provide an email address', 400));
     }
 
-    const user = await User.findOne({ email });
+    const user = await prisma.user.findUnique({ where: { email: email.toLowerCase().trim() } });
 
-    // Always return success to prevent email enumeration
     if (!user) {
         return res.status(200).json({
             success: true,
@@ -312,33 +351,33 @@ exports.forgotPassword = asyncHandler(async (req, res, next) => {
         });
     }
 
-    // Generate reset token (valid for 1 hour)
-    const crypto = require('crypto');
     const resetToken = crypto.randomBytes(32).toString('hex');
     const resetTokenHash = crypto.createHash('sha256').update(resetToken).digest('hex');
 
-    user.passwordResetToken = resetTokenHash;
-    user.passwordResetExpires = Date.now() + 60 * 60 * 1000; // 1 hour
-    await user.save({ validateBeforeSave: false });
+    await prisma.user.update({
+        where: { id: user.id },
+        data: {
+            passwordResetToken: resetTokenHash,
+            passwordResetExpires: new Date(Date.now() + 60 * 60 * 1000),
+        },
+    });
 
-    // Send email via service
     const resetUrl = `${process.env.FRONTEND_URL || 'http://localhost:5173'}/reset-password?token=${resetToken}`;
 
     try {
         await emailService.sendPasswordResetEmail(user.email, resetUrl);
-        const logger = require('../utils/logger');
         logger.info(`Password reset email sent to: ${email}`);
     } catch (error) {
-        user.passwordResetToken = undefined;
-        user.passwordResetExpires = undefined;
-        await user.save({ validateBeforeSave: false });
+        await prisma.user.update({
+            where: { id: user.id },
+            data: { passwordResetToken: null, passwordResetExpires: null },
+        });
         return next(new AppError('There was an error sending the email. Try again later!', 500));
     }
 
     res.status(200).json({
         success: true,
         message: 'If an account exists with this email, a reset link has been sent.',
-        // DEV ONLY - remove in production
         ...(process.env.NODE_ENV !== 'production' && { devToken: resetToken }),
     });
 });
@@ -350,27 +389,20 @@ exports.forgotPassword = asyncHandler(async (req, res, next) => {
  */
 exports.validateResetToken = asyncHandler(async (req, res, next) => {
     const { token } = req.body;
+    if (!token) return next(new AppError('Token is required', 400));
 
-    if (!token) {
-        return next(new AppError('Token is required', 400));
-    }
-
-    const crypto = require('crypto');
     const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
 
-    const user = await User.findOne({
-        passwordResetToken: tokenHash,
-        passwordResetExpires: { $gt: Date.now() },
+    const user = await prisma.user.findFirst({
+        where: {
+            passwordResetToken: tokenHash,
+            passwordResetExpires: { gt: new Date() },
+        },
     });
 
-    if (!user) {
-        return next(new AppError('Invalid or expired token', 400));
-    }
+    if (!user) return next(new AppError('Invalid or expired token', 400));
 
-    res.status(200).json({
-        success: true,
-        message: 'Token is valid',
-    });
+    res.status(200).json({ success: true, message: 'Token is valid' });
 });
 
 /**
@@ -385,36 +417,36 @@ exports.resetPassword = asyncHandler(async (req, res, next) => {
         return next(new AppError('Token and password are required', 400));
     }
 
-    // Validate password strength
     if (password.length < 8) {
         return next(new AppError('Password must be at least 8 characters', 400));
     }
 
-    const crypto = require('crypto');
     const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
 
-    const user = await User.findOne({
-        passwordResetToken: tokenHash,
-        passwordResetExpires: { $gt: Date.now() },
+    const user = await prisma.user.findFirst({
+        where: {
+            passwordResetToken: tokenHash,
+            passwordResetExpires: { gt: new Date() },
+        },
     });
 
-    if (!user) {
-        return next(new AppError('Invalid or expired token', 400));
-    }
+    if (!user) return next(new AppError('Invalid or expired token', 400));
 
-    // Update password and clear reset token
-    user.password = password;
-    user.passwordResetToken = undefined;
-    user.passwordResetExpires = undefined;
-    await user.save();
+    const hashedPassword = await bcrypt.hash(password, BCRYPT_ROUNDS);
 
-    const logger = require('../utils/logger');
+    await prisma.user.update({
+        where: { id: user.id },
+        data: {
+            password: hashedPassword,
+            passwordResetToken: null,
+            passwordResetExpires: null,
+            passwordChangedAt: new Date(),
+        },
+    });
+
     logger.info(`Password reset completed for: ${user.email}`);
 
-    res.status(200).json({
-        success: true,
-        message: 'Password has been reset successfully',
-    });
+    res.status(200).json({ success: true, message: 'Password has been reset successfully' });
 });
 
 /**
@@ -424,23 +456,19 @@ exports.resetPassword = asyncHandler(async (req, res, next) => {
  */
 exports.validateInvite = asyncHandler(async (req, res, next) => {
     const { token } = req.params;
+    if (!token) return next(new AppError('Invitation token is required', 400));
 
-    if (!token) {
-        return next(new AppError('Invitation token is required', 400));
-    }
-
-    const crypto = require('crypto');
     const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
 
-    const user = await User.findOne({
-        inviteToken: tokenHash,
-        inviteTokenExpires: { $gt: Date.now() },
-        isActive: false, // Not yet activated
+    const user = await prisma.user.findFirst({
+        where: {
+            inviteToken: tokenHash,
+            inviteTokenExpires: { gt: new Date() },
+            isActive: false,
+        },
     });
 
-    if (!user) {
-        return next(new AppError('Invalid or expired invitation', 400));
-    }
+    if (!user) return next(new AppError('Invalid or expired invitation', 400));
 
     res.status(200).json({
         success: true,
@@ -465,38 +493,39 @@ exports.registerWithInvite = asyncHandler(async (req, res, next) => {
         return next(new AppError('All required fields must be provided', 400));
     }
 
-    // Validate password strength
     if (password.length < 8) {
         return next(new AppError('Password must be at least 8 characters', 400));
     }
 
-    const crypto = require('crypto');
     const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
 
-    const user = await User.findOne({
-        inviteToken: tokenHash,
-        inviteTokenExpires: { $gt: Date.now() },
+    const user = await prisma.user.findFirst({
+        where: {
+            inviteToken: tokenHash,
+            inviteTokenExpires: { gt: new Date() },
+        },
     });
 
-    if (!user) {
-        return next(new AppError('Invalid or expired invitation', 400));
-    }
+    if (!user) return next(new AppError('Invalid or expired invitation', 400));
 
-    // Complete user registration
-    user.name = `${firstName} ${lastName}`;
-    user.password = password;
-    user.phone = phone || undefined;
-    user.isActive = true;
-    user.inviteToken = undefined;
-    user.inviteTokenExpires = undefined;
-    await user.save();
+    const hashedPassword = await bcrypt.hash(password, BCRYPT_ROUNDS);
 
-    const logger = require('../utils/logger');
+    await prisma.user.update({
+        where: { id: user.id },
+        data: {
+            name: `${firstName} ${lastName}`,
+            firstName,
+            lastName,
+            password: hashedPassword,
+            phone: phone || null,
+            isActive: true,
+            inviteToken: null,
+            inviteTokenExpires: null,
+            passwordChangedAt: new Date(),
+        },
+    });
+
     logger.info(`User registered via invite: ${user.email}`);
 
-    res.status(201).json({
-        success: true,
-        message: 'Account created successfully',
-    });
+    res.status(201).json({ success: true, message: 'Account created successfully' });
 });
-

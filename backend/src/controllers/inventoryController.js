@@ -1,6 +1,4 @@
-const Inventory = require('../models/Inventory');
-const Office = require('../models/Office');
-const mongoose = require('mongoose');
+const prisma = require('../config/prisma');
 
 // @desc    Get all inventory items
 // @route   GET /api/inventory
@@ -8,40 +6,32 @@ const mongoose = require('mongoose');
 exports.getInventory = async (req, res) => {
     try {
         const { type, category, lowStock, officeId } = req.query;
-        let query = {};
+        const where = {};
 
-        // Role-based filtering
         if (req.user.role !== 'SUPER_ADMIN') {
-            query.officeId = req.user.officeId;
+            const oid = req.user.office?.id || req.user.officeId;
+            where.officeId = typeof oid === 'object' ? oid.id : oid;
         } else if (officeId) {
-            query.officeId = officeId;
+            where.officeId = officeId;
         }
 
-        if (type) query.type = type.toUpperCase();
-        if (category) query.category = category;
+        if (type) where.type = type.toUpperCase();
+        if (category) where.category = category;
 
-        const items = await Inventory.find(query)
-            .populate('officeId', 'name')
-            .populate('vendor', 'name')
-            .sort({ name: 1 });
+        let items = await prisma.inventory.findMany({
+            where,
+            include: { stockMovements: { orderBy: { date: 'desc' }, take: 5 } },
+            orderBy: { name: 'asc' },
+        });
 
-        // Post-query filtering for low stock (virtual field)
-        let results = items;
+        // Post-query filtering for low stock
         if (lowStock === 'true') {
-            results = items.filter(item => item.isLowStock);
+            items = items.filter(item => item.currentQuantity <= item.reorderPoint);
         }
 
-        res.status(200).json({
-            success: true,
-            count: results.length,
-            data: results
-        });
+        res.status(200).json({ success: true, count: items.length, data: items });
     } catch (error) {
-        res.status(500).json({
-            success: false,
-            message: 'Server Error',
-            error: error.message
-        });
+        res.status(500).json({ success: false, message: 'Server Error', error: error.message });
     }
 };
 
@@ -50,28 +40,27 @@ exports.getInventory = async (req, res) => {
 // @access  Private
 exports.getItem = async (req, res) => {
     try {
-        const item = await Inventory.findById(req.params.id)
-            .populate('officeId', 'name')
-            .populate('vendor', 'name')
-            .populate('usageHistory.maintenanceTicket', 'ticketNumber')
-            .populate('usageHistory.asset', 'name')
-            .populate('usageHistory.technician', 'name')
-            .populate('stockMovements.performedBy', 'name');
-
-        if (!item) {
-            return res.status(404).json({ success: false, message: 'Item not found' });
-        }
-
-        res.status(200).json({
-            success: true,
-            data: item
+        const item = await prisma.inventory.findUnique({
+            where: { id: req.params.id },
+            include: {
+                stockMovements: {
+                    orderBy: { date: 'desc' },
+                    take: 50,
+                    include: { performedBy: { select: { id: true, name: true } } },
+                },
+                sparePartUsages: {
+                    orderBy: { createdAt: 'desc' },
+                    take: 20,
+                    include: { ticket: { select: { id: true, ticketNumber: true } } },
+                },
+            },
         });
+
+        if (!item) return res.status(404).json({ success: false, message: 'Item not found' });
+
+        res.status(200).json({ success: true, data: item });
     } catch (error) {
-        res.status(500).json({
-            success: false,
-            message: 'Server Error',
-            error: error.message
-        });
+        res.status(500).json({ success: false, message: 'Server Error', error: error.message });
     }
 };
 
@@ -80,26 +69,50 @@ exports.getItem = async (req, res) => {
 // @access  Private (Manager/Admin)
 exports.createItem = async (req, res) => {
     try {
-        const officeId = req.user.officeId || req.body.officeId;
+        const oid = req.user.office?.id || req.user.officeId || req.body.officeId;
+        const resolvedOfficeId = typeof oid === 'object' ? oid.id : oid;
 
-        const item = new Inventory({
-            ...req.body,
-            officeId,
-            createdBy: req.user._id
+        const { name, type, description, sku, partNumber, category, subcategory,
+            trackingType, currentQuantity, reorderPoint, reorderQuantity,
+            maxQuantity, minimumQuantity, unit, costPrice, sellingPrice,
+            unitCost, pricingCurrency, notes } = req.body;
+
+        // Auto-generate SKU if not provided
+        let finalSku = sku?.toUpperCase()?.trim();
+        if (!finalSku) {
+            const prefix = (type || 'PRODUCT') === 'PRODUCT' ? 'PRD' : 'SPR';
+            const count = await prisma.inventory.count();
+            finalSku = `${prefix}-${String(count + 1).padStart(5, '0')}`;
+        }
+
+        const item = await prisma.inventory.create({
+            data: {
+                name,
+                type: type?.toUpperCase() || 'PRODUCT',
+                description,
+                sku: finalSku,
+                partNumber,
+                category,
+                subcategory,
+                officeId: resolvedOfficeId,
+                trackingType: trackingType || 'QUANTITY',
+                currentQuantity: Number(currentQuantity) || 0,
+                reorderPoint: Number(reorderPoint) || 10,
+                reorderQuantity: Number(reorderQuantity) || 50,
+                maxQuantity: maxQuantity ? Number(maxQuantity) : null,
+                minimumQuantity: Number(minimumQuantity) || 5,
+                unit: unit || 'pieces',
+                costPrice: costPrice ? Number(costPrice) : null,
+                sellingPrice: sellingPrice ? Number(sellingPrice) : null,
+                unitCost: unitCost ? Number(unitCost) : null,
+                pricingCurrency: pricingCurrency || 'INR',
+                notes,
+            },
         });
 
-        await item.save();
-
-        res.status(201).json({
-            success: true,
-            data: item
-        });
+        res.status(201).json({ success: true, data: item });
     } catch (error) {
-        res.status(500).json({
-            success: false,
-            message: 'Server Error',
-            error: error.message
-        });
+        res.status(500).json({ success: false, message: 'Server Error', error: error.message });
     }
 };
 
@@ -108,26 +121,20 @@ exports.createItem = async (req, res) => {
 // @access  Private (Manager/Admin)
 exports.updateItem = async (req, res) => {
     try {
-        let item = await Inventory.findById(req.params.id);
-        if (!item) return res.status(404).json({ success: false, message: 'Item not found' });
+        const exists = await prisma.inventory.findUnique({ where: { id: req.params.id } });
+        if (!exists) return res.status(404).json({ success: false, message: 'Item not found' });
 
-        // Prevent updating stock quantity directly via update
-        delete req.body.stock;
-        delete req.body.quantity;
+        // Don't allow direct quantity changes — use adjustStock
+        const { currentQuantity, ...updateData } = req.body;
 
-        Object.assign(item, req.body);
-        await item.save();
-
-        res.status(200).json({
-            success: true,
-            data: item
+        const item = await prisma.inventory.update({
+            where: { id: req.params.id },
+            data: updateData,
         });
+
+        res.status(200).json({ success: true, data: item });
     } catch (error) {
-        res.status(500).json({
-            success: false,
-            message: 'Server Error',
-            error: error.message
-        });
+        res.status(500).json({ success: false, message: 'Server Error', error: error.message });
     }
 };
 
@@ -137,24 +144,50 @@ exports.updateItem = async (req, res) => {
 exports.adjustStock = async (req, res) => {
     try {
         const { type, quantity, reason, notes, reference } = req.body;
-        // type: 'stock_in' | 'stock_out' | 'adjustment'
 
-        const item = await Inventory.findById(req.params.id);
-        if (!item) return res.status(404).json({ success: false, message: 'Item not found' });
+        const result = await prisma.$transaction(async (tx) => {
+            const item = await tx.inventory.findUnique({ where: { id: req.params.id } });
+            if (!item) throw new Error('Item not found');
 
-        item.recordMovement(type, Number(quantity), reference, notes || reason, req.user._id);
-        await item.save();
+            const qty = Number(quantity);
+            let newQuantity = item.currentQuantity;
 
-        res.status(200).json({
-            success: true,
-            data: item
+            const movementType = type.toUpperCase().replace(/[-\s]/g, '_');
+
+            if (movementType === 'STOCK_IN') {
+                newQuantity += qty;
+            } else if (movementType === 'STOCK_OUT') {
+                if (item.currentQuantity < qty) throw new Error('Insufficient stock');
+                newQuantity -= qty;
+            } else if (movementType === 'ADJUSTMENT') {
+                newQuantity = qty; // Direct set
+            }
+
+            await tx.inventory.update({
+                where: { id: req.params.id },
+                data: { currentQuantity: newQuantity },
+            });
+
+            await tx.stockMovement.create({
+                data: {
+                    inventoryId: req.params.id,
+                    type: movementType,
+                    quantity: qty,
+                    reason: notes || reason,
+                    reference,
+                    performedById: req.user.id,
+                },
+            });
+
+            return await tx.inventory.findUnique({
+                where: { id: req.params.id },
+                include: { stockMovements: { orderBy: { date: 'desc' }, take: 5 } },
+            });
         });
+
+        res.status(200).json({ success: true, data: result });
     } catch (error) {
-        res.status(500).json({
-            success: false,
-            message: 'Server Error',
-            error: error.message
-        });
+        res.status(500).json({ success: false, message: 'Server Error', error: error.message });
     }
 };
 
@@ -162,73 +195,77 @@ exports.adjustStock = async (req, res) => {
 // @route   POST /api/inventory/transfer
 // @access  Private (Manager/Admin)
 exports.transferStock = async (req, res) => {
-    const session = await mongoose.startSession();
-    session.startTransaction();
-
     try {
         const { sourceItemId, targetOfficeId, quantity, notes } = req.body;
 
-        const sourceItem = await Inventory.findById(sourceItemId).session(session);
-        if (!sourceItem) throw new Error('Source item not found');
+        await prisma.$transaction(async (tx) => {
+            const sourceItem = await tx.inventory.findUnique({ where: { id: sourceItemId } });
+            if (!sourceItem) throw new Error('Source item not found');
+            if (sourceItem.currentQuantity < quantity) throw new Error('Insufficient stock for transfer');
 
-        if (sourceItem.stock.currentQuantity < quantity) {
-            throw new Error('Insufficient stock for transfer');
-        }
-
-        // Deduct from source
-        sourceItem.recordMovement('stock_out', quantity, 'TRANSFER', `Transfer to office ${targetOfficeId}`, req.user._id);
-        await sourceItem.save({ session });
-
-        // Find or create item in target office
-        let targetItem = await Inventory.findOne({
-            sku: sourceItem.sku, // Assuming SKU is unique per item type, but wait SKU is unique gloablly? 
-            // SKU is generated per item. If transferring, we might match by name/partNumber + officeId
-            // Or we strictly look for same 'partNumber' or 'name' in target office
-            name: sourceItem.name,
-            partNumber: sourceItem.partNumber,
-            officeId: targetOfficeId
-        }).session(session);
-
-        if (!targetItem) {
-            // Clone item for new office
-            const itemData = sourceItem.toObject();
-            delete itemData._id;
-            delete itemData.id;
-            delete itemData.officeId;
-            delete itemData.stock;
-            delete itemData.quantity;
-            delete itemData.stockMovements;
-            delete itemData.usageHistory;
-            delete itemData.createdAt;
-            delete itemData.updatedAt;
-            delete itemData.sku; // Let it regenerate or share? Usually unique. Let it regen.
-
-            targetItem = new Inventory({
-                ...itemData,
-                officeId: targetOfficeId,
-                stock: { ...sourceItem.stock, currentQuantity: 0 },
-                quantity: 0
+            // Deduct from source
+            await tx.inventory.update({
+                where: { id: sourceItemId },
+                data: { currentQuantity: { decrement: quantity } },
             });
-        }
 
-        // Add to target
-        targetItem.recordMovement('stock_in', quantity, 'TRANSFER', `Transfer from ${sourceItem.officeId}`, req.user._id);
-        await targetItem.save({ session });
+            await tx.stockMovement.create({
+                data: {
+                    inventoryId: sourceItemId,
+                    type: 'TRANSFER',
+                    quantity,
+                    reason: `Transfer to office ${targetOfficeId}`,
+                    performedById: req.user.id,
+                },
+            });
 
-        await session.commitTransaction();
-        res.status(200).json({
-            success: true,
-            message: 'Transfer successful'
+            // Find or create item in target office
+            let targetItem = await tx.inventory.findFirst({
+                where: { name: sourceItem.name, officeId: targetOfficeId },
+            });
+
+            if (!targetItem) {
+                const count = await tx.inventory.count();
+                targetItem = await tx.inventory.create({
+                    data: {
+                        name: sourceItem.name,
+                        type: sourceItem.type,
+                        description: sourceItem.description,
+                        sku: `XFER-${String(count + 1).padStart(5, '0')}`,
+                        partNumber: sourceItem.partNumber,
+                        category: sourceItem.category,
+                        subcategory: sourceItem.subcategory,
+                        officeId: targetOfficeId,
+                        trackingType: sourceItem.trackingType,
+                        currentQuantity: 0,
+                        reorderPoint: sourceItem.reorderPoint,
+                        reorderQuantity: sourceItem.reorderQuantity,
+                        unit: sourceItem.unit,
+                        unitCost: sourceItem.unitCost,
+                        pricingCurrency: sourceItem.pricingCurrency,
+                    },
+                });
+            }
+
+            await tx.inventory.update({
+                where: { id: targetItem.id },
+                data: { currentQuantity: { increment: quantity } },
+            });
+
+            await tx.stockMovement.create({
+                data: {
+                    inventoryId: targetItem.id,
+                    type: 'TRANSFER',
+                    quantity,
+                    reason: `Transfer from ${sourceItem.officeId}`,
+                    performedById: req.user.id,
+                },
+            });
         });
 
+        res.status(200).json({ success: true, message: 'Transfer successful' });
     } catch (error) {
-        await session.abortTransaction();
-        res.status(500).json({
-            success: false,
-            message: error.message
-        });
-    } finally {
-        session.endSession();
+        res.status(500).json({ success: false, message: error.message });
     }
 };
 
@@ -237,40 +274,42 @@ exports.transferStock = async (req, res) => {
 // @access  Private
 exports.getLowStock = async (req, res) => {
     try {
-        const query = req.user.role !== 'SUPER_ADMIN' ? { officeId: req.user.officeId } : {};
+        const where = {};
+        if (req.user.role !== 'SUPER_ADMIN') {
+            const oid = req.user.office?.id || req.user.officeId;
+            where.officeId = typeof oid === 'object' ? oid.id : oid;
+        }
 
-        // Mongo doesn't easily query virtuals, so we fetch all valid for office and filter in JS
-        // Optimization: Query where quantity < reorderPoint (heuristic) if possible, but schema structure makes it hard
-        // We'll rely on the getInventory filter logic or just do it here.
-
-        const items = await Inventory.find(query).select('name stock quantity partNumber officeId type');
-        const lowStockItems = items.filter(item => item.isLowStock);
-
-        res.status(200).json({
-            success: true,
-            count: lowStockItems.length,
-            data: lowStockItems
+        // Prisma doesn't support field-to-field comparisons in where, so fetch and filter
+        const items = await prisma.inventory.findMany({
+            where,
+            select: { id: true, name: true, type: true, currentQuantity: true, reorderPoint: true, partNumber: true, officeId: true },
         });
+
+        const lowStockItems = items.filter(item => item.currentQuantity <= item.reorderPoint);
+
+        res.status(200).json({ success: true, count: lowStockItems.length, data: lowStockItems });
     } catch (error) {
-        res.status(500).json({
-            success: false,
-            message: 'Server Error',
-            error: error.message
-        });
+        res.status(500).json({ success: false, message: 'Server Error', error: error.message });
     }
 };
 
-// @desc    Get stock valuation report
+// @desc    Get stock valuation
 // @route   GET /api/inventory/reports/valuation
 // @access  Private (Admin/Manager)
 exports.getStockValuation = async (req, res) => {
     try {
-        const query = req.user.role !== 'SUPER_ADMIN' ? { officeId: req.user.officeId } : {};
+        const where = {};
+        if (req.user.role !== 'SUPER_ADMIN') {
+            const oid = req.user.office?.id || req.user.officeId;
+            where.officeId = typeof oid === 'object' ? oid.id : oid;
+        }
 
-        const items = await Inventory.find(query);
+        const items = await prisma.inventory.findMany({ where });
 
         const valuation = items.reduce((acc, item) => {
-            const val = item.totalValue || 0;
+            const unitVal = item.costPrice || item.unitCost || 0;
+            const val = unitVal * item.currentQuantity;
             if (item.type === 'PRODUCT') acc.products += val;
             if (item.type === 'SPARE') acc.spares += val;
             acc.total += val;
@@ -279,16 +318,9 @@ exports.getStockValuation = async (req, res) => {
 
         res.status(200).json({
             success: true,
-            data: {
-                ...valuation,
-                itemCount: items.length
-            }
+            data: { ...valuation, itemCount: items.length },
         });
     } catch (error) {
-        res.status(500).json({
-            success: false,
-            message: 'Server Error',
-            error: error.message
-        });
+        res.status(500).json({ success: false, message: 'Server Error', error: error.message });
     }
 };

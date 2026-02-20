@@ -1,39 +1,31 @@
-const Settings = require('../models/Settings');
+const prisma = require('../config/prisma');
 const { asyncHandler } = require('../utils/errorHandler');
 
 /**
  * Settings Controller — SUPER_ADMIN only
- * Global system configuration management
  */
 
-/**
- * @desc    Get system settings
- * @route   GET /api/settings
- * @access  SUPER_ADMIN
- */
 exports.getSettings = asyncHandler(async (req, res) => {
-    const settings = await Settings.getSettings();
+    // Upsert to ensure settings always exist (singleton pattern)
+    let settings = await prisma.settings.findFirst();
 
-    res.json({
-        success: true,
-        data: settings,
-    });
+    if (!settings) {
+        settings = await prisma.settings.create({
+            data: {
+                companyName: 'CoreOps ERP',
+                defaultCurrency: 'INR',
+                defaultTimezone: 'Asia/Kolkata',
+            },
+        });
+    }
+
+    res.json({ success: true, data: settings });
 });
 
-/**
- * @desc    Update system settings
- * @route   PUT /api/settings
- * @access  SUPER_ADMIN
- */
 exports.updateSettings = asyncHandler(async (req, res) => {
     const allowedFields = [
-        'companyName',
-        'companyLogo',
-        'defaultCurrency',
-        'defaultTimezone',
-        'maintenanceMode',
-        'sessionTimeout',
-        'passwordPolicy',
+        'companyName', 'companyLogo', 'defaultCurrency', 'defaultTimezone',
+        'maintenanceMode', 'sessionTimeout', 'passwordPolicy',
     ];
 
     const updates = {};
@@ -45,20 +37,21 @@ exports.updateSettings = asyncHandler(async (req, res) => {
 
     // Merge nested passwordPolicy
     if (updates.passwordPolicy && typeof updates.passwordPolicy === 'object') {
-        const current = await Settings.getSettings();
-        updates.passwordPolicy = {
-            ...current.passwordPolicy?.toObject?.() || current.passwordPolicy,
-            ...updates.passwordPolicy,
-        };
+        const current = await prisma.settings.findFirst();
+        const currentPolicy = (typeof current.passwordPolicy === 'object' && current.passwordPolicy) || {};
+        updates.passwordPolicy = { ...currentPolicy, ...updates.passwordPolicy };
     }
 
-    let settings = await Settings.getSettings();
-    Object.assign(settings, updates);
-    await settings.save();
+    let settings = await prisma.settings.findFirst();
 
-    res.json({
-        success: true,
-        message: 'Settings updated successfully',
-        data: settings,
-    });
+    if (!settings) {
+        settings = await prisma.settings.create({ data: updates });
+    } else {
+        settings = await prisma.settings.update({
+            where: { id: settings.id },
+            data: updates,
+        });
+    }
+
+    res.json({ success: true, message: 'Settings updated successfully', data: settings });
 });

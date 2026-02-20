@@ -1,246 +1,149 @@
-const Notification = require('../models/Notification');
+const prisma = require('../config/prisma');
 const { notifyUser, getIO } = require('../config/socketServer');
 
 /**
- * Notification Controller
- * 
- * Handles user notifications for approvals, alerts, and system messages.
+ * Notification Controller (Prisma)
  */
 
-/**
- * Get notifications for current user
- * GET /api/notifications
- */
+// GET /api/notifications
 exports.getNotifications = async (req, res) => {
     try {
         const { page = 1, limit = 20, unreadOnly = false, type } = req.query;
-
-        const query = { recipient: req.user._id };
-
-        if (unreadOnly === 'true') {
-            query.isRead = false;
-        }
-
-        if (type) {
-            query.type = type;
-        }
-
         const skip = (parseInt(page) - 1) * parseInt(limit);
+        const where = { recipientId: req.user.id };
+
+        if (unreadOnly === 'true') where.isRead = false;
+        if (type) where.type = type;
 
         const [notifications, total, unreadCount] = await Promise.all([
-            Notification.find(query)
-                .sort({ createdAt: -1 })
-                .skip(skip)
-                .limit(parseInt(limit))
-                .lean(),
-            Notification.countDocuments(query),
-            Notification.countDocuments({ recipient: req.user._id, isRead: false }),
+            prisma.notification.findMany({
+                where,
+                orderBy: { createdAt: 'desc' },
+                skip,
+                take: parseInt(limit),
+            }),
+            prisma.notification.count({ where }),
+            prisma.notification.count({ where: { recipientId: req.user.id, isRead: false } }),
         ]);
 
         res.json({
             success: true,
             data: notifications,
             unreadCount,
-            pagination: {
-                page: parseInt(page),
-                limit: parseInt(limit),
-                total,
-                pages: Math.ceil(total / parseInt(limit)),
-            },
+            pagination: { page: parseInt(page), limit: parseInt(limit), total, pages: Math.ceil(total / parseInt(limit)) },
         });
     } catch (error) {
-        res.status(500).json({
-            success: false,
-            message: 'Failed to fetch notifications',
-            error: error.message,
-        });
+        res.status(500).json({ success: false, message: 'Failed to fetch notifications', error: error.message });
     }
 };
 
-/**
- * Mark notification as read
- * PUT /api/notifications/:id/read
- */
+// PUT /api/notifications/:id/read
 exports.markAsRead = async (req, res) => {
     try {
-        const notification = await Notification.findOneAndUpdate(
-            { _id: req.params.id, recipient: req.user._id },
-            { isRead: true, readAt: new Date() },
-            { new: true }
-        );
-
-        if (!notification) {
-            return res.status(404).json({
-                success: false,
-                message: 'Notification not found',
-            });
-        }
-
-        res.json({
-            success: true,
-            data: notification,
+        const notification = await prisma.notification.findFirst({
+            where: { id: req.params.id, recipientId: req.user.id },
         });
+
+        if (!notification) return res.status(404).json({ success: false, message: 'Notification not found' });
+
+        const updated = await prisma.notification.update({
+            where: { id: req.params.id },
+            data: { isRead: true, readAt: new Date() },
+        });
+
+        res.json({ success: true, data: updated });
     } catch (error) {
-        res.status(500).json({
-            success: false,
-            message: 'Failed to mark notification as read',
-            error: error.message,
-        });
+        res.status(500).json({ success: false, message: 'Failed to mark notification as read', error: error.message });
     }
 };
 
-/**
- * Mark all notifications as read
- * PUT /api/notifications/read-all
- */
+// PUT /api/notifications/read-all
 exports.markAllAsRead = async (req, res) => {
     try {
-        const result = await Notification.updateMany(
-            { recipient: req.user._id, isRead: false },
-            { isRead: true, readAt: new Date() }
-        );
+        const result = await prisma.notification.updateMany({
+            where: { recipientId: req.user.id, isRead: false },
+            data: { isRead: true, readAt: new Date() },
+        });
 
-        res.json({
-            success: true,
-            message: `Marked ${result.modifiedCount} notifications as read`,
-        });
+        res.json({ success: true, message: `Marked ${result.count} notifications as read` });
     } catch (error) {
-        res.status(500).json({
-            success: false,
-            message: 'Failed to mark all as read',
-            error: error.message,
-        });
+        res.status(500).json({ success: false, message: 'Failed to mark all as read', error: error.message });
     }
 };
 
-/**
- * Delete notification
- * DELETE /api/notifications/:id
- */
+// DELETE /api/notifications/:id
 exports.deleteNotification = async (req, res) => {
     try {
-        const notification = await Notification.findOneAndDelete({
-            _id: req.params.id,
-            recipient: req.user._id,
+        const notification = await prisma.notification.findFirst({
+            where: { id: req.params.id, recipientId: req.user.id },
         });
 
-        if (!notification) {
-            return res.status(404).json({
-                success: false,
-                message: 'Notification not found',
-            });
-        }
+        if (!notification) return res.status(404).json({ success: false, message: 'Notification not found' });
 
-        res.json({
-            success: true,
-            message: 'Notification deleted',
-        });
+        await prisma.notification.delete({ where: { id: req.params.id } });
+        res.json({ success: true, message: 'Notification deleted' });
     } catch (error) {
-        res.status(500).json({
-            success: false,
-            message: 'Failed to delete notification',
-            error: error.message,
-        });
+        res.status(500).json({ success: false, message: 'Failed to delete notification', error: error.message });
     }
 };
 
-/**
- * Get unread count only
- * GET /api/notifications/unread-count
- */
+// GET /api/notifications/unread-count
 exports.getUnreadCount = async (req, res) => {
     try {
-        const count = await Notification.countDocuments({
-            recipient: req.user._id,
-            isRead: false,
+        const count = await prisma.notification.count({
+            where: { recipientId: req.user.id, isRead: false },
         });
 
-        res.json({
-            success: true,
-            data: { unreadCount: count },
-        });
+        res.json({ success: true, data: { unreadCount: count } });
     } catch (error) {
-        res.status(500).json({
-            success: false,
-            message: 'Failed to get unread count',
-            error: error.message,
-        });
+        res.status(500).json({ success: false, message: 'Failed to get unread count', error: error.message });
     }
 };
 
-/**
- * Admin: Create notification for a user
- * POST /api/notifications (admin only)
- */
+// POST /api/notifications (admin only)
 exports.createNotification = async (req, res) => {
     try {
         const { recipient, type, title, message, priority, metadata, actionUrl } = req.body;
 
-        const notification = await Notification.create({
-            recipient,
-            type,
-            title,
-            message,
-            priority: priority || 'low',
-            metadata,
-            actionUrl,
+        const notification = await prisma.notification.create({
+            data: {
+                recipientId: recipient,
+                type,
+                title,
+                message,
+                priority: priority || 'LOW',
+                metadata: metadata || undefined,
+                actionUrl,
+            },
         });
 
-        // Real-time notification
         notifyUser(recipient, notification);
-
-        res.status(201).json({
-            success: true,
-            data: notification,
-        });
+        res.status(201).json({ success: true, data: notification });
     } catch (error) {
-        res.status(500).json({
-            success: false,
-            message: 'Failed to create notification',
-            error: error.message,
-        });
+        res.status(500).json({ success: false, message: 'Failed to create notification', error: error.message });
     }
 };
 
-/**
- * Admin: Send notification to multiple users
- * POST /api/notifications/broadcast (admin only)
- */
+// POST /api/notifications/broadcast (admin only)
 exports.broadcastNotification = async (req, res) => {
     try {
         const { recipients, type, title, message, priority } = req.body;
 
         if (!recipients || !Array.isArray(recipients)) {
-            return res.status(400).json({
-                success: false,
-                message: 'Recipients array is required',
-            });
+            return res.status(400).json({ success: false, message: 'Recipients array is required' });
         }
 
-        const notifications = recipients.map(recipient => ({
-            recipient,
-            type,
-            title,
-            message,
-            priority: priority || 'low',
-        }));
+        const notifications = [];
+        for (const recipientId of recipients) {
+            const n = await prisma.notification.create({
+                data: { recipientId, type, title, message, priority: priority || 'LOW' },
+            });
+            notifications.push(n);
+            notifyUser(recipientId, n);
+        }
 
-        const result = await Notification.insertMany(notifications);
-
-        // Real-time broadcast (iterate or use room if available)
-        result.forEach(note => {
-            notifyUser(note.recipient, note);
-        });
-
-        res.status(201).json({
-            success: true,
-            message: `Sent ${result.length} notifications`,
-        });
+        res.status(201).json({ success: true, message: `Sent ${notifications.length} notifications` });
     } catch (error) {
-        res.status(500).json({
-            success: false,
-            message: 'Failed to broadcast notification',
-            error: error.message,
-        });
+        res.status(500).json({ success: false, message: 'Failed to broadcast notification', error: error.message });
     }
 };

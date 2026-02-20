@@ -27,24 +27,34 @@ const errorHandler = (err, req, res, next) => {
     let error = { ...err };
     error.message = err.message;
 
-    // Mongoose bad ObjectId
-    if (err.name === 'CastError') {
-        const message = 'Resource not found';
-        error = new AppError(message, 404);
+    // Prisma — record not found
+    if (err.code === 'P2025') {
+        error = new AppError('Resource not found', 404);
     }
 
-    // Mongoose duplicate key
-    if (err.code === 11000) {
-        const field = Object.keys(err.keyValue)[0];
-        const message = `Duplicate value entered for ${field}`;
-        error = new AppError(message, 400);
+    // Prisma — unique constraint violation
+    if (err.code === 'P2002') {
+        const field = err.meta?.target?.join(', ') || 'field';
+        error = new AppError(`Duplicate value entered for ${field}`, 400);
     }
 
-    // Mongoose validation error
-    if (err.name === 'ValidationError') {
-        const messages = Object.values(err.errors).map((val) => val.message);
-        const message = messages.join('. ');
-        error = new AppError(message, 400);
+    // Prisma — foreign key constraint failure
+    if (err.code === 'P2003') {
+        error = new AppError('Related resource not found', 400);
+    }
+
+    // Prisma — validation error
+    if (err.name === 'PrismaClientValidationError') {
+        error = new AppError('Invalid data provided', 400);
+    }
+
+    // JWT errors
+    if (err.name === 'JsonWebTokenError') {
+        error = new AppError('Invalid token', 401);
+    }
+
+    if (err.name === 'TokenExpiredError') {
+        error = new AppError('Token expired', 401);
     }
 
     res.status(error.statusCode || 500).json({

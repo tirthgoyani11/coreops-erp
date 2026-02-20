@@ -105,18 +105,25 @@ if (process.env.NODE_ENV === 'production') {
 
 // Health check endpoint (enhanced for production)
 app.get('/health', async (req, res) => {
-    const mongoose = require('mongoose');
+    const prisma = require('./src/config/prisma');
+    let dbStatus = 'disconnected';
+
+    try {
+        await prisma.$queryRaw`SELECT 1`;
+        dbStatus = 'connected';
+    } catch (e) {
+        dbStatus = 'disconnected';
+    }
 
     const health = {
         status: 'ok',
         timestamp: new Date().toISOString(),
         environment: process.env.NODE_ENV || 'development',
         uptime: process.uptime(),
-        database: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected',
+        database: dbStatus,
     };
 
-    // Return 503 if database is not connected
-    const statusCode = health.database === 'connected' ? 200 : 503;
+    const statusCode = dbStatus === 'connected' ? 200 : 503;
 
     res.status(statusCode).json(health);
 });

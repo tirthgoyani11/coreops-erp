@@ -1,400 +1,377 @@
-const mongoose = require('mongoose');
-const Maintenance = require('../models/Maintenance');
-const Asset = require('../models/Asset');
-const Inventory = require('../models/Inventory');
-const User = require('../models/User');
+const prisma = require('../config/prisma');
 
 /**
- * Maintenance Controller
- * Handles all ticket management, approval workflows, and algorithmic decision making
+ * Maintenance Controller (Prisma)
+ * Handles ticket management, approval workflows, work logs, spare parts
  */
 
-// @desc    Create new maintenance ticket
+// Helper: Repair-vs-Replace algorithm decision
+function runAlgorithm(estimatedCost, purchasePrice, condition, age) {
+    const costRatio = purchasePrice > 0 ? estimatedCost / purchasePrice : 0;
+    const conditionScore = { 'EXCELLENT': 1, 'GOOD': 0.75, 'FAIR': 0.5, 'POOR': 0.25 };
+    const cs = conditionScore[condition] || 0.5;
+    const ageScore = Math.max(0, 1 - (age / 10));
+
+    const repairScore = (1 - costRatio) * 0.5 + cs * 0.3 + ageScore * 0.2;
+    const decision = repairScore >= 0.5 ? 'REPAIR' : 'REPLACE';
+    const confidence = Math.round(Math.abs(repairScore - 0.5) * 200);
+    const autoApprove = estimatedCost < 1000 && repairScore >= 0.6;
+
+    return { decision, confidence, repairScore: Math.round(repairScore * 100), costRatio: Math.round(costRatio * 100), factors: { costRatio, conditionScore: cs, ageScore: Math.round(ageScore * 100) / 100 }, autoApprove };
+}
+
+// @desc    Create ticket
 // @route   POST /api/maintenance
-// @access  Private
 exports.createTicket = async (req, res) => {
     try {
         const { assetId, issueDescription, priority, issueType, estimatedCost, images } = req.body;
 
-        // Verify asset exists
-        const asset = await Asset.findById(assetId);
-        if (!asset) {
-            return res.status(404).json({
-                success: false,
-                message: 'Asset not found'
-            });
-        }
+        const asset = await prisma.asset.findUnique({ where: { id: assetId } });
+        if (!asset) return res.status(404).json({ success: false, message: 'Asset not found' });
 
-        // Create ticket
-        const ticket = new Maintenance({
-            assetId,
-            officeId: req.user.officeId || asset.officeId, // Use asset office if super admin
-            issueDescription,
-            priority,
-            issueType,
-            estimatedCost: estimatedCost || 0,
-            requestedBy: req.user._id,
-            attachments: images || [],
-            status: 'REQUESTED'
-        });
+        // Generate ticket number
+        const count = await prisma.maintenanceTicket.count();
+        const ticketNumber = `MT-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}-${String(count + 1).padStart(4, '0')}`;
 
-        // Run algorithm if cost is provided
+        const oid = req.user.office?.id || req.user.officeId;
+        const resolvedOfficeId = typeof oid === 'object' ? oid.id : oid;
+
+        // Run algorithm
+        let algorithmDecision = null;
+        let approvalStatus = 'PENDING';
         if (estimatedCost > 0) {
-            await ticket.runAlgorithm();
+            const ageYears = (Date.now() - new Date(asset.purchaseDate).getTime()) / (365.25 * 24 * 60 * 60 * 1000);
+            algorithmDecision = runAlgorithm(estimatedCost, asset.purchasePrice, asset.condition, ageYears);
+            if (algorithmDecision.autoApprove) approvalStatus = 'AUTO_APPROVED';
         }
 
-        await ticket.save();
+        const ticket = await prisma.maintenanceTicket.create({
+            data: {
+                ticketNumber,
+                assetId,
+                officeId: resolvedOfficeId || asset.officeId,
+                issueDescription,
+                priority: priority || 'MEDIUM',
+                issueType: issueType || 'OTHER',
+                estimatedCost: estimatedCost || 0,
+                requestedById: req.user.id,
+                attachments: images || [],
+                status: 'REQUESTED',
+                approvalStatus,
+                algorithmDecision,
+            },
+        });
 
         // Update asset status
-        asset.status = 'MAINTENANCE';
-        await asset.save();
+        await prisma.asset.update({ where: { id: assetId }, data: { status: 'MAINTENANCE' } });
 
-        res.status(201).json({
-            success: true,
-            data: ticket
-        });
+        res.status(201).json({ success: true, data: ticket });
     } catch (error) {
-        res.status(500).json({
-            success: false,
-            message: 'Server Error',
-            error: error.message
-        });
+        res.status(500).json({ success: false, message: 'Server Error', error: error.message });
     }
 };
 
 // @desc    Get all tickets
 // @route   GET /api/maintenance
-// @access  Private
 exports.getTickets = async (req, res) => {
     try {
-        const { status, priority, technician, assetId, view } = req.query;
-        let query = {};
+        const { status, priority, technician, assetId, view, start, end } = req.query;
+        const where = {};
 
-        // Role-based filtering
         if (req.user.role !== 'SUPER_ADMIN') {
-            query.officeId = req.user.officeId;
+            const oid = req.user.office?.id || req.user.officeId;
+            where.officeId = typeof oid === 'object' ? oid.id : oid;
         }
 
-        // Apply filters
-        if (status) query.status = status;
-        if (priority) query.priority = priority;
-        if (technician) query.assignedTo = technician;
-        if (assetId) query.assetId = assetId;
+        if (status) where.status = status;
+        if (priority) where.priority = priority;
+        if (technician) where.assignedToId = technician;
+        if (assetId) where.assetId = assetId;
 
-        // Calendar view date range filter
-        if (view === 'calendar' && req.query.start && req.query.end) {
-            query.reportedDate = {
-                $gte: new Date(req.query.start),
-                $lte: new Date(req.query.end)
-            };
+        if (view === 'calendar' && start && end) {
+            where.reportedDate = { gte: new Date(start), lte: new Date(end) };
         }
 
-        const tickets = await Maintenance.find(query)
-            .populate('assetId', 'name serialNumber category location')
-            .populate('assignedTo', 'name')
-            .populate('requestedBy', 'name')
-            .sort({ createdAt: -1 });
-
-        res.status(200).json({
-            success: true,
-            count: tickets.length,
-            data: tickets
+        const tickets = await prisma.maintenanceTicket.findMany({
+            where,
+            include: {
+                asset: { select: { id: true, name: true, serialNumber: true, category: true, building: true, floor: true, room: true } },
+                assignedTo: { select: { id: true, name: true } },
+                requestedBy: { select: { id: true, name: true } },
+            },
+            orderBy: { createdAt: 'desc' },
         });
 
+        res.status(200).json({ success: true, count: tickets.length, data: tickets });
     } catch (error) {
-        res.status(500).json({
-            success: false,
-            message: 'Server Error',
-            error: error.message
-        });
+        res.status(500).json({ success: false, message: 'Server Error', error: error.message });
     }
 };
 
 // @desc    Get single ticket
 // @route   GET /api/maintenance/:id
-// @access  Private
 exports.getTicket = async (req, res) => {
     try {
-        const ticket = await Maintenance.findById(req.params.id)
-            .populate('assetId')
-            .populate('assignedTo', 'name email')
-            .populate('requestedBy', 'name email')
-            .populate('approvedBy', 'name')
-            .populate('workLog.technician', 'name')
-            .populate('sparePartsUsed.inventoryId', 'name partNumber');
-
-        if (!ticket) {
-            return res.status(404).json({
-                success: false,
-                message: 'Ticket not found'
-            });
-        }
-
-        res.status(200).json({
-            success: true,
-            data: ticket
+        const ticket = await prisma.maintenanceTicket.findUnique({
+            where: { id: req.params.id },
+            include: {
+                asset: true,
+                assignedTo: { select: { id: true, name: true, email: true } },
+                requestedBy: { select: { id: true, name: true, email: true } },
+                approvedBy: { select: { id: true, name: true } },
+                workLogs: { include: { technician: { select: { id: true, name: true } } } },
+                sparePartsUsed: { include: { inventory: { select: { id: true, name: true, partNumber: true } } } },
+            },
         });
+
+        if (!ticket) return res.status(404).json({ success: false, message: 'Ticket not found' });
+        res.status(200).json({ success: true, data: ticket });
     } catch (error) {
-        res.status(500).json({
-            success: false,
-            message: 'Server Error',
-            error: error.message
-        });
+        res.status(500).json({ success: false, message: 'Server Error', error: error.message });
     }
 };
 
-// @desc    Update ticket status / Approve / Assign
+// @desc    Update ticket
 // @route   PUT /api/maintenance/:id
-// @access  Private (Manager/Admin)
 exports.updateTicket = async (req, res) => {
     try {
         const { status, assignedTo, approvalStatus, approvalNotes, resolution } = req.body;
 
-        let ticket = await Maintenance.findById(req.params.id);
+        const ticket = await prisma.maintenanceTicket.findUnique({ where: { id: req.params.id } });
+        if (!ticket) return res.status(404).json({ success: false, message: 'Ticket not found' });
 
-        if (!ticket) {
-            return res.status(404).json({
-                success: false,
-                message: 'Ticket not found'
-            });
-        }
+        const updateData = {};
 
-        // Handle assignment
         if (assignedTo) {
-            ticket.assignedTo = assignedTo;
-            ticket.assignedDate = Date.now();
-            ticket.status = 'IN_PROGRESS';
+            updateData.assignedToId = assignedTo;
+            updateData.assignedDate = new Date();
+            updateData.status = 'IN_PROGRESS';
         }
 
-        // Handle approval
         if (approvalStatus) {
-            // Check permission
-            if (!req.user.permissions.canApproveTickets) {
-                return res.status(403).json({
-                    success: false,
-                    message: 'Not authorized to approve tickets'
-                });
+            if (!req.user.canApproveTickets) {
+                return res.status(403).json({ success: false, message: 'Not authorized to approve tickets' });
             }
 
-            // Check limit
-            if (!req.user.canApproveAmount(ticket.estimatedCost)) {
-                return res.status(403).json({
-                    success: false,
-                    message: `Approval limit exceeded. Requires approval > ${ticket.estimatedCost}`
-                });
-            }
+            updateData.approvalStatus = approvalStatus.toUpperCase();
+            updateData.approvedById = req.user.id;
+            updateData.approvalDate = new Date();
+            updateData.approvalNotes = approvalNotes;
 
-            ticket.approvalStatus = approvalStatus;
-            ticket.approvedBy = req.user._id;
-            ticket.approvalDate = Date.now();
-            ticket.approvalNotes = approvalNotes;
-
-            if (approvalStatus === 'approved') {
-                ticket.status = 'APPROVED';
-            } else if (approvalStatus === 'rejected') {
-                ticket.status = 'REJECTED';
-            }
+            if (approvalStatus.toUpperCase() === 'APPROVED') updateData.status = 'APPROVED';
+            else if (approvalStatus.toUpperCase() === 'REJECTED') updateData.status = 'REJECTED';
         }
 
-        // Handle generic status update
         if (status) {
-            ticket.status = status;
+            updateData.status = status;
             if (status === 'COMPLETED' || status === 'CLOSED') {
-                ticket.completedDate = Date.now();
-                // Find asset and set status back to ACTIVE
-                const asset = await Asset.findById(ticket.assetId);
-                if (asset) {
-                    asset.status = 'ACTIVE';
-                    await asset.addMaintenanceRecord(
-                        ticket._id,
-                        ticket.issueType,
-                        ticket.actualCost || ticket.estimatedCost,
-                        resolution || ticket.resolution
-                    );
-                }
+                updateData.completedDate = new Date();
+                // Restore asset to ACTIVE
+                await prisma.asset.update({ where: { id: ticket.assetId }, data: { status: 'ACTIVE' } });
+                // Log maintenance cost to asset history
+                await prisma.assetMaintenanceHistory.create({
+                    data: {
+                        assetId: ticket.assetId,
+                        type: ticket.issueType || 'OTHER',
+                        cost: ticket.actualCost || ticket.estimatedCost || 0,
+                        notes: resolution || ticket.resolution || 'Ticket closed',
+                    },
+                });
             }
         }
 
-        if (resolution) {
-            ticket.resolution = resolution;
-        }
+        if (resolution) updateData.resolution = resolution;
 
-        await ticket.save();
-
-        // Refetch to populate fields
-        const updatedTicket = await Maintenance.findById(req.params.id)
-            .populate('assetId', 'name')
-            .populate('assignedTo', 'name');
-
-        res.status(200).json({
-            success: true,
-            data: updatedTicket
+        const updated = await prisma.maintenanceTicket.update({
+            where: { id: req.params.id },
+            data: updateData,
+            include: {
+                asset: { select: { id: true, name: true } },
+                assignedTo: { select: { id: true, name: true } },
+            },
         });
 
+        res.status(200).json({ success: true, data: updated });
     } catch (error) {
-        res.status(500).json({
-            success: false,
-            message: 'Server Error',
-            error: error.message
-        });
+        res.status(500).json({ success: false, message: 'Server Error', error: error.message });
     }
 };
 
-// @desc    Add work log entry
+// @desc    Add work log
 // @route   POST /api/maintenance/:id/worklog
-// @access  Private (Technician)
 exports.addWorkLog = async (req, res) => {
     try {
         const { startTime, endTime, notes } = req.body;
 
-        const ticket = await Maintenance.findById(req.params.id);
-        if (!ticket) {
-            return res.status(404).json({ success: false, message: 'Ticket not found' });
+        const ticket = await prisma.maintenanceTicket.findUnique({ where: { id: req.params.id } });
+        if (!ticket) return res.status(404).json({ success: false, message: 'Ticket not found' });
+
+        let hoursWorked = null;
+        if (startTime && endTime) {
+            hoursWorked = (new Date(endTime) - new Date(startTime)) / (1000 * 60 * 60);
         }
 
-        ticket.addWorkLog(req.user._id, startTime, endTime, notes);
-        await ticket.save();
+        await prisma.workLog.create({
+            data: {
+                ticketId: req.params.id,
+                technicianId: req.user.id,
+                startTime: startTime ? new Date(startTime) : null,
+                endTime: endTime ? new Date(endTime) : null,
+                hoursWorked,
+                notes,
+            },
+        });
 
-        res.status(200).json({
-            success: true,
-            data: ticket
+        const updated = await prisma.maintenanceTicket.findUnique({
+            where: { id: req.params.id },
+            include: { workLogs: { include: { technician: { select: { id: true, name: true } } } } },
         });
+
+        res.status(200).json({ success: true, data: updated });
     } catch (error) {
-        res.status(500).json({
-            success: false,
-            message: 'Server Error',
-            error: error.message
-        });
+        res.status(500).json({ success: false, message: 'Server Error', error: error.message });
     }
 };
 
 // @desc    Consume spare parts
 // @route   POST /api/maintenance/:id/parts
-// @access  Private (Technician)
 exports.consumePart = async (req, res) => {
     try {
         const { inventoryId, quantity } = req.body;
 
-        const ticket = await Maintenance.findById(req.params.id);
-        if (!ticket) return res.status(404).json({ success: false, message: 'Ticket not found' });
+        const result = await prisma.$transaction(async (tx) => {
+            const ticket = await tx.maintenanceTicket.findUnique({ where: { id: req.params.id } });
+            if (!ticket) throw new Error('Ticket not found');
 
-        const part = await Inventory.findById(inventoryId);
-        if (!part) return res.status(404).json({ success: false, message: 'Part not found' });
+            const part = await tx.inventory.findUnique({ where: { id: inventoryId } });
+            if (!part) throw new Error('Part not found');
+            if (part.currentQuantity < quantity) throw new Error('Insufficient stock');
 
-        if (part.stock.currentQuantity < quantity) {
-            return res.status(400).json({ success: false, message: 'Insufficient stock' });
-        }
+            // Decrement inventory
+            await tx.inventory.update({
+                where: { id: inventoryId },
+                data: { currentQuantity: { decrement: quantity } },
+            });
 
-        // Record usage on part (decrements stock)
-        part.recordUsage(ticket._id, quantity, ticket.assetId, req.user._id);
-        await part.save();
+            // Record stock movement
+            await tx.stockMovement.create({
+                data: {
+                    inventoryId,
+                    type: 'STOCK_OUT',
+                    quantity,
+                    reason: `Maintenance ticket ${ticket.ticketNumber}`,
+                    reference: ticket.ticketNumber,
+                    performedById: req.user.id,
+                },
+            });
 
-        // Add to ticket
-        ticket.sparePartsUsed.push({
-            inventoryId: part._id,
-            partNumber: part.partNumber || part.sku,
-            name: part.name,
-            quantity: quantity,
-            costPerUnit: part.costInfo?.unitCost || 0
+            // Record spare part usage on ticket
+            await tx.sparePartUsage.create({
+                data: {
+                    ticketId: req.params.id,
+                    inventoryId,
+                    partNumber: part.partNumber || part.sku,
+                    name: part.name,
+                    quantity,
+                    costPerUnit: part.unitCost || part.costPrice || 0,
+                },
+            });
+
+            // Update actual cost
+            const partCost = quantity * (part.unitCost || part.costPrice || 0);
+            await tx.maintenanceTicket.update({
+                where: { id: req.params.id },
+                data: { actualCost: { increment: partCost } },
+            });
+
+            return await tx.maintenanceTicket.findUnique({
+                where: { id: req.params.id },
+                include: { sparePartsUsed: { include: { inventory: { select: { id: true, name: true } } } } },
+            });
         });
 
-        // Update actual cost
-        ticket.actualCost = (ticket.actualCost || 0) + (quantity * (part.costInfo?.unitCost || 0));
-
-        await ticket.save();
-
-        res.status(200).json({
-            success: true,
-            data: ticket
-        });
-
+        res.status(200).json({ success: true, data: result });
     } catch (error) {
-        res.status(500).json({
-            success: false,
-            message: 'Server Error',
-            error: error.message
-        });
+        res.status(500).json({ success: false, message: 'Server Error', error: error.message });
     }
 };
 
-// @desc    Get dashboard stats
+// @desc    Get maintenance stats
 // @route   GET /api/maintenance/stats
-// @access  Private
 exports.getStats = async (req, res) => {
     try {
-        const officeId = req.user.officeId;
-        const query = req.user.role !== 'SUPER_ADMIN' ? { officeId } : {};
+        const where = {};
+        if (req.user.role !== 'SUPER_ADMIN') {
+            const oid = req.user.office?.id || req.user.officeId;
+            where.officeId = typeof oid === 'object' ? oid.id : oid;
+        }
 
-        const totalTickets = await Maintenance.countDocuments(query);
-        const openTickets = await Maintenance.countDocuments({ ...query, status: { $nin: ['COMPLETED', 'CLOSED', 'CANCELLED'] } });
-        const criticalTickets = await Maintenance.countDocuments({ ...query, priority: 'critical', status: { $ne: 'CLOSED' } });
+        const [totalTickets, openTickets, criticalTickets, completedTickets] = await Promise.all([
+            prisma.maintenanceTicket.count({ where }),
+            prisma.maintenanceTicket.count({ where: { ...where, status: { notIn: ['COMPLETED', 'CLOSED', 'CANCELLED'] } } }),
+            prisma.maintenanceTicket.count({ where: { ...where, priority: 'CRITICAL', status: { not: 'CLOSED' } } }),
+            prisma.maintenanceTicket.findMany({
+                where: { ...where, status: 'COMPLETED', completedDate: { not: null } },
+                select: { reportedDate: true, completedDate: true },
+            }),
+        ]);
 
-        // Calculate average resolution time (rough)
-        const completedTickets = await Maintenance.find({ ...query, status: 'COMPLETED' }).select('daysOpen');
         const avgResolutionTime = completedTickets.length
-            ? completedTickets.reduce((acc, t) => acc + (t.daysOpen || 0), 0) / completedTickets.length
+            ? completedTickets.reduce((acc, t) => {
+                const days = (new Date(t.completedDate) - new Date(t.reportedDate)) / (1000 * 60 * 60 * 24);
+                return acc + days;
+            }, 0) / completedTickets.length
             : 0;
 
         res.status(200).json({
             success: true,
-            data: {
-                totalTickets,
-                openTickets,
-                criticalTickets,
-                avgResolutionTime: Math.round(avgResolutionTime * 10) / 10
-            }
+            data: { totalTickets, openTickets, criticalTickets, avgResolutionTime: Math.round(avgResolutionTime * 10) / 10 },
         });
-
     } catch (error) {
-        res.status(500).json({
-            success: false,
-            message: 'Server Error',
-            error: error.message
-        });
+        res.status(500).json({ success: false, message: 'Server Error', error: error.message });
     }
 };
 
-// @desc    Digital Twin Preview — shows exact state changes before closing a ticket
+// @desc    Digital Twin Preview
 // @route   GET /api/maintenance/:id/preview
-// @access  Private (Manager+)
 exports.getDigitalTwinPreview = async (req, res) => {
     try {
-        const ticket = await Maintenance.findById(req.params.id)
-            .populate('assetId', 'name guaiNumber status purchaseCost totalMaintenanceCost')
-            .populate('sparePartsUsed.inventoryId', 'name stock.currentQuantity');
+        const ticket = await prisma.maintenanceTicket.findUnique({
+            where: { id: req.params.id },
+            include: {
+                asset: { select: { name: true, guai: true, status: true, purchasePrice: true } },
+                sparePartsUsed: { include: { inventory: { select: { name: true, currentQuantity: true } } } },
+            },
+        });
 
         if (!ticket) return res.status(404).json({ success: false, message: 'Ticket not found' });
 
-        const asset = ticket.assetId;
-        const closeCost = ticket.actualCost || ticket.estimatedCost || ticket.repairCost || 0;
+        const closeCost = ticket.actualCost || ticket.estimatedCost || 0;
 
-        // Build state diff preview
+        // Get total maintenance history cost
+        const historyAgg = await prisma.assetMaintenanceHistory.aggregate({
+            where: { assetId: ticket.assetId },
+            _sum: { cost: true },
+        });
+        const totalPriorCost = historyAgg._sum.cost || 0;
+
         const preview = {
             ticketId: ticket.ticketNumber,
             assetChanges: {
-                field: 'status',
-                before: asset?.status || 'UNKNOWN',
-                after: 'ACTIVE',
-                label: `Asset ${asset?.guaiNumber || asset?.name} will return to ACTIVE`,
+                field: 'status', before: ticket.asset?.status || 'UNKNOWN', after: 'ACTIVE',
+                label: `Asset ${ticket.asset?.guai || ticket.asset?.name} will return to ACTIVE`,
             },
             financeImpact: {
-                expenseAmount: closeCost,
-                currency: ticket.currency || 'INR',
-                budgetCategory: 'MAINTENANCE',
+                expenseAmount: closeCost, currency: ticket.currency || 'INR', budgetCategory: 'MAINTENANCE',
                 label: `₹${closeCost.toLocaleString('en-IN')} will be recorded as maintenance expense`,
             },
             inventoryChanges: (ticket.sparePartsUsed || []).map(part => ({
-                partName: part.name || part.inventoryId?.name || 'Unknown Part',
+                partName: part.name || part.inventory?.name || 'Unknown Part',
                 quantityDeducted: part.quantity,
-                currentStock: part.inventoryId?.stock?.currentQuantity ?? 'N/A',
-                afterStock: part.inventoryId?.stock?.currentQuantity != null
-                    ? part.inventoryId.stock.currentQuantity - part.quantity
-                    : 'N/A',
+                currentStock: part.inventory?.currentQuantity ?? 'N/A',
+                afterStock: part.inventory?.currentQuantity != null ? part.inventory.currentQuantity - part.quantity : 'N/A',
             })),
-            maintenanceHistory: {
-                totalPriorCost: asset?.totalMaintenanceCost || 0,
-                totalAfterClose: (asset?.totalMaintenanceCost || 0) + closeCost,
-            },
+            maintenanceHistory: { totalPriorCost, totalAfterClose: totalPriorCost + closeCost },
             reversible: true,
             warning: closeCost > 50000 ? 'High value maintenance — manager approval recommended.' : null,
         };
@@ -405,44 +382,42 @@ exports.getDigitalTwinPreview = async (req, res) => {
     }
 };
 
-// @desc    Check anomaly on maintenance cost before closing
+// @desc    Check anomaly on maintenance cost
 // @route   GET /api/maintenance/:id/anomaly-check
-// @access  Private
 exports.checkAnomaly = async (req, res) => {
     try {
         const { calculateZScore, rollingAverage } = require('../utils/anomaly');
 
-        const ticket = await Maintenance.findById(req.params.id);
+        const ticket = await prisma.maintenanceTicket.findUnique({ where: { id: req.params.id } });
         if (!ticket) return res.status(404).json({ success: false, message: 'Ticket not found' });
 
-        const cost = ticket.actualCost || ticket.estimatedCost || ticket.repairCost || 0;
+        const cost = ticket.actualCost || ticket.estimatedCost || 0;
+        const asset = await prisma.asset.findUnique({ where: { id: ticket.assetId }, select: { name: true } });
 
-        // Get historical costs for same asset category
-        const asset = await Asset.findById(ticket.assetId);
-        const historicalTickets = await Maintenance.find({
-            officeId: ticket.officeId,
-            status: { $in: ['COMPLETED', 'CLOSED'] },
-            $or: [
-                { actualCost: { $gt: 0 } },
-                { estimatedCost: { $gt: 0 } },
-                { repairCost: { $gt: 0 } },
-            ],
-        }).select('actualCost estimatedCost repairCost createdAt');
+        const historicalTickets = await prisma.maintenanceTicket.findMany({
+            where: {
+                officeId: ticket.officeId,
+                status: { in: ['COMPLETED', 'CLOSED'] },
+                OR: [
+                    { actualCost: { gt: 0 } },
+                    { estimatedCost: { gt: 0 } },
+                ],
+            },
+            select: { actualCost: true, estimatedCost: true, createdAt: true },
+        });
 
-        const historyCosts = historicalTickets.map(t => t.actualCost || t.estimatedCost || t.repairCost);
+        const historyCosts = historicalTickets.map(t => t.actualCost || t.estimatedCost);
         const zScoreResult = calculateZScore(cost, historyCosts);
         const rolling = rollingAverage(historicalTickets.map(t => ({
-            amount: t.actualCost || t.estimatedCost || t.repairCost,
+            amount: t.actualCost || t.estimatedCost,
             date: t.createdAt,
         })));
 
         res.json({
             success: true,
             data: {
-                ticketNumber: ticket.ticketNumber,
-                cost,
-                anomaly: zScoreResult,
-                rollingAverage: rolling,
+                ticketNumber: ticket.ticketNumber, cost,
+                anomaly: zScoreResult, rollingAverage: rolling,
                 assetName: asset?.name,
                 recommendation: zScoreResult.isAnomaly
                     ? 'ESCALATE — Cost significantly exceeds historical pattern'

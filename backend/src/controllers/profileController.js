@@ -1,12 +1,8 @@
-const User = require('../models/User');
+const bcrypt = require('bcrypt');
+const prisma = require('../config/prisma');
 const { asyncHandler, AppError } = require('../utils/errorHandler');
-const path = require('path');
-const fs = require('fs');
 
-/**
- * Profile Controller
- * Handles user profile management (view, update, avatar, password change)
- */
+const BCRYPT_ROUNDS = 12;
 
 /**
  * @desc    Get current user's full profile
@@ -14,14 +10,14 @@ const fs = require('fs');
  * @access  Private
  */
 exports.getProfile = asyncHandler(async (req, res) => {
-    const user = await User.findById(req.user._id)
-        .populate('officeId', 'name city')
-        .lean();
-
-    res.json({
-        success: true,
-        data: user,
+    const user = await prisma.user.findUnique({
+        where: { id: req.user.id },
+        include: { office: { select: { id: true, name: true } } },
     });
+
+    const { password, passwordResetToken, passwordResetExpires, ...safe } = user;
+
+    res.json({ success: true, data: safe });
 });
 
 /**
@@ -39,30 +35,29 @@ exports.updateProfile = asyncHandler(async (req, res) => {
         }
     }
 
-    // Merge nested preferences instead of replacing
+    // Merge nested preferences
     if (updates.preferences && typeof updates.preferences === 'object') {
-        const currentUser = await User.findById(req.user._id).lean();
+        const current = await prisma.user.findUnique({ where: { id: req.user.id }, select: { preferences: true } });
+        const currentPrefs = (typeof current.preferences === 'object' && current.preferences) || {};
         updates.preferences = {
-            ...currentUser.preferences,
+            ...currentPrefs,
             ...updates.preferences,
             notifications: {
-                ...(currentUser.preferences?.notifications || {}),
+                ...(currentPrefs.notifications || {}),
                 ...(updates.preferences.notifications || {}),
             },
         };
     }
 
-    const user = await User.findByIdAndUpdate(
-        req.user._id,
-        { $set: updates },
-        { new: true, runValidators: true }
-    ).populate('officeId', 'name city');
-
-    res.json({
-        success: true,
-        message: 'Profile updated successfully',
-        data: user,
+    const user = await prisma.user.update({
+        where: { id: req.user.id },
+        data: updates,
+        include: { office: { select: { id: true, name: true } } },
     });
+
+    const { password, passwordResetToken, passwordResetExpires, ...safe } = user;
+
+    res.json({ success: true, message: 'Profile updated successfully', data: safe });
 });
 
 /**
@@ -71,67 +66,47 @@ exports.updateProfile = asyncHandler(async (req, res) => {
  * @access  Private
  */
 exports.updateAvatar = asyncHandler(async (req, res, next) => {
-    if (!req.file) {
-        return next(new AppError('Please upload an image file', 400));
-    }
+    if (!req.file) return next(new AppError('Please upload an image file', 400));
 
     const storageService = require('../services/storageService');
     const result = await storageService.upload(req.file, 'avatars');
 
-    // Delete old avatar if exists
-    const currentUser = await User.findById(req.user._id);
-    if (currentUser.avatar) {
-        try {
-            await storageService.delete(currentUser.avatar);
-        } catch (e) {
-            // Ignore deletion errors for old avatar
-        }
+    // Delete old avatar
+    const current = await prisma.user.findUnique({ where: { id: req.user.id }, select: { avatar: true } });
+    if (current.avatar) {
+        try { await storageService.delete(current.avatar); } catch (e) { /* ignore */ }
     }
 
-    const user = await User.findByIdAndUpdate(
-        req.user._id,
-        { avatar: result.url },
-        { new: true }
-    );
-
-    res.json({
-        success: true,
-        message: 'Avatar updated successfully',
-        data: { avatar: user.avatar },
+    await prisma.user.update({
+        where: { id: req.user.id },
+        data: { avatar: result.url },
     });
+
+    res.json({ success: true, message: 'Avatar updated successfully', data: { avatar: result.url } });
 });
 
 /**
- * @desc    Change password (requires current password)
+ * @desc    Change password
  * @route   PUT /api/profile/password
  * @access  Private
  */
 exports.changePassword = asyncHandler(async (req, res, next) => {
     const { currentPassword, newPassword } = req.body;
 
-    if (!currentPassword || !newPassword) {
-        return next(new AppError('Please provide current and new password', 400));
-    }
+    if (!currentPassword || !newPassword) return next(new AppError('Please provide current and new password', 400));
+    if (newPassword.length < 8) return next(new AppError('New password must be at least 8 characters', 400));
 
-    if (newPassword.length < 8) {
-        return next(new AppError('New password must be at least 8 characters', 400));
-    }
+    const user = await prisma.user.findUnique({ where: { id: req.user.id } });
 
-    // Get user with password field
-    const user = await User.findById(req.user._id).select('+password');
+    const isMatch = await bcrypt.compare(currentPassword, user.password);
+    if (!isMatch) return next(new AppError('Current password is incorrect', 401));
 
-    // Verify current password
-    const isMatch = await user.comparePassword(currentPassword);
-    if (!isMatch) {
-        return next(new AppError('Current password is incorrect', 401));
-    }
+    const hashedPassword = await bcrypt.hash(newPassword, BCRYPT_ROUNDS);
 
-    // Update password (pre-save hook will hash it)
-    user.password = newPassword;
-    await user.save();
-
-    res.json({
-        success: true,
-        message: 'Password changed successfully',
+    await prisma.user.update({
+        where: { id: req.user.id },
+        data: { password: hashedPassword, passwordChangedAt: new Date() },
     });
+
+    res.json({ success: true, message: 'Password changed successfully' });
 });

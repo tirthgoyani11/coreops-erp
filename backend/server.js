@@ -1,16 +1,16 @@
 require('dotenv').config();
 const http = require('http');
 const app = require('./app');
-// Restart Triggered
 const connectDB = require('./src/config/db');
 const logger = require('./src/utils/logger');
 const socketServer = require('./src/config/socketServer');
+const prisma = require('./src/config/prisma');
 
 const PORT = process.env.PORT || 5000;
 
 // Validate required environment variables in production
 if (process.env.NODE_ENV === 'production') {
-    const requiredEnvVars = ['MONGO_URI', 'JWT_SECRET', 'ALLOWED_ORIGINS'];
+    const requiredEnvVars = ['DATABASE_URL', 'JWT_SECRET', 'ALLOWED_ORIGINS'];
     const missing = requiredEnvVars.filter((envVar) => !process.env[envVar]);
 
     if (missing.length > 0) {
@@ -18,7 +18,6 @@ if (process.env.NODE_ENV === 'production') {
         process.exit(1);
     }
 
-    // Warn about weak JWT secret
     if (process.env.JWT_SECRET.length < 32) {
         logger.warn('JWT_SECRET should be at least 32 characters for production security');
     }
@@ -29,7 +28,6 @@ const startServer = async () => {
     try {
         await connectDB();
 
-        // Wrap Express app with HTTP server for Socket.IO
         const server = http.createServer(app);
 
         // Initialize Socket.IO
@@ -43,6 +41,7 @@ const startServer = async () => {
 ║                                                    ║
 ║   Environment: ${(process.env.NODE_ENV || 'development').padEnd(20)}      ║
 ║   Port:        ${String(PORT).padEnd(20)}          ║
+║   Database:    PostgreSQL (Prisma)                 ║
 ║   Socket.IO:   Enabled                             ║
 ║   Status:      Running                             ║
 ║                                                    ║
@@ -62,14 +61,12 @@ const startServer = async () => {
 
                 logger.info('HTTP server closed');
 
-                // Close database connection (Mongoose 9+ - no callback)
                 try {
-                    const mongoose = require('mongoose');
-                    await mongoose.connection.close();
-                    logger.info('MongoDB connection closed');
+                    await prisma.$disconnect();
+                    logger.info('Prisma connection closed');
                     process.exit(0);
                 } catch (closeErr) {
-                    logger.error('Error closing MongoDB connection:', closeErr);
+                    logger.error('Error closing Prisma connection:', closeErr);
                     process.exit(1);
                 }
             });
@@ -81,7 +78,6 @@ const startServer = async () => {
             }, 30000);
         };
 
-        // Listen for termination signals
         process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
         process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 
