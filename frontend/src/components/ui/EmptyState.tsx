@@ -1,6 +1,6 @@
-import * as React from "react"
 import { cn } from "../../lib/utils"
-import { LucideIcon, InboxIcon } from "lucide-react"
+import type { LucideIcon } from "lucide-react"
+import { InboxIcon } from "lucide-react"
 import { Button } from "./Button"
 
 export interface EmptyStateProps {

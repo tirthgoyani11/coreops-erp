@@ -20,9 +20,9 @@ import api from '../lib/api';
 import { exportAuditLogs } from '../utils/exportUtils';
 
 interface AuditLog {
-    _id: string;
+    id: string;
     user?: {
-        _id: string;
+        id: string;
         name: string;
         email: string;
         role: string;
@@ -320,7 +320,7 @@ const AuditLogs = () => {
                                 logs.map((log) => {
                                     const { date, time } = formatTime(log.timestamp);
                                     return (
-                                        <tr key={log._id} className="hover:bg-[var(--bg-card-hover)] transition-colors">
+                                        <tr key={log.id} className="hover:bg-[var(--bg-card-hover)] transition-colors">
                                             <td className="px-6 py-4 whitespace-nowrap">
                                                 <div className="text-sm font-medium text-[var(--text-primary)]">
                                                     {date}

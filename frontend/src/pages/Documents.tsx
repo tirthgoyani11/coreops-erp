@@ -112,14 +112,14 @@ export default function Documents() {
             ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                     {documents.map(doc => (
-                        <div key={doc._id} className="group bg-[var(--card)] border border-[var(--border)] rounded-xl p-4 hover:shadow-md transition-shadow relative">
+                        <div key={doc.id} className="group bg-[var(--card)] border border-[var(--border)] rounded-xl p-4 hover:shadow-md transition-shadow relative">
                             <div className="flex items-start justify-between mb-3">
                                 <div className="p-3 bg-[var(--muted)] rounded-lg">
                                     <FileIcon mimeType={doc.mimeType} />
                                 </div>
                                 <div className="opacity-0 group-hover:opacity-100 transition-opacity flex gap-2">
                                     <a
-                                        href={`/api/documents/${doc._id}/download`}
+                                        href={`/api/documents/${doc.id}/download`}
                                         target="_blank"
                                         rel="noopener noreferrer"
                                         className="p-1.5 hover:bg-[var(--muted)] rounded-md text-blue-500"
@@ -128,7 +128,7 @@ export default function Documents() {
                                         <Download size={16} />
                                     </a>
                                     <button
-                                        onClick={() => handleDelete(doc._id)}
+                                        onClick={() => handleDelete(doc.id)}
                                         className="p-1.5 hover:bg-[var(--muted)] rounded-md text-red-500"
                                         title="Delete"
                                     >
@@ -137,7 +137,7 @@ export default function Documents() {
                                 </div>
                             </div>
 
-                            <h3 className="font-medium truncate pr-6 cursor-pointer hover:text-[var(--primary)]" onClick={() => navigate(`/documents/${doc._id}`)}>
+                            <h3 className="font-medium truncate pr-6 cursor-pointer hover:text-[var(--primary)]" onClick={() => navigate(`/documents/${doc.id}`)}>
                                 {doc.name}
                             </h3>
 

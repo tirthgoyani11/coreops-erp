@@ -1,6 +1,5 @@
-import * as React from "react"
 import { cn } from "../../lib/utils"
-import { LucideIcon, TrendingUp, TrendingDown, Minus } from "lucide-react"
+import { TrendingUp, TrendingDown, Minus, type LucideIcon } from "lucide-react"
 
 export interface StatCardProps {
     title: string

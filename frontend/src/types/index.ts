@@ -4,7 +4,6 @@
 export type UserRole = 'SUPER_ADMIN' | 'ADMIN' | 'MANAGER' | 'TECHNICIAN' | 'STAFF' | 'VIEWER';
 
 export interface User {
-    _id: string;
     id: string;
     name: string;
     email: string;
@@ -40,28 +39,39 @@ export interface AuthResponse {
 
 // Office Types
 export interface Office {
-    _id: string;
+    id: string;
     name: string;
     code: string;
-    country: string;
-    currency: string;
+    country?: string;
+    currency?: string;
+    baseCurrency?: string;
     isActive: boolean;
 }
 
 // Asset Types
 export interface Asset {
-    _id: string;
+    id: string;
     guai: string;
     name: string;
     category: string;
-    purchaseInfo: {
-        purchasePrice: number;
-        purchaseDate?: string;
-        currency?: string;
-    };
-    officeId: Office;
-    status: 'ACTIVE' | 'MAINTENANCE' | 'RETIRED';
-    createdBy: Pick<User, 'id' | 'name' | 'email'>;
+    manufacturer?: string;
+    model?: string;
+    serialNumber?: string;
+    description?: string;
+    purchasePrice: number;
+    purchaseDate?: string;
+    currency?: string;
+    building?: string;
+    floor?: string;
+    room?: string;
+    officeId: string;
+    office?: Office;
+    status: 'ACTIVE' | 'MAINTENANCE' | 'RETIRED' | 'DISPOSED';
+    assignedTo?: Pick<User, 'id' | 'name' | 'email'> | null;
+    warrantyStart?: string;
+    warrantyEnd?: string;
+    qrCode?: string;
+    createdBy?: Pick<User, 'id' | 'name' | 'email'>;
     createdAt: string;
     updatedAt: string;
 }
@@ -77,14 +87,15 @@ export interface CreateAssetPayload {
 
 // Inventory Types
 export interface InventoryItem {
-    _id: string;
+    id: string;
     type: 'PRODUCT' | 'SPARE';
     name: string;
     sku: string;
     quantity: number;
     unitCost: number;
-    officeId: Office;
-    createdBy: Pick<User, 'id' | 'name' | 'email'>;
+    officeId: string;
+    office?: Office;
+    createdBy?: Pick<User, 'id' | 'name' | 'email'>;
     createdAt: string;
     updatedAt: string;
 }
@@ -100,7 +111,7 @@ export interface CreateInventoryPayload {
 
 // Vendor Types
 export interface Vendor {
-    _id: string;
+    id: string;
     vendorCode: string;
     name: string;
     type: 'PARTS' | 'SERVICE' | 'EQUIPMENT' | 'CONSUMABLES' | 'OTHER';
@@ -140,7 +151,7 @@ export interface CreateVendorPayload {
 
 // Notification Types
 export interface Notification {
-    _id: string;
+    id: string;
     recipient: string;
     type: 'system' | 'approval_required' | 'approval_rejected' | 'ticket_assigned' | 'ticket_completed' | 'low_stock' | 'maintenance_due';
     title: string;
@@ -164,9 +175,9 @@ export interface PurchaseOrderItem {
 }
 
 export interface PurchaseOrder {
-    _id: string;
+    id: string;
     poNumber: string;
-    vendor: Pick<Vendor, '_id' | 'name' | 'vendorCode'>;
+    vendor: Pick<Vendor, 'id' | 'name' | 'vendorCode'>;
     officeId: string;
     items: PurchaseOrderItem[];
     subtotal: number;
@@ -180,11 +191,11 @@ export interface PurchaseOrder {
     expectedDeliveryDate?: string;
     approval?: {
         status: 'pending' | 'approved' | 'rejected';
-        approvedBy?: Pick<User, '_id' | 'name'>;
+        approvedBy?: Pick<User, 'id' | 'name'>;
         approvedDate?: string;
         rejectionReason?: string;
     };
-    requestedBy: Pick<User, '_id' | 'name' | 'email'>;
+    requestedBy: Pick<User, 'id' | 'name' | 'email'>;
     notes?: string;
     createdAt: string;
     updatedAt: string;
@@ -199,19 +210,19 @@ export interface CreatePurchaseOrderPayload {
 
 // Maintenance Types
 export interface MaintenanceTicket {
-    _id: string;
+    id: string;
     ticketNumber: string;
-    asset: Pick<Asset, '_id' | 'guai' | 'name'>;
+    asset: Pick<Asset, 'id' | 'guai' | 'name'>;
     type: 'REPAIR' | 'INSPECTION' | 'REPLACEMENT' | 'PREVENTIVE';
     priority: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
     status: 'OPEN' | 'IN_PROGRESS' | 'PENDING_APPROVAL' | 'COMPLETED' | 'CANCELLED';
     description: string;
     estimatedCost: number;
     actualCost?: number;
-    assignedTo?: Pick<User, '_id' | 'name'>;
+    assignedTo?: Pick<User, 'id' | 'name'>;
     dueDate?: string;
     completedAt?: string;
-    createdBy: Pick<User, '_id' | 'name'>;
+    createdBy: Pick<User, 'id' | 'name'>;
     createdAt: string;
     updatedAt: string;
 }
@@ -240,4 +251,3 @@ export interface ApiError {
     message: string;
     errors?: Array<{ field: string; message: string }>;
 }
-

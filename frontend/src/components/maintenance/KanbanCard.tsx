@@ -11,7 +11,7 @@ interface KanbanCardProps {
 export function KanbanCard({ ticket, isOverlay }: KanbanCardProps) {
     const navigate = useNavigate();
     const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
-        id: ticket._id,
+        id: ticket.id,
     });
 
     const style = transform ? {
@@ -33,7 +33,7 @@ export function KanbanCard({ ticket, isOverlay }: KanbanCardProps) {
             {...attributes}
             className={`${isDragging ? 'opacity-50' : 'opacity-100'} cursor-grab active:cursor-grabbing outline-none`}
             onClick={() => {
-                if (!isDragging) navigate(`/maintenance/${ticket._id}`);
+                if (!isDragging) navigate(`/maintenance/${ticket.id}`);
             }}
         >
             <Card className={`p-3 relative group hover:shadow-md transition-shadow ${isOverlay ? 'shadow-xl cursor-grabbing rotate-2' : ''}`}>
@@ -49,7 +49,7 @@ export function KanbanCard({ ticket, isOverlay }: KanbanCardProps) {
                 </h4>
 
                 <div className="text-xs text-gray-500 mb-3 truncate">
-                    {ticket.assetId?.name || 'Unknown Asset'}
+                    {ticket.asset?.name || 'Unknown Asset'}
                 </div>
 
                 <div className="flex items-center justify-between text-xs text-gray-400 mt-2 border-t pt-2 dark:border-gray-800">

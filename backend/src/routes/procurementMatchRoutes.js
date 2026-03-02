@@ -1,15 +1,11 @@
 const express = require('express');
 const router = express.Router();
 const { protect } = require('../middleware/auth');
-const PurchaseOrder = require('../models/PurchaseOrder');
+const prisma = require('../config/prisma');
 
 /**
- * 3-Way Matching Routes
+ * 3-Way Matching Routes (Prisma)
  * Matches PO items vs GRN (received quantities) vs Invoice amounts.
- * 
- * Tolerances:
- *   - Quantity: ±5%
- *   - Price: ±2%
  */
 
 const TOLERANCES = {
@@ -17,19 +13,23 @@ const TOLERANCES = {
     pricePercent: 2,
 };
 
-// @desc    Perform 3-way match for a PO
-// @route   POST /api/procurement/match/:poId
-// @access  Private (Manager+)
+// POST /api/procurement/match/:poId
 router.post('/match/:poId', protect, async (req, res) => {
     try {
         const { invoiceItems } = req.body;
-        // invoiceItems: [{ name, quantity, unitPrice, totalPrice }]
 
         if (!invoiceItems || !Array.isArray(invoiceItems)) {
             return res.status(400).json({ success: false, message: 'invoiceItems array is required' });
         }
 
-        const po = await PurchaseOrder.findById(req.params.poId).populate('vendorId', 'name');
+        const po = await prisma.purchaseOrder.findUnique({
+            where: { id: req.params.poId },
+            include: {
+                vendor: { select: { id: true, name: true } },
+                items: true,
+            },
+        });
+
         if (!po) return res.status(404).json({ success: false, message: 'Purchase Order not found' });
 
         const matchResults = [];
@@ -57,7 +57,7 @@ router.post('/match/:poId', protect, async (req, res) => {
                 overallMatch: 'UNMATCHED',
             };
 
-            // === Match 1: PO → GRN (Quantity) ===
+            // Match 1: PO → GRN (Quantity)
             const grnQtyDiff = Math.abs(poItem.quantity - (poItem.receivedQuantity || 0));
             const grnQtyPct = poItem.quantity > 0 ? (grnQtyDiff / poItem.quantity) * 100 : 0;
 
@@ -70,9 +70,8 @@ router.post('/match/:poId', protect, async (req, res) => {
                 overallStatus = 'PARTIAL_MATCH';
             }
 
-            // === Match 2 & 3: Invoice comparisons ===
+            // Match 2 & 3: Invoice comparisons
             if (invoiceItem) {
-                // PO → Invoice (Price)
                 const priceDiff = Math.abs(poItem.unitPrice - invoiceItem.unitPrice);
                 const pricePct = poItem.unitPrice > 0 ? (priceDiff / poItem.unitPrice) * 100 : 0;
 
@@ -85,7 +84,6 @@ router.post('/match/:poId', protect, async (req, res) => {
                     overallStatus = 'MISMATCH';
                 }
 
-                // GRN → Invoice (Quantity)
                 const invQtyDiff = Math.abs((poItem.receivedQuantity || 0) - invoiceItem.quantity);
                 const invQtyPct = invoiceItem.quantity > 0 ? (invQtyDiff / invoiceItem.quantity) * 100 : 0;
 
@@ -98,7 +96,6 @@ router.post('/match/:poId', protect, async (req, res) => {
                     overallStatus = 'MISMATCH';
                 }
 
-                // Determine per-item overall
                 const allExact = Object.values(result.matches).every(m => m.status === 'EXACT');
                 const anyMismatch = Object.values(result.matches).some(m => m.status === 'MISMATCH');
                 result.overallMatch = allExact ? 'EXACT' : anyMismatch ? 'MISMATCH' : 'WITHIN_TOLERANCE';
@@ -112,7 +109,6 @@ router.post('/match/:poId', protect, async (req, res) => {
             matchResults.push(result);
         }
 
-        // Grand total comparison
         const poTotal = po.items.reduce((sum, i) => sum + (i.totalPrice || 0), 0);
         const invoiceTotal = invoiceItems.reduce((sum, i) => sum + (i.totalPrice || i.quantity * i.unitPrice || 0), 0);
         const totalDiff = Math.abs(poTotal - invoiceTotal);
@@ -122,7 +118,7 @@ router.post('/match/:poId', protect, async (req, res) => {
             success: true,
             data: {
                 poNumber: po.poNumber,
-                vendor: po.vendorId?.name,
+                vendor: po.vendor?.name,
                 overallStatus,
                 tolerances: TOLERANCES,
                 grandTotal: {

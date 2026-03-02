@@ -12,7 +12,7 @@ interface DashboardStats {
         total: number;
         active: number;
         totalValue: number;
-        byStatus: Array<{ _id: string; count: number }>;
+        byStatus: Array<{ id: string; count: number }>;
     };
     inventory: {
         total: number;
@@ -28,7 +28,7 @@ interface DashboardStats {
 }
 
 interface CategoryData {
-    _id: string;
+    id: string;
     count: number;
     totalValue: number;
 }
@@ -180,9 +180,9 @@ export function Analytics() {
                     ) : (
                         <div className="space-y-4">
                             {categories.map((cat, i) => (
-                                <div key={cat._id || i} className="group">
+                                <div key={cat.id || i} className="group">
                                     <div className="flex justify-between items-center mb-2">
-                                        <span className="text-[var(--text-primary)] font-medium">{cat._id || 'Other'}</span>
+                                        <span className="text-[var(--text-primary)] font-medium">{cat.id || 'Other'}</span>
                                         <span className="text-[var(--text-secondary)]">{formatCurrency(cat.totalValue)}</span>
                                     </div>
                                     <div className="h-3 bg-[var(--bg-overlay)] rounded-full overflow-hidden">
@@ -244,7 +244,7 @@ export function Analytics() {
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 {stats?.assets.byStatus?.map((status, i) => (
                     <motion.div
-                        key={status._id}
+                        key={status.id}
                         initial={{ opacity: 0, scale: 0.95 }}
                         animate={{ opacity: 1, scale: 1 }}
                         transition={{ delay: 0.6 + i * 0.1 }}
@@ -252,7 +252,7 @@ export function Analytics() {
                         className="bg-[var(--bg-card)] border border-[var(--border-color)] p-4 rounded-2xl text-center"
                     >
                         <p className="text-2xl font-bold text-[var(--text-primary)]">{status.count}</p>
-                        <p className="text-xs text-[var(--text-secondary)] uppercase tracking-wider">{status._id}</p>
+                        <p className="text-xs text-[var(--text-secondary)] uppercase tracking-wider">{status.id}</p>
                     </motion.div>
                 ))}
                 <motion.div

@@ -1,36 +1,28 @@
-const CurrencyRate = require('../models/CurrencyRate');
+const prisma = require('../config/prisma');
 
 /**
- * Currency Service - Live Exchange Rate Integration
+ * Currency Service - Live Exchange Rate Integration (Prisma)
  * 
  * Uses Frankfurter API (https://frankfurter.app) - FREE, no API key required
  * Data sourced from European Central Bank (ECB)
- * 
- * Supported currencies: USD, EUR, GBP, INR, JPY, AUD, CAD, CHF, CNY, and 30+ more
  */
 
-// Configuration
 const CONFIG = {
     API_URL: 'https://api.frankfurter.app',
-    BASE_CURRENCY: 'USD', // Default base for all conversions
+    BASE_CURRENCY: 'USD',
     SUPPORTED_CURRENCIES: ['USD', 'EUR', 'GBP', 'INR', 'JPY', 'AUD', 'CAD', 'CHF', 'CNY', 'SGD', 'AED'],
     CACHE_DURATION_MS: 4 * 60 * 60 * 1000, // 4 hours
     RETRY_ATTEMPTS: 3,
     RETRY_DELAY_MS: 1000,
 };
 
-// In-memory cache to reduce API calls
+// In-memory cache
 let rateCache = {
     rates: null,
     lastUpdated: null,
     base: null,
 };
 
-/**
- * Fetch latest rates from Frankfurter API
- * @param {String} baseCurrency - Base currency code (default: USD)
- * @returns {Object} - { base, date, rates: { EUR: 0.92, INR: 83.0, ... } }
- */
 async function fetchLatestRates(baseCurrency = CONFIG.BASE_CURRENCY) {
     const url = `${CONFIG.API_URL}/latest?from=${baseCurrency}&to=${CONFIG.SUPPORTED_CURRENCIES.filter(c => c !== baseCurrency).join(',')}`;
 
@@ -38,14 +30,9 @@ async function fetchLatestRates(baseCurrency = CONFIG.BASE_CURRENCY) {
     for (let attempt = 1; attempt <= CONFIG.RETRY_ATTEMPTS; attempt++) {
         try {
             const response = await fetch(url);
-
-            if (!response.ok) {
-                throw new Error(`API returned ${response.status}: ${response.statusText}`);
-            }
-
+            if (!response.ok) throw new Error(`API returned ${response.status}: ${response.statusText}`);
             const data = await response.json();
 
-            // Update cache
             rateCache = {
                 rates: data.rates,
                 lastUpdated: new Date(),
@@ -67,25 +54,13 @@ async function fetchLatestRates(baseCurrency = CONFIG.BASE_CURRENCY) {
             }
         }
     }
-
     throw new Error(`Failed to fetch rates after ${CONFIG.RETRY_ATTEMPTS} attempts: ${lastError.message}`);
 }
 
-/**
- * Fetch historical rates for a specific date
- * @param {String} date - Date in YYYY-MM-DD format
- * @param {String} baseCurrency - Base currency code
- * @returns {Object} - Historical rates
- */
 async function fetchHistoricalRates(date, baseCurrency = CONFIG.BASE_CURRENCY) {
     const url = `${CONFIG.API_URL}/${date}?from=${baseCurrency}&to=${CONFIG.SUPPORTED_CURRENCIES.filter(c => c !== baseCurrency).join(',')}`;
-
     const response = await fetch(url);
-
-    if (!response.ok) {
-        throw new Error(`API returned ${response.status}: ${response.statusText}`);
-    }
-
+    if (!response.ok) throw new Error(`API returned ${response.status}: ${response.statusText}`);
     const data = await response.json();
 
     return {
@@ -98,36 +73,34 @@ async function fetchHistoricalRates(date, baseCurrency = CONFIG.BASE_CURRENCY) {
 }
 
 /**
- * Update rates in database from API
- * Stores rates with USD as base for consistent conversion
+ * Update rates in database using Prisma upsert
  */
 async function updateRatesInDatabase() {
     try {
         const result = await fetchLatestRates('USD');
 
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-
         const updates = [];
-
-        // Store USD to each currency
         for (const [currency, rate] of Object.entries(result.rates)) {
             updates.push(
-                CurrencyRate.findOneAndUpdate(
-                    {
-                        baseCurrency: 'USD',
-                        targetCurrency: currency,
-                        date: today,
+                prisma.currencyRate.upsert({
+                    where: {
+                        baseCurrency_targetCurrency: {
+                            baseCurrency: 'USD',
+                            targetCurrency: currency,
+                        },
                     },
-                    {
+                    update: {
+                        rate,
+                        source: 'frankfurter-api',
+                        fetchedAt: new Date(),
+                    },
+                    create: {
                         baseCurrency: 'USD',
                         targetCurrency: currency,
-                        rate: rate,
-                        date: today,
+                        rate,
                         source: 'frankfurter-api',
                     },
-                    { upsert: true, new: true }
-                )
+                })
             );
         }
 
@@ -140,65 +113,36 @@ async function updateRatesInDatabase() {
             rates: result.rates,
         };
     } catch (error) {
-        console.error('Error updating currency rates:', error);
-        return {
-            success: false,
-            error: error.message,
-        };
+        console.error('Error updating currency rates:', error.message);
+        return { success: false, error: error.message };
     }
 }
 
-/**
- * Get live rate with caching
- * @param {String} fromCurrency 
- * @param {String} toCurrency 
- * @returns {Number} - Exchange rate
- */
 async function getLiveRate(fromCurrency, toCurrency) {
     const from = fromCurrency.toUpperCase();
     const to = toCurrency.toUpperCase();
-
-    // Same currency
     if (from === to) return 1;
 
-    // Check cache validity
     const cacheAge = rateCache.lastUpdated ? Date.now() - rateCache.lastUpdated.getTime() : Infinity;
-
     if (cacheAge > CONFIG.CACHE_DURATION_MS || !rateCache.rates) {
         await fetchLatestRates('USD');
     }
 
-    // Convert via USD as intermediary
     let rate;
-
     if (from === 'USD') {
         rate = rateCache.rates[to];
     } else if (to === 'USD') {
         rate = 1 / rateCache.rates[from];
     } else {
-        // Cross rate: FROM -> USD -> TO
-        const fromToUsd = 1 / rateCache.rates[from];
-        const usdToTo = rateCache.rates[to];
-        rate = fromToUsd * usdToTo;
+        rate = (1 / rateCache.rates[from]) * rateCache.rates[to];
     }
 
-    if (!rate) {
-        throw new Error(`No rate available for ${from} to ${to}`);
-    }
-
+    if (!rate) throw new Error(`No rate available for ${from} to ${to}`);
     return Math.round(rate * 10000) / 10000;
 }
 
-/**
- * Convert amount between currencies using live rates
- * @param {Number} amount 
- * @param {String} fromCurrency 
- * @param {String} toCurrency 
- * @returns {Object} - { convertedAmount, rate, source }
- */
 async function convertLive(amount, fromCurrency, toCurrency) {
     const rate = await getLiveRate(fromCurrency, toCurrency);
-
     return {
         originalAmount: amount,
         fromCurrency: fromCurrency.toUpperCase(),
@@ -210,16 +154,11 @@ async function convertLive(amount, fromCurrency, toCurrency) {
     };
 }
 
-/**
- * Get all current rates from cache or fetch fresh
- */
 async function getAllRates(baseCurrency = 'USD') {
     const cacheAge = rateCache.lastUpdated ? Date.now() - rateCache.lastUpdated.getTime() : Infinity;
-
     if (cacheAge > CONFIG.CACHE_DURATION_MS || !rateCache.rates || rateCache.base !== baseCurrency) {
         return await fetchLatestRates(baseCurrency);
     }
-
     return {
         success: true,
         base: rateCache.base,
@@ -230,12 +169,7 @@ async function getAllRates(baseCurrency = 'USD') {
     };
 }
 
-/**
- * Schedule automatic rate updates (called during server startup)
- * Updates rates every 4 hours
- */
 function scheduleRateUpdates() {
-    // Initial update
     updateRatesInDatabase()
         .then(result => {
             if (result.success) {
@@ -244,15 +178,12 @@ function scheduleRateUpdates() {
                 console.error('❌ Failed to initialize currency rates:', result.error);
             }
         })
-        .catch(console.error);
+        .catch(err => console.error('❌ Currency rate init error:', err.message));
 
-    // Schedule updates every 4 hours
     setInterval(() => {
         updateRatesInDatabase()
             .then(result => {
-                if (result.success) {
-                    console.log(`🔄 Currency rates updated: ${result.message}`);
-                }
+                if (result.success) console.log(`🔄 Currency rates updated: ${result.message}`);
             })
             .catch(console.error);
     }, CONFIG.CACHE_DURATION_MS);

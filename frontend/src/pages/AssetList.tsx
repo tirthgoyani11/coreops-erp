@@ -10,7 +10,7 @@ import { AssetTable } from '../components/assets/AssetTable';
 import { AssetOverview } from '../components/assets/detail/AssetOverview';
 
 interface Asset {
-    _id: string;
+    id: string;
     guai: string;
     name: string;
     category: string;
@@ -21,14 +21,14 @@ interface Asset {
         floor: string;
         room: string;
         officeId: {
-            _id: string;
+            id: string;
             name: string;
             code: string;
         };
     };
     qrCode?: string;
     officeId: {
-        _id: string;
+        id: string;
         name: string;
     };
 }

@@ -1,15 +1,11 @@
 const aiService = require('./aiService');
-const AiOperation = require('../models/AiOperation');
+const prisma = require('../config/prisma');
 const logger = require('../utils/logger');
 
 /**
- * Intent Extraction Service
+ * Intent Extraction Service (Prisma)
  * 
- * Extracts structured intent from natural language input.
  * Uses Ollama (qwen2.5:3b) with JSON-enforced output.
- * 
- * Input:  "Close the AC-102 maintenance ticket, the bill was 4800 rupees"
- * Output: { intent: "CLOSE_MAINTENANCE", entities: { assetId: "AC-102", amount: 4800 }, confidence: 0.94 }
  */
 
 const INTENT_SYSTEM_PROMPT = `You are an ERP intent extraction engine for CoreOps ERP system.
@@ -50,22 +46,18 @@ Output ONLY valid JSON with this exact structure:
 
 /**
  * Extract intent from natural language text
- * @param {string} text - User's natural language input
- * @param {Object} context - { userId, officeId, sessionId }
- * @returns {Object} { intent, entities, confidence, aiOperationId }
  */
 async function extractIntent(text, context = {}) {
     const startTime = Date.now();
 
     const result = await aiService.generateJSON('intent', text, {
         systemPrompt: INTENT_SYSTEM_PROMPT,
-        temperature: 0.1, // Low temp for deterministic extraction
+        temperature: 0.1,
         maxTokens: 512,
     });
 
     const durationMs = Date.now() - startTime;
 
-    // Default fallback if AI fails
     const defaultResult = {
         intent: 'GENERAL',
         entities: {},
@@ -74,27 +66,34 @@ async function extractIntent(text, context = {}) {
 
     const parsed = result.parsed || defaultResult;
 
-    // Log the AI operation
-    const aiOp = await AiOperation.log({
-        userId: context.userId,
-        sessionId: context.sessionId,
-        intent: parsed.intent || 'GENERAL',
-        inputSummary: text.substring(0, 500),
-        agentsUsed: ['intent_agent'],
-        confidenceScore: parsed.confidence || 0,
-        totalDurationMs: durationMs,
-        status: result.error ? 'failed' : 'completed',
-        officeId: context.officeId,
-        explanation: {
-            model: result.model,
-            tokensGenerated: result.tokensGenerated,
-            rawOutput: result.raw,
-        },
-    });
+    // Log the AI operation via Prisma
+    let aiOp = null;
+    try {
+        aiOp = await prisma.aiOperation.create({
+            data: {
+                userId: context.userId,
+                sessionId: context.sessionId || null,
+                intent: parsed.intent || 'GENERAL',
+                inputSummary: text.substring(0, 500),
+                agentsUsed: ['intent_agent'],
+                confidenceScore: parsed.confidence || 0,
+                totalDurationMs: durationMs,
+                status: result.error ? 'AI_FAILED' : 'AI_COMPLETED',
+                officeId: context.officeId || null,
+                explanation: {
+                    model: result.model,
+                    tokensGenerated: result.tokensGenerated,
+                    rawOutput: result.raw,
+                },
+            },
+        });
+    } catch (err) {
+        logger.error('Failed to log AI operation:', err.message);
+    }
 
     return {
         ...parsed,
-        aiOperationId: aiOp?._id,
+        aiOperationId: aiOp?.id,
         model: result.model,
         durationMs,
     };
@@ -102,8 +101,6 @@ async function extractIntent(text, context = {}) {
 
 /**
  * Classify urgency of a maintenance request from description
- * @param {string} description - Issue description
- * @returns {Object} { priority, reasoning, confidence }
  */
 async function classifyUrgency(description) {
     const prompt = `Classify the urgency of this maintenance request. Output JSON only.

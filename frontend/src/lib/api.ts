@@ -31,7 +31,7 @@ function addRefreshSubscriber(callback: (token: string) => void) {
 // Create axios instance with security defaults
 const api = axios.create({
     baseURL: API_BASE_URL,
-    timeout: 30000,
+    timeout: 120000, // 120s timeout to allow large LLM queries to resolve
     headers: {
         'Content-Type': 'application/json',
     },

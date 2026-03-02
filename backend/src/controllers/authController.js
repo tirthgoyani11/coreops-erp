@@ -169,6 +169,7 @@ exports.login = asyncHandler(async (req, res, next) => {
             name: user.name,
             email: user.email,
             role: user.role,
+            officeId: user.officeId,
             office: user.office,
         },
     });
@@ -238,6 +239,7 @@ exports.refreshToken = asyncHandler(async (req, res, next) => {
             name: user.name,
             email: user.email,
             role: user.role,
+            officeId: user.officeId,
             office: user.office,
         },
     });

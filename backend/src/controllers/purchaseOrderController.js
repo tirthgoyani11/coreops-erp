@@ -27,12 +27,27 @@ exports.createPO = async (req, res) => {
 
         const subtotal = poItems.reduce((acc, item) => acc + item.totalPrice, 0);
 
+        // officeId is required — resolve from req.user or fetch from DB
+        let officeId = req.user.office?.id || req.user.officeId;
+        if (!officeId) {
+            const dbUser = await prisma.user.findUnique({ where: { id: req.user.id }, select: { officeId: true } });
+            officeId = dbUser?.officeId;
+        }
+        if (!officeId) {
+            // Fallback: use the first office
+            const firstOffice = await prisma.office.findFirst({ select: { id: true } });
+            officeId = firstOffice?.id;
+        }
+        if (!officeId) {
+            return res.status(400).json({ success: false, message: 'No office found. Please assign an office to your account.' });
+        }
+
         const po = await prisma.purchaseOrder.create({
             data: {
                 poNumber,
-                vendorId,
-                officeId: req.user.office?.id || req.user.officeId,
-                requestedById: req.user.id,
+                vendor: { connect: { id: vendorId } },
+                office: { connect: { id: officeId } },
+                requestedBy: { connect: { id: req.user.id } },
                 expectedDeliveryDate: expectedDeliveryDate ? new Date(expectedDeliveryDate) : null,
                 notes,
                 status: 'DRAFT',
@@ -228,5 +243,102 @@ exports.receiveGoods = async (req, res) => {
         res.status(200).json({ success: true, data: result });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+// @desc    Approve Payment (Enforce 3-Way Match)
+// @route   POST /api/purchase-orders/:id/approve-payment
+// @access  Private
+exports.approvePayment = async (req, res) => {
+    try {
+        const { invoiceItems, invoiceReference } = req.body;
+
+        if (!invoiceItems || !Array.isArray(invoiceItems)) {
+            return res.status(400).json({ success: false, message: 'invoiceItems array is required for 3-way match' });
+        }
+
+        const po = await prisma.purchaseOrder.findUnique({
+            where: { id: req.params.id },
+            include: { items: true, vendor: true },
+        });
+
+        if (!po) return res.status(404).json({ success: false, message: 'PO not found' });
+        if (po.status !== 'RECEIVED' && po.status !== 'PARTIALLY_RECEIVED') {
+            return res.status(400).json({ success: false, message: 'Cannot approve payment: Goods not received yet (GRN missing)' });
+        }
+
+        const TOLERANCES = { quantityPercent: 5, pricePercent: 2 };
+        let matchFailed = false;
+        let mismatchDetails = [];
+
+        // 3-Way Match Logic
+        for (const poItem of po.items) {
+            const invoiceItem = invoiceItems.find(inv => inv.name?.toLowerCase() === poItem.name?.toLowerCase());
+
+            if (!invoiceItem) {
+                matchFailed = true;
+                mismatchDetails.push(`Missing invoice item for PO item: ${poItem.name}`);
+                continue;
+            }
+
+            // GRN vs Invoice Qty
+            const invQtyDiff = Math.abs((poItem.receivedQuantity || 0) - invoiceItem.quantity);
+            const invQtyPct = invoiceItem.quantity > 0 ? (invQtyDiff / invoiceItem.quantity) * 100 : 0;
+            if (invQtyPct > TOLERANCES.quantityPercent) {
+                matchFailed = true;
+                mismatchDetails.push(`Quantity mismatch on ${poItem.name} (Received: ${poItem.receivedQuantity}, Invoiced: ${invoiceItem.quantity})`);
+            }
+
+            // PO vs Invoice Price
+            const priceDiff = Math.abs(poItem.unitPrice - invoiceItem.unitPrice);
+            const pricePct = poItem.unitPrice > 0 ? (priceDiff / poItem.unitPrice) * 100 : 0;
+            if (pricePct > TOLERANCES.pricePercent) {
+                matchFailed = true;
+                mismatchDetails.push(`Price mismatch on ${poItem.name} (PO: ₹${poItem.unitPrice}, Invoiced: ₹${invoiceItem.unitPrice})`);
+            }
+        }
+
+        const invoiceTotal = invoiceItems.reduce((sum, i) => sum + (i.totalPrice || i.quantity * i.unitPrice || 0), 0);
+
+        if (matchFailed && req.user.role !== 'SUPER_ADMIN') {
+            return res.status(400).json({
+                success: false,
+                message: '3-Way Match failed. Payment rejected.',
+                mismatches: mismatchDetails
+            });
+        }
+
+        // If matched (or overridden by SUPER_ADMIN), create Transaction & update PO
+        const transactionResult = await prisma.$transaction(async (tx) => {
+            const updatedPO = await tx.purchaseOrder.update({
+                where: { id: po.id },
+                data: { invoiceReference: invoiceReference || 'INV-AUTO' },
+            });
+
+            const transaction = await tx.transaction.create({
+                data: {
+                    type: 'EXPENSE',
+                    category: 'PROCUREMENT',
+                    amount: invoiceTotal,
+                    description: `Payment for PO ${po.poNumber} to ${po.vendor.name}`,
+                    referenceType: 'PURCHASE_ORDER',
+                    referenceId: po.poNumber,
+                    officeId: po.officeId,
+                    recordedById: req.user.id,
+                    status: 'CLEARED'
+                }
+            });
+
+            return { updatedPO, transaction };
+        });
+
+        res.status(200).json({
+            success: true,
+            message: matchFailed ? '3-Way Match failed, but payment approved via SUPER_ADMIN override.' : '3-Way Match successful. Payment approved.',
+            data: transactionResult
+        });
+
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
     }
 };

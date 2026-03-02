@@ -49,7 +49,7 @@ const filterByOffice = (req, res, next) => {
                 message: 'Branch Manager not assigned to any office.',
             });
         }
-        const officeIdValue = officeId._id || officeId;
+        const officeIdValue = typeof officeId === 'object' ? officeId.id : officeId;
         req.officeFilter = { officeId: officeIdValue };
         req.scopeFilter = { officeId: officeIdValue };
         req.canViewBranch = true;
@@ -64,13 +64,13 @@ const filterByOffice = (req, res, next) => {
                 message: 'Technician not assigned to any office.',
             });
         }
-        const officeIdValue = officeId._id || officeId;
+        const officeIdValue = typeof officeId === 'object' ? officeId.id : officeId;
         req.officeFilter = { officeId: officeIdValue };
         // For tickets, also filter by assignment
-        req.assignedFilter = { assignedTo: req.user._id };
+        req.assignedFilter = { assignedTo: req.user.id };
         req.scopeFilter = {
             officeId: officeIdValue,
-            assignedTo: req.user._id
+            assignedTo: req.user.id
         };
         req.canViewAssigned = true;
         return next();
@@ -84,7 +84,7 @@ const filterByOffice = (req, res, next) => {
                 message: 'Viewer not assigned to any office.',
             });
         }
-        const officeIdValue = officeId._id || officeId;
+        const officeIdValue = typeof officeId === 'object' ? officeId.id : officeId;
         req.officeFilter = { officeId: officeIdValue };
         req.scopeFilter = { officeId: officeIdValue };
         // Viewer has read-only flag

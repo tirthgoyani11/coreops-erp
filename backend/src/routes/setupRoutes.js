@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const Office = require('../models/Office');
+const prisma = require('../config/prisma');
 const { asyncHandler, AppError } = require('../utils/errorHandler');
 const verifyToken = require('../middleware/verifyToken');
 const authorize = require('../middleware/authorize');
@@ -10,7 +10,7 @@ const { authLimiter } = require('../middleware/rateLimiter');
  * @desc    Complete initial system setup
  * @route   POST /api/setup/complete
  * @access  SUPER_ADMIN only
- * 
+ *
  * Creates the initial organization configuration:
  * - Sets base currency
  * - Creates first branch/headquarters
@@ -26,30 +26,28 @@ router.post('/complete', authLimiter, verifyToken, authorize('SUPER_ADMIN'), asy
         branchCountry
     } = req.body;
 
-    // Validate required fields
     if (!companyName || !branchName || !branchCity) {
         return next(new AppError('Company name, branch name, and city are required', 400));
     }
 
-    // Check if setup has already been completed (offices exist)
-    const existingOffices = await Office.countDocuments();
+    const existingOffices = await prisma.office.count();
     if (existingOffices > 0) {
         return next(new AppError('Setup has already been completed', 400));
     }
 
-    // Create first branch/headquarters
-    const headquarters = await Office.create({
-        name: branchName,
-        code: 'HQ',
-        type: 'headquarters',
-        address: branchAddress || address || '',
-        city: branchCity,
-        country: branchCountry || 'Unknown',
-        baseCurrency: baseCurrency || 'USD',
-        isActive: true,
+    const headquarters = await prisma.office.create({
+        data: {
+            name: branchName,
+            code: 'HQ',
+            type: 'HEADQUARTERS',
+            street: branchAddress || address || '',
+            city: branchCity,
+            country: branchCountry || 'Unknown',
+            baseCurrency: baseCurrency || 'USD',
+            isActive: true,
+        },
     });
 
-    // Store company settings (could be in a Settings model in production)
     const logger = require('../utils/logger');
     logger.info(`Setup completed: ${companyName} with HQ at ${branchCity}`);
 
@@ -60,7 +58,7 @@ router.post('/complete', authLimiter, verifyToken, authorize('SUPER_ADMIN'), asy
             companyName,
             baseCurrency: baseCurrency || 'USD',
             headquarters: {
-                id: headquarters._id,
+                id: headquarters.id,
                 name: headquarters.name,
                 city: headquarters.city,
             },
@@ -74,7 +72,7 @@ router.post('/complete', authLimiter, verifyToken, authorize('SUPER_ADMIN'), asy
  * @access  Public
  */
 router.get('/status', asyncHandler(async (req, res) => {
-    const officeCount = await Office.countDocuments();
+    const officeCount = await prisma.office.count();
 
     res.status(200).json({
         success: true,

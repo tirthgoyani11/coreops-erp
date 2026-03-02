@@ -17,7 +17,7 @@ function ReceiveDialog({ po, onClose, onSuccess }: any) {
         defaultValues: {
             grnReference: '',
             receivedItems: po.items.map((item: any) => ({
-                itemId: item._id,
+                itemId: item.id,
                 name: item.name,
                 ordered: item.quantity,
                 receivedSoFar: item.receivedQuantity || 0,
@@ -45,7 +45,7 @@ function ReceiveDialog({ po, onClose, onSuccess }: any) {
                     }))
             };
 
-            await api.post(`/purchase-orders/${po._id}/receive`, payload);
+            await api.post(`/purchase-orders/${po.id}/receive`, payload);
             if (onSuccess) onSuccess();
         } catch (error) {
             console.error('Receive failed:', error);
@@ -177,14 +177,19 @@ export function PurchaseOrderDetail() {
                             {po.status.replace(/_/g, ' ')}
                         </span>
                     </h1>
-                    <p className="text-gray-500 mt-1">Vendor: <span className="font-semibold text-blue-600">{po.vendorId?.name}</span></p>
+                    <p className="text-gray-500 mt-1">Vendor: <span className="font-semibold text-blue-600">{po.vendor?.name || 'Unknown Vendor'}</span></p>
                 </div>
 
                 <div className="flex gap-3">
                     {po.status === 'DRAFT' && (
-                        <Button onClick={() => updateStatus('PENDING_APPROVAL')} className="bg-yellow-500 hover:bg-yellow-600 text-white">
-                            Submit for Approval
-                        </Button>
+                        <>
+                            <Button onClick={() => updateStatus('PENDING_APPROVAL')} className="bg-yellow-500 hover:bg-yellow-600 text-white">
+                                Submit for Approval
+                            </Button>
+                            <Button onClick={() => updateStatus('CANCELLED')} variant="outline" className="text-red-500 border-red-300 hover:bg-red-50">
+                                Cancel Order
+                            </Button>
+                        </>
                     )}
                     {po.status === 'PENDING_APPROVAL' && (
                         <Button onClick={() => updateStatus('APPROVED')} className="bg-green-600 hover:bg-green-700 text-white">
@@ -229,7 +234,7 @@ export function PurchaseOrderDetail() {
                             </thead>
                             <tbody className="divide-y dark:divide-gray-700">
                                 {po.items.map((item: any) => (
-                                    <tr key={item._id}>
+                                    <tr key={item.id}>
                                         <td className="p-3">
                                             <p className="font-medium text-gray-900 dark:text-gray-100">{item.name}</p>
                                             <p className="text-xs text-gray-500">{item.description}</p>

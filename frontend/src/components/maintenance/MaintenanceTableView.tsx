@@ -29,8 +29,8 @@ export function MaintenanceTableView({ tickets }: MaintenanceTableViewProps) {
 
     const getPriorityIcon = (priority: string) => {
         switch (priority) {
-            case 'critical': return <AlertCircle className="w-4 h-4 text-red-500" />;
-            case 'high': return <AlertCircle className="w-4 h-4 text-orange-500" />;
+            case 'CRITICAL': return <AlertCircle className="w-4 h-4 text-red-500" />;
+            case 'HIGH': return <AlertCircle className="w-4 h-4 text-orange-500" />;
             default: return null;
         }
     };
@@ -66,9 +66,9 @@ export function MaintenanceTableView({ tickets }: MaintenanceTableViewProps) {
                     <tbody className="divide-y divide-gray-200 dark:divide-gray-800">
                         {tickets.map((ticket) => (
                             <tr
-                                key={ticket._id}
+                                key={ticket.id}
                                 className="group hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors cursor-pointer"
-                                onClick={() => navigate(`/maintenance/${ticket._id}`)}
+                                onClick={() => navigate(`/maintenance/${ticket.id}`)}
                             >
                                 <td className="px-4 py-3 font-medium text-primary-600">
                                     {ticket.ticketNumber}
@@ -76,10 +76,10 @@ export function MaintenanceTableView({ tickets }: MaintenanceTableViewProps) {
                                 <td className="px-4 py-3">
                                     <div className="flex flex-col">
                                         <span className="font-medium text-gray-900 dark:text-gray-100">
-                                            {ticket.assetId?.name || 'Unknown Asset'}
+                                            {ticket.asset?.name || 'Unknown Asset'}
                                         </span>
                                         <span className="text-xs text-gray-500">
-                                            {ticket.assetId?.serialNumber}
+                                            {ticket.asset?.serialNumber}
                                         </span>
                                     </div>
                                 </td>
@@ -88,7 +88,7 @@ export function MaintenanceTableView({ tickets }: MaintenanceTableViewProps) {
                                 </td>
                                 <td className="px-4 py-3">
                                     <Badge variant={getStatusColor(ticket.status) as any}>
-                                        {ticket.status.replace('_', ' ')}
+                                        {ticket.status.replaceAll('_', ' ')}
                                     </Badge>
                                 </td>
                                 <td className="px-4 py-3">

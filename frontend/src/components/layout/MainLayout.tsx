@@ -5,6 +5,7 @@ import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
 import { Loader2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { OpsPilot } from '../OpsPilot';
 
 export function MainLayout() {
     const { isAuthenticated, isInitializing } = useAuthStore();
@@ -53,6 +54,7 @@ export function MainLayout() {
                     </motion.div>
                 </AnimatePresence>
             </main>
+            <OpsPilot />
         </div>
     );
 }

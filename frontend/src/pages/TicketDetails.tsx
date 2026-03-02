@@ -19,6 +19,7 @@ import { Badge } from '../components/ui/Badge';
 import { Card } from '../components/ui/Card';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '../components/ui/Tabs';
 import { Input } from '../components/ui/Input';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '../components/ui/Dialog';
 
 export default function TicketDetails() {
     const { id } = useParams();
@@ -29,9 +30,14 @@ export default function TicketDetails() {
     const [loading, setLoading] = useState(true);
     const [selectedTab, setSelectedTab] = useState('overview');
 
+    // Closure preview state
+    const [showCloseModal, setShowCloseModal] = useState(false);
+    const [previewData, setPreviewData] = useState<any>(null);
+    const [anomalyData, setAnomalyData] = useState<any>(null);
+    const [closing, setClosing] = useState(false);
+
     // Approval state
     const [approvalNote, setApprovalNote] = useState('');
-    // const [actionLoading, setActionLoading] = useState(false); // Unused
 
     // Fetch ticket
     const fetchTicket = async () => {
@@ -56,7 +62,6 @@ export default function TicketDetails() {
             return;
         }
 
-        // setActionLoading(true);
         try {
             await api.put(`/maintenance/${id}`, {
                 approvalStatus: status,
@@ -66,13 +71,36 @@ export default function TicketDetails() {
             fetchTicket();
         } catch (error: any) {
             toast.error(error.response?.data?.message || 'Action failed');
-        } finally {
-            // setActionLoading(false);
         }
     };
 
+    const fetchPreview = async () => {
+        try {
+            const [previewRes, anomalyRes] = await Promise.all([
+                api.get(`/maintenance/${id}/preview`),
+                api.get(`/maintenance/${id}/anomaly-check`)
+            ]);
+            setPreviewData(previewRes.data.data);
+            setAnomalyData(anomalyRes.data.data);
+            setShowCloseModal(true);
+        } catch (error) {
+            toast.error('Failed to load closure preview');
+        }
+    }
 
-
+    const handleCloseTicket = async () => {
+        setClosing(true);
+        try {
+            await api.put(`/maintenance/${id}`, { status: 'COMPLETED' });
+            toast.success('Ticket completed successfully');
+            setShowCloseModal(false);
+            fetchTicket();
+        } catch (error) {
+            toast.error('Failed to close ticket');
+        } finally {
+            setClosing(false);
+        }
+    }
     if (loading) return <div className="p-8 text-center">Loading...</div>;
     if (!ticket) return <div className="p-8 text-center">Ticket not found</div>;
 
@@ -91,7 +119,7 @@ export default function TicketDetails() {
                         <div className="flex items-center gap-3">
                             <h1 className="text-2xl font-bold">{ticket.ticketNumber}</h1>
                             <Badge variant={ticket.status === 'COMPLETED' ? 'success' : 'default'}>
-                                {ticket.status.replace('_', ' ')}
+                                {ticket.status.replaceAll('_', ' ')}
                             </Badge>
                             <Badge variant="outline">{ticket.priority}</Badge>
                         </div>
@@ -100,11 +128,15 @@ export default function TicketDetails() {
                 </div>
 
                 <div className="flex gap-2">
-                    {ticket.status === 'COMPLETED' && (
+                    {ticket.status === 'COMPLETED' ? (
                         <Button variant="outline">Download Report</Button>
-                    )}
+                    ) : ticket.status === 'IN_PROGRESS' || ticket.status === 'APPROVED' ? (
+                        <Button variant="success" onClick={fetchPreview}>
+                            Complete Ticket
+                        </Button>
+                    ) : null}
                     {/* Primary Action Button based on status & role */}
-                    {ticket.approvalStatus === 'pending' && isManager && (
+                    {ticket.approvalStatus === 'PENDING' && isManager && (
                         <div className="flex gap-2">
                             <Button variant="destructive" onClick={() => handleApproval('rejected')}>
                                 Reject
@@ -176,14 +208,14 @@ export default function TicketDetails() {
                                     <div>
                                         <dt className="text-gray-500">Asset</dt>
                                         <dd className="font-medium flex items-center gap-2 mt-1">
-                                            {ticket.assetId?.name}
-                                            <span className="text-xs text-gray-400">({ticket.assetId?.serialNumber})</span>
+                                            {ticket.asset?.name}
+                                            <span className="text-xs text-gray-400">({ticket.asset?.serialNumber})</span>
                                         </dd>
                                     </div>
                                     <div>
                                         <dt className="text-gray-500">Location</dt>
                                         <dd className="font-medium mt-1">
-                                            {ticket.assetId?.location?.building} - {ticket.assetId?.location?.room}
+                                            {ticket.asset?.building || 'N/A'} - {ticket.asset?.room || 'N/A'}
                                         </dd>
                                     </div>
                                     <div>
@@ -205,7 +237,7 @@ export default function TicketDetails() {
                                 </dl>
                             </Card>
 
-                            {ticket.approvalStatus === 'pending' && isManager && (
+                            {ticket.approvalStatus === 'PENDING' && isManager && (
                                 <Card className="p-6 border-orange-200 bg-orange-50 dark:bg-orange-900/10 dark:border-orange-800">
                                     <h3 className="font-semibold mb-2 flex items-center gap-2 text-orange-800 dark:text-orange-200">
                                         <AlertTriangle className="w-4 h-4" />
@@ -230,11 +262,11 @@ export default function TicketDetails() {
                                     <h3 className="font-semibold">Technician Logs</h3>
                                     <Button variant="outline" size="sm">Add Entry</Button>
                                 </div>
-                                {ticket.workLog?.length === 0 ? (
+                                {(ticket.workLogs?.length ?? 0) === 0 ? (
                                     <p className="text-gray-500 text-sm">No work logged yet.</p>
                                 ) : (
                                     <div className="space-y-4">
-                                        {ticket.workLog.map((log: any, i: number) => (
+                                        {ticket.workLogs.map((log: any, i: number) => (
                                             <div key={i} className="flex gap-4 pb-4 border-b last:border-0 border-gray-100 dark:border-gray-800">
                                                 <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center text-gray-600 text-xs font-bold">
                                                     {log.technician?.name?.charAt(0)}
@@ -257,11 +289,11 @@ export default function TicketDetails() {
                                     <h3 className="font-semibold">Spare Parts Used</h3>
                                     <Button variant="outline" size="sm">Add Part</Button>
                                 </div>
-                                {ticket.sparePartsUsed?.length === 0 ? (
+                                {(ticket.sparePartsUsed?.length ?? 0) === 0 ? (
                                     <p className="text-gray-500 text-sm">No parts used yet.</p>
                                 ) : (
                                     <div className="overflow-x-auto">
-                                        <table className="w-full text-sm item-left">
+                                        <table className="w-full text-sm text-left">
                                             <thead>
                                                 <tr className="text-gray-500 border-b">
                                                     <th className="pb-2 text-left">Part Name</th>
@@ -271,7 +303,7 @@ export default function TicketDetails() {
                                                 </tr>
                                             </thead>
                                             <tbody>
-                                                {ticket.sparePartsUsed.map((part: any, i: number) => (
+                                                {(ticket.sparePartsUsed || []).map((part: any, i: number) => (
                                                     <tr key={i} className="border-b last:border-0">
                                                         <td className="py-2">{part.name} <span className="text-xs text-gray-400">({part.partNumber})</span></td>
                                                         <td className="py-2 text-right">{part.quantity}</td>
@@ -312,6 +344,68 @@ export default function TicketDetails() {
                 </div>
 
             </div>
+
+            <Dialog open={showCloseModal} onOpenChange={setShowCloseModal}>
+                <DialogContent size="lg">
+                    <DialogHeader>
+                        <DialogTitle>Complete Maintenance Ticket</DialogTitle>
+                    </DialogHeader>
+
+                    {previewData && anomalyData && (
+                        <div className="space-y-6">
+                            {/* Anomaly Detection */}
+                            {anomalyData.anomaly?.isAnomaly || anomalyData.anomaly?.isElevated ? (
+                                <div className={`p-4 rounded-[var(--radius-md)] border-l-4 ${anomalyData.anomaly.isAnomaly ? 'border-red-500 bg-red-50 dark:bg-red-900/20' : 'border-orange-500 bg-orange-50 dark:bg-orange-900/20'}`}>
+                                    <h4 className={`font-semibold ${anomalyData.anomaly.isAnomaly ? 'text-red-700 dark:text-red-400' : 'text-orange-700 dark:text-orange-400'}`}>
+                                        <AlertTriangle className="inline w-4 h-4 mr-2" />
+                                        Cost Anomaly Detected
+                                    </h4>
+                                    <p className="mt-1 text-sm text-[var(--text-secondary)]">{anomalyData.anomaly.message}</p>
+                                    <p className="mt-2 text-xs font-semibold uppercase">{anomalyData.recommendation}</p>
+                                </div>
+                            ) : null}
+
+                            {/* Digital Twin Prediction */}
+                            <div>
+                                <h4 className="font-semibold text-[var(--text-primary)] mb-3">Digital Twin Execution Preview</h4>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div className="p-4 rounded-[var(--radius-md)] bg-[var(--surface-muted)]">
+                                        <p className="text-xs text-[var(--text-muted)] uppercase mb-1">Asset Status</p>
+                                        <p className="text-[var(--text-primary)] font-medium">{previewData.assetChanges.before} → {previewData.assetChanges.after}</p>
+                                        <p className="text-xs text-[var(--color-success)] mt-1">{previewData.assetChanges.label}</p>
+                                    </div>
+                                    <div className="p-4 rounded-[var(--radius-md)] bg-[var(--surface-muted)]">
+                                        <p className="text-xs text-[var(--text-muted)] uppercase mb-1">Financial Impact</p>
+                                        <p className="text-[var(--text-primary)] font-medium">₹{previewData.financeImpact.expenseAmount.toLocaleString()}</p>
+                                        <p className="text-xs text-[var(--text-secondary)] mt-1">{previewData.financeImpact.label}</p>
+                                    </div>
+                                </div>
+
+                                {previewData.inventoryChanges?.length > 0 && (
+                                    <div className="mt-4 p-4 rounded-[var(--radius-md)] border border-[var(--border-default)]">
+                                        <p className="text-xs text-[var(--text-muted)] uppercase mb-2">Inventory Deduction Summary</p>
+                                        <ul className="space-y-2">
+                                            {previewData.inventoryChanges.map((inv: any, idx: number) => (
+                                                <li key={idx} className="flex justify-between text-sm">
+                                                    <span className="text-[var(--text-primary)]">{inv.partName}</span>
+                                                    <span className="text-[var(--text-secondary)]">- {inv.quantityDeducted} unit(s) <span className="opacity-50">({inv.afterStock} remaining)</span></span>
+                                                </li>
+                                            ))}
+                                        </ul>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    )}
+
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setShowCloseModal(false)}>Cancel</Button>
+                        <Button variant="success" onClick={handleCloseTicket} disabled={closing}>
+                            {closing ? 'Processing...' : 'Confirm Completion'}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 }

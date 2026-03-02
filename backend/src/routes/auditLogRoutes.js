@@ -1,13 +1,14 @@
 const express = require('express');
 const router = express.Router();
-const AuditLog = require('../models/AuditLog');
+const prisma = require('../config/prisma');
 const verifyToken = require('../middleware/verifyToken');
 const authorize = require('../middleware/authorize');
 
 /**
- * Audit Log Routes
- * 
- * View system audit logs for security and compliance
+ * Audit Log Routes (Prisma/PostgreSQL)
+ *
+ * Migrated from Mongoose → Prisma to fix 500 timeout errors.
+ * View system audit logs for security and compliance.
  */
 
 // Get audit logs with pagination and filters
@@ -24,45 +25,50 @@ router.get('/', verifyToken, authorize('SUPER_ADMIN', 'ADMIN', 'MANAGER'), async
             status,
         } = req.query;
 
-        const query = {};
+        const where = {};
 
         // Filter by action
         if (action) {
-            query.action = { $regex: action, $options: 'i' };
+            where.action = action;
         }
 
         // Filter by resource type
         if (resourceType) {
-            query.resourceType = resourceType;
+            where.resourceType = resourceType;
         }
 
         // Filter by user
         if (userId) {
-            query.user = userId;
+            where.userId = userId;
         }
 
         // Filter by status
         if (status) {
-            query.status = status;
+            where.status = status;
         }
 
         // Date range filter
         if (startDate || endDate) {
-            query.timestamp = {};
-            if (startDate) query.timestamp.$gte = new Date(startDate);
-            if (endDate) query.timestamp.$lte = new Date(endDate);
+            where.timestamp = {};
+            if (startDate) where.timestamp.gte = new Date(startDate);
+            if (endDate) where.timestamp.lte = new Date(endDate);
         }
 
         const skip = (parseInt(page) - 1) * parseInt(limit);
 
         const [logs, total] = await Promise.all([
-            AuditLog.find(query)
-                .populate('user', 'name email role')
-                .sort({ timestamp: -1 })
-                .skip(skip)
-                .limit(parseInt(limit))
-                .lean(),
-            AuditLog.countDocuments(query),
+            prisma.auditLog.findMany({
+                where,
+                include: {
+                    user: {
+                        select: { id: true, name: true, email: true, role: true },
+                    },
+                },
+                orderBy: { timestamp: 'desc' },
+                skip,
+                take: parseInt(limit),
+            }),
+            prisma.auditLog.count({ where }),
         ]);
 
         res.json({
@@ -88,9 +94,14 @@ router.get('/', verifyToken, authorize('SUPER_ADMIN', 'ADMIN', 'MANAGER'), async
 // Get audit log by ID
 router.get('/:id', verifyToken, authorize('SUPER_ADMIN', 'ADMIN', 'MANAGER'), async (req, res) => {
     try {
-        const log = await AuditLog.findById(req.params.id)
-            .populate('user', 'name email role')
-            .lean();
+        const log = await prisma.auditLog.findUnique({
+            where: { id: req.params.id },
+            include: {
+                user: {
+                    select: { id: true, name: true, email: true, role: true },
+                },
+            },
+        });
 
         if (!log) {
             return res.status(404).json({
@@ -119,44 +130,53 @@ router.get('/stats/summary', verifyToken, authorize('SUPER_ADMIN', 'ADMIN', 'MAN
         const startDate = new Date();
         startDate.setDate(startDate.getDate() - parseInt(days));
 
-        const [byAction, byResource, byStatus, timeline] = await Promise.all([
+        const [byAction, byResource, byStatus, recentLogs] = await Promise.all([
             // Group by action
-            AuditLog.aggregate([
-                { $match: { timestamp: { $gte: startDate } } },
-                { $group: { _id: '$action', count: { $sum: 1 } } },
-                { $sort: { count: -1 } },
-                { $limit: 10 },
-            ]),
+            prisma.auditLog.groupBy({
+                by: ['action'],
+                _count: { action: true },
+                where: { timestamp: { gte: startDate } },
+                orderBy: { _count: { action: 'desc' } },
+                take: 10,
+            }),
             // Group by resource type
-            AuditLog.aggregate([
-                { $match: { timestamp: { $gte: startDate } } },
-                { $group: { _id: '$resourceType', count: { $sum: 1 } } },
-                { $sort: { count: -1 } },
-            ]),
+            prisma.auditLog.groupBy({
+                by: ['resourceType'],
+                _count: { resourceType: true },
+                where: { timestamp: { gte: startDate } },
+                orderBy: { _count: { resourceType: 'desc' } },
+            }),
             // Group by status
-            AuditLog.aggregate([
-                { $match: { timestamp: { $gte: startDate } } },
-                { $group: { _id: '$status', count: { $sum: 1 } } },
-            ]),
-            // Timeline by day
-            AuditLog.aggregate([
-                { $match: { timestamp: { $gte: startDate } } },
-                {
-                    $group: {
-                        _id: { $dateToString: { format: '%Y-%m-%d', date: '$timestamp' } },
-                        count: { $sum: 1 },
-                    },
-                },
-                { $sort: { _id: 1 } },
-            ]),
+            prisma.auditLog.groupBy({
+                by: ['status'],
+                _count: { status: true },
+                where: { timestamp: { gte: startDate } },
+            }),
+            // Recent logs for timeline (last N days, grouped manually)
+            prisma.auditLog.findMany({
+                where: { timestamp: { gte: startDate } },
+                select: { timestamp: true },
+                orderBy: { timestamp: 'asc' },
+            }),
         ]);
+
+        // Build timeline by day from recent logs
+        const timelineMap = {};
+        for (const log of recentLogs) {
+            const day = log.timestamp.toISOString().split('T')[0];
+            timelineMap[day] = (timelineMap[day] || 0) + 1;
+        }
+        const timeline = Object.entries(timelineMap).map(([date, count]) => ({
+            id: date,
+            count,
+        }));
 
         res.json({
             success: true,
             data: {
-                byAction,
-                byResource,
-                byStatus,
+                byAction: byAction.map(r => ({ id: r.action, count: r._count.action })),
+                byResource: byResource.map(r => ({ id: r.resourceType, count: r._count.resourceType })),
+                byStatus: byStatus.map(r => ({ id: r.status, count: r._count.status })),
                 timeline,
             },
         });

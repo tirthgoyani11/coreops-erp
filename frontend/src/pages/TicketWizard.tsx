@@ -64,7 +64,7 @@ export function TicketWizard() {
                             </SelectTrigger>
                             <SelectContent>
                                 {assets.map((asset: any) => (
-                                    <SelectItem key={asset._id} value={asset._id}>
+                                    <SelectItem key={asset.id} value={asset.id}>
                                         {asset.name} ({asset.serialNumber})
                                     </SelectItem>
                                 ))}

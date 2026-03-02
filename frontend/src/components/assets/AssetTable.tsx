@@ -46,7 +46,7 @@ export function AssetTable({ data, loading, onAssetClick, onBulkDelete, onRefres
     // Helper: Get selected asset IDs from rowSelection indices
     const getSelectedIds = (): string[] => {
         return Object.keys(rowSelection)
-            .map(index => data[parseInt(index)]?._id)
+            .map(index => data[parseInt(index)]?.id)
             .filter(Boolean);
     };
 
@@ -120,14 +120,13 @@ export function AssetTable({ data, loading, onAssetClick, onBulkDelete, onRefres
                 </span>
             ),
         }),
-        columnHelper.accessor('location', {
+        columnHelper.accessor('building', {
             header: 'Location',
             cell: info => {
-                const loc = info.row.original.location;
                 return (
                     <div className="text-xs text-[var(--text-secondary)]">
-                        <span className='block text-[var(--text-primary)]'>{info.row.original.officeId?.name || 'N/A'}</span>
-                        <span className='opacity-70'>{loc?.room || loc?.floor || '-'}</span>
+                        <span className='block text-[var(--text-primary)]'>{info.row.original.office?.name || 'N/A'}</span>
+                        <span className='opacity-70'>{info.row.original.room || info.row.original.floor || '-'}</span>
                     </div>
                 );
             }
@@ -144,7 +143,7 @@ export function AssetTable({ data, loading, onAssetClick, onBulkDelete, onRefres
             cell: info => (
                 <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                     <button
-                        onClick={(e) => { e.stopPropagation(); navigate(`/assets/${info.row.original._id}/edit`); }}
+                        onClick={(e) => { e.stopPropagation(); navigate(`/assets/${info.row.original.id}/edit`); }}
                         className="p-1.5 hover:bg-[var(--bg-card-hover)] rounded-lg text-[var(--text-secondary)] hover:text-[var(--primary)] transition-colors"
                         title="Edit Asset"
                     >
@@ -153,7 +152,7 @@ export function AssetTable({ data, loading, onAssetClick, onBulkDelete, onRefres
                     <button
                         onClick={(e) => {
                             e.stopPropagation();
-                            setTransferModal({ open: true, ids: [info.row.original._id] });
+                            setTransferModal({ open: true, ids: [info.row.original.id] });
                         }}
                         className="p-1.5 hover:bg-[var(--bg-card-hover)] rounded-lg text-[var(--text-secondary)] hover:text-blue-400 transition-colors"
                         title="Transfer Asset"
@@ -163,7 +162,7 @@ export function AssetTable({ data, loading, onAssetClick, onBulkDelete, onRefres
                     <button
                         onClick={(e) => {
                             e.stopPropagation();
-                            setStatusModal({ open: true, ids: [info.row.original._id] });
+                            setStatusModal({ open: true, ids: [info.row.original.id] });
                         }}
                         className="p-1.5 hover:bg-[var(--bg-card-hover)] rounded-lg text-[var(--text-secondary)] hover:text-amber-400 transition-colors"
                         title="Update Status"
@@ -173,7 +172,7 @@ export function AssetTable({ data, loading, onAssetClick, onBulkDelete, onRefres
                     <button
                         onClick={(e) => {
                             e.stopPropagation();
-                            if (onBulkDelete) onBulkDelete([info.row.original._id]);
+                            if (onBulkDelete) onBulkDelete([info.row.original.id]);
                         }}
                         className="p-1.5 hover:bg-[var(--bg-card-hover)] rounded-lg text-[var(--text-secondary)] hover:text-red-500 transition-colors"
                         title="Delete Asset"
@@ -283,9 +282,9 @@ export function AssetTable({ data, loading, onAssetClick, onBulkDelete, onRefres
                                     transition={{ duration: 0.2 }}
                                     onClick={() => {
                                         if (onAssetClick) {
-                                            onAssetClick(row.original._id);
+                                            onAssetClick(row.original.id);
                                         } else {
-                                            navigate(`/assets/${row.original._id}`);
+                                            navigate(`/assets/${row.original.id}`);
                                         }
                                     }}
                                     className={cn(

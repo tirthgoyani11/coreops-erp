@@ -8,9 +8,9 @@ import api from '../lib/api';
 import { formatCurrency } from '../lib/utils';
 
 interface PurchaseOrder {
-    _id: string;
+    id: string;
     poNumber: string;
-    vendor: { _id: string; name: string; vendorCode: string };
+    vendor: { id: string; name: string; vendorCode: string };
     items: Array<{ name: string; quantity: number; unitPrice: number }>;
     subtotal: number;
     totalAmount: number;
@@ -35,7 +35,7 @@ export function PurchaseOrders() {
     const [loading, setLoading] = useState(true);
     const [showModal, setShowModal] = useState(false);
     const [formLoading, setFormLoading] = useState(false);
-    const [vendors, setVendors] = useState<Array<{ _id: string; name: string; vendorCode: string }>>([]);
+    const [vendors, setVendors] = useState<Array<{ id: string; name: string; vendorCode: string }>>([]);
     const [statusFilter, setStatusFilter] = useState('');
 
     const [formData, setFormData] = useState({
@@ -208,7 +208,7 @@ export function PurchaseOrders() {
 
                             return (
                                 <motion.div
-                                    key={order._id}
+                                    key={order.id}
                                     initial={{ opacity: 0, x: -20 }}
                                     animate={{ opacity: 1, x: 0 }}
                                     transition={{ delay: i * 0.05 }}
@@ -243,7 +243,7 @@ export function PurchaseOrders() {
 
                                             {order.status === 'DRAFT' && (
                                                 <button
-                                                    onClick={(e) => { e.stopPropagation(); submitForApproval(order._id); }}
+                                                    onClick={(e) => { e.stopPropagation(); submitForApproval(order.id); }}
                                                     className="px-4 py-2 bg-[var(--primary)] text-black text-sm font-bold rounded-xl hover:opacity-90"
                                                 >
                                                     Submit
@@ -287,7 +287,7 @@ export function PurchaseOrders() {
                                     >
                                         <option value="">Select Vendor</option>
                                         {vendors.map(v => (
-                                            <option key={v._id} value={v._id}>{v.name} ({v.vendorCode})</option>
+                                            <option key={v.id} value={v.id}>{v.name} ({v.vendorCode})</option>
                                         ))}
                                     </select>
                                 </div>

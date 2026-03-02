@@ -46,7 +46,7 @@ export function InventoryDetail() {
     if (loading) return <div className="p-8 text-center">Loading...</div>;
     if (!item) return <div className="p-8 text-center">Item not found</div>;
 
-    const isLowStock = item.quantity <= item.minQuantity;
+    const isLowStock = item.currentQuantity <= item.reorderPoint;
 
     return (
         <div className="space-y-6 max-w-5xl mx-auto">
@@ -64,7 +64,7 @@ export function InventoryDetail() {
                                 <Badge variant="warning">Low Stock</Badge>
                             )}
                         </div>
-                        <p className="text-gray-500">{item.category} • {item.location}</p>
+                        <p className="text-gray-500">{item.category} • {item.storageLocation || 'No location'}</p>
                     </div>
                 </div>
                 <div className="flex gap-2">
@@ -87,7 +87,7 @@ export function InventoryDetail() {
                         <div className="flex flex-col sm:flex-row gap-6">
                             <div className="flex flex-col items-center gap-2 p-4 border rounded-lg bg-white dark:bg-gray-800">
                                 <div className="bg-white p-2 rounded">
-                                    <QRCode value={JSON.stringify({ id: item._id, sku: item.sku })} size={128} />
+                                    <QRCode value={JSON.stringify({ id: item.id, sku: item.sku })} size={128} />
                                 </div>
                                 <span className="text-xs font-mono text-gray-500">{item.sku}</span>
                                 <Button size="sm" variant="outline" onClick={() => window.print()}>
@@ -100,21 +100,21 @@ export function InventoryDetail() {
                                     <div>
                                         <dt className="text-gray-500">Stock Quantity</dt>
                                         <dd className="font-medium text-lg mt-1 flex items-center gap-2">
-                                            {item.quantity} {item.unit}
+                                            {item.currentQuantity} {item.unit}
                                             {isLowStock && <AlertTriangle className="w-4 h-4 text-red-500" />}
                                         </dd>
                                     </div>
                                     <div>
-                                        <dt className="text-gray-500">Minimum Quantity</dt>
-                                        <dd className="font-medium mt-1">{item.minQuantity} {item.unit}</dd>
+                                        <dt className="text-gray-500">Reorder Point</dt>
+                                        <dd className="font-medium mt-1">{item.reorderPoint} {item.unit}</dd>
                                     </div>
                                     <div>
-                                        <dt className="text-gray-500">Unit Price</dt>
-                                        <dd className="font-medium mt-1">₹{(item.unitPrice ?? 0).toLocaleString()}</dd>
+                                        <dt className="text-gray-500">Unit Cost</dt>
+                                        <dd className="font-medium mt-1">₹{(item.costPrice ?? item.unitCost ?? 0).toLocaleString()}</dd>
                                     </div>
                                     <div>
                                         <dt className="text-gray-500">Total Value</dt>
-                                        <dd className="font-medium mt-1">₹{((item.unitPrice ?? 0) * (item.quantity ?? 0)).toLocaleString()}</dd>
+                                        <dd className="font-medium mt-1">₹{((item.costPrice ?? item.unitCost ?? 0) * (item.currentQuantity ?? 0)).toLocaleString()}</dd>
                                     </div>
                                     <div className="sm:col-span-2">
                                         <dt className="text-gray-500">Description</dt>
@@ -236,13 +236,13 @@ export function InventoryDetail() {
                     <Card className="p-6">
                         <h3 className="font-semibold mb-4">Quick Actions</h3>
                         <div className="space-y-3">
-                            <Button className="w-full justify-start" variant="outline" onClick={() => navigate('/inventory/operations?type=IN&item=' + item._id)}>
+                            <Button className="w-full justify-start" variant="outline" onClick={() => navigate('/inventory/operations?type=IN&item=' + item.id)}>
                                 + Restock In
                             </Button>
-                            <Button className="w-full justify-start" variant="outline" onClick={() => navigate('/inventory/operations?type=OUT&item=' + item._id)}>
+                            <Button className="w-full justify-start" variant="outline" onClick={() => navigate('/inventory/operations?type=OUT&item=' + item.id)}>
                                 - Stock Out
                             </Button>
-                            <Button className="w-full justify-start" variant="outline" onClick={() => navigate('/inventory/operations?type=ADJUST&item=' + item._id)}>
+                            <Button className="w-full justify-start" variant="outline" onClick={() => navigate('/inventory/operations?type=ADJUST&item=' + item.id)}>
                                 ⇄ Adjust Stock
                             </Button>
                         </div>

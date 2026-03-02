@@ -14,58 +14,56 @@ import api from '../../lib/api';
 // Types
 interface StaffStats {
     branchAssets: number;
-    myTicketsToday: number;
+    openTickets: number;
     lowStockItems: number;
-    recentTransactions: number;
+    totalInventory: number;
 }
-
-// Chart data
-const weeklyActivity = [
-    { name: 'Mon', value: 12 },
-    { name: 'Tue', value: 18 },
-    { name: 'Wed', value: 8 },
-    { name: 'Thu', value: 22 },
-    { name: 'Fri', value: 15 },
-    { name: 'Sat', value: 5 },
-    { name: 'Sun', value: 2 },
-];
-
-const inventoryStatus = [
-    { name: 'In Stock', value: 320 },
-    { name: 'Low Stock', value: 18 },
-    { name: 'Out of Stock', value: 4 },
-    { name: 'On Order', value: 12 },
-];
 
 export const StaffDashboard = memo(function StaffDashboard() {
     const [stats, setStats] = useState<StaffStats>({
         branchAssets: 0,
-        myTicketsToday: 0,
+        openTickets: 0,
         lowStockItems: 0,
-        recentTransactions: 0,
+        totalInventory: 0,
     });
     const [loading, setLoading] = useState(true);
+    const [assetCategoryData, setAssetCategoryData] = useState<{ name: string; value: number }[]>([]);
+    const [inventoryData, setInventoryData] = useState<{ name: string; value: number }[]>([]);
 
     useEffect(() => {
         async function fetchData() {
             try {
-                const [assetsRes, ticketsRes] = await Promise.allSettled([
-                    api.get('/assets', { params: { limit: 1 } }),
-                    api.get('/maintenance', { params: { limit: 1 } }),
+                const [dashRes, categoryRes, inventoryRes] = await Promise.allSettled([
+                    api.get('/analytics/dashboard'),
+                    api.get('/analytics/assets/by-category'),
+                    api.get('/analytics/inventory/status'),
                 ]);
 
-                setStats({
-                    branchAssets:
-                        assetsRes.status === 'fulfilled'
-                            ? assetsRes.value.data.pagination?.total || 0
-                            : 0,
-                    myTicketsToday:
-                        ticketsRes.status === 'fulfilled'
-                            ? ticketsRes.value.data.pagination?.total || 0
-                            : 0,
-                    lowStockItems: 18,
-                    recentTransactions: 42,
-                });
+                // Dashboard stats
+                if (dashRes.status === 'fulfilled' && dashRes.value.data?.data) {
+                    const d = dashRes.value.data.data;
+                    setStats({
+                        branchAssets: d.assets?.total || 0,
+                        openTickets: d.maintenance?.openTickets || 0,
+                        lowStockItems: d.inventory?.lowStock || 0,
+                        totalInventory: d.inventory?.total || 0,
+                    });
+                }
+
+                // Asset by category chart
+                if (categoryRes.status === 'fulfilled' && categoryRes.value.data?.data) {
+                    setAssetCategoryData(
+                        categoryRes.value.data.data.map((c: any) => ({ name: c.id, value: c.count }))
+                    );
+                }
+
+                // Inventory chart
+                if (inventoryRes.status === 'fulfilled' && inventoryRes.value.data?.data) {
+                    const inv = inventoryRes.value.data.data;
+                    setInventoryData(
+                        inv.byType?.map((t: any) => ({ name: t.id, value: t.totalQuantity })) || []
+                    );
+                }
             } catch {
                 // Keep defaults
             } finally {
@@ -99,7 +97,7 @@ export const StaffDashboard = memo(function StaffDashboard() {
                 />
                 <StatCard
                     title="Open Tickets"
-                    value={stats.myTicketsToday.toString()}
+                    value={stats.openTickets.toString()}
                     icon={Wrench}
                     color="orange"
                     loading={loading}
@@ -112,8 +110,8 @@ export const StaffDashboard = memo(function StaffDashboard() {
                     loading={loading}
                 />
                 <StatCard
-                    title="Recent Transactions"
-                    value={stats.recentTransactions.toString()}
+                    title="Inventory Items"
+                    value={stats.totalInventory.toString()}
                     icon={ClipboardList}
                     color="green"
                     loading={loading}
@@ -123,15 +121,15 @@ export const StaffDashboard = memo(function StaffDashboard() {
             {/* Charts Row */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <DashboardChart
-                    title="Weekly Activity"
-                    data={weeklyActivity}
+                    title="Assets by Category"
+                    data={assetCategoryData}
                     type="bar"
                     colors={['var(--primary)']}
                     loading={loading}
                 />
                 <DashboardChart
-                    title="Inventory Status"
-                    data={inventoryStatus}
+                    title="Inventory by Type"
+                    data={inventoryData}
                     type="pie"
                     loading={loading}
                 />

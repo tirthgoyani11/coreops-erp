@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import api from '../lib/api';
 
 export interface Notification {
-    _id: string;
+    id: string;
     recipient: string;
     type: 'system' | 'approval_required' | 'approval_rejected' | 'ticket_assigned' | 'ticket_completed' | 'low_stock' | 'maintenance_due';
     title: string;
@@ -62,7 +62,7 @@ export const useNotificationStore = create<NotificationState>((set, get) => ({
             await api.put(`/notifications/${id}/read`);
             set((state) => ({
                 notifications: state.notifications.map((n) =>
-                    n._id === id ? { ...n, isRead: true } : n
+                    n.id === id ? { ...n, isRead: true } : n
                 ),
                 unreadCount: Math.max(0, state.unreadCount - 1),
             }));

@@ -74,12 +74,10 @@ export function VendorDetail() {
                         <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">{vendor.name}</h1>
                         <div className="flex items-center gap-2 text-gray-500 mt-1">
                             <span className="bg-gray-100 dark:bg-gray-800 px-2 py-0.5 rounded text-sm">{vendor.vendorCode}</span>
-                            <span>•</span>
-                            <span>{vendor.type}</span>
                         </div>
                     </div>
                 </div>
-                <Button variant="outline">
+                <Button variant="outline" onClick={() => navigate(`/vendors/${id}/edit`)}>
                     <Edit className="w-4 h-4 mr-2" /> Edit Vendor
                 </Button>
             </div>
@@ -91,20 +89,18 @@ export function VendorDetail() {
                     <div className="space-y-3 text-sm">
                         <div className="flex items-center gap-3">
                             <Mail className="w-4 h-4 text-gray-400" />
-                            <a href={`mailto:${vendor.contactPerson?.email}`} className="text-blue-600 hover:underline">
-                                {vendor.contactPerson?.email || 'N/A'}
+                            <a href={`mailto:${vendor.email}`} className="text-blue-600 hover:underline">
+                                {vendor.email || 'N/A'}
                             </a>
                         </div>
                         <div className="flex items-center gap-3">
                             <Phone className="w-4 h-4 text-gray-400" />
-                            <span>{vendor.contactPerson?.phone || 'N/A'}</span>
+                            <span>{vendor.phone || 'N/A'}</span>
                         </div>
                         <div className="flex items-start gap-3">
                             <MapPin className="w-4 h-4 text-gray-400 mt-1" />
-                            <span>
-                                {vendor.address?.street}<br />
-                                {vendor.address?.city}, {vendor.address?.state} {vendor.address?.zipCode}<br />
-                                {vendor.address?.country}
+                            <span className="whitespace-pre-wrap">
+                                {vendor.address || 'N/A'}
                             </span>
                         </div>
                     </div>
@@ -123,7 +119,7 @@ export function VendorDetail() {
                                 <Clock className="w-4 h-4" /> On-Time Delivery
                             </div>
                             <div className="text-2xl font-bold text-green-700 dark:text-green-300">
-                                {vendor.performanceMetrics?.onTimeDeliveries || 0}%
+                                {vendor.reliabilityMetrics?.deliveryScore || 0}%
                             </div>
                         </div>
                         <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
@@ -131,7 +127,7 @@ export function VendorDetail() {
                                 <BarChart3 className="w-4 h-4" /> Quality Rating
                             </div>
                             <div className="text-2xl font-bold text-blue-700 dark:text-blue-300">
-                                {vendor.performanceMetrics?.qualityRating || 0}/5
+                                {((vendor.reliabilityMetrics?.overallScore || 0) / 20).toFixed(1)}/5
                             </div>
                         </div>
                         <div className="p-4 bg-purple-50 dark:bg-purple-900/20 rounded-lg">
@@ -139,7 +135,7 @@ export function VendorDetail() {
                                 <Package className="w-4 h-4" /> Total Orders
                             </div>
                             <div className="text-2xl font-bold text-purple-700 dark:text-purple-300">
-                                {vendor.performanceMetrics?.totalOrders || 0}
+                                {vendor.purchaseOrders?.length || 0}
                             </div>
                         </div>
                     </div>
@@ -161,7 +157,7 @@ export function VendorDetail() {
             <Card className="p-6">
                 <div className="flex items-center justify-between mb-4">
                     <h3 className="font-semibold text-lg">Purchase Order History</h3>
-                    <Button variant="outline" size="sm">View All</Button>
+                    <Button variant="outline" size="sm" onClick={() => navigate(`/procurement/orders?vendorId=${id}`)}>View All</Button>
                 </div>
                 <div className="overflow-x-auto">
                     <table className="w-full text-sm">
@@ -175,7 +171,7 @@ export function VendorDetail() {
                         </thead>
                         <tbody className="divide-y">
                             {orders.map((po: any) => (
-                                <tr key={po._id} className="hover:bg-gray-50/50 cursor-pointer" onClick={() => navigate(`/procurement/orders/${po._id}`)}>
+                                <tr key={po.id} className="hover:bg-gray-50/50 cursor-pointer" onClick={() => navigate(`/procurement/orders/${po.id}`)}>
                                     <td className="py-3 pl-4 font-medium text-blue-600">{po.poNumber}</td>
                                     <td className="py-3 text-gray-500">{new Date(po.createdAt).toLocaleDateString()}</td>
                                     <td className="py-3">

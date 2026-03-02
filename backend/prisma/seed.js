@@ -555,6 +555,75 @@ async function main() {
     console.log(`   ✅ 4 audit logs`);
 
     // ═══════════════════════════════════════════════════════════
+    // 14. GENERAL LEDGER (Phase 2)
+    // ═══════════════════════════════════════════════════════════
+    console.log('📒 Creating GL accounts (Chart of Accounts)...');
+    const glAccounts = await Promise.all([
+        // ASSET accounts (normal side: DEBIT)
+        prisma.gLAccount.create({ data: { code: '1000', name: 'Cash', type: 'ASSET', normalSide: 'DEBIT', balance: 500000, officeId: hq.id } }),
+        prisma.gLAccount.create({ data: { code: '1010', name: 'Bank - HDFC Current', type: 'ASSET', normalSide: 'DEBIT', balance: 2500000, officeId: hq.id } }),
+        prisma.gLAccount.create({ data: { code: '1200', name: 'Accounts Receivable', type: 'ASSET', normalSide: 'DEBIT', balance: 127000, officeId: hq.id } }),
+        prisma.gLAccount.create({ data: { code: '1300', name: 'Inventory', type: 'ASSET', normalSide: 'DEBIT', balance: 185000, officeId: hq.id } }),
+        prisma.gLAccount.create({ data: { code: '1500', name: 'Fixed Assets', type: 'ASSET', normalSide: 'DEBIT', balance: 3400000, officeId: hq.id } }),
+        // LIABILITY accounts (normal side: CREDIT)
+        prisma.gLAccount.create({ data: { code: '2000', name: 'Accounts Payable', type: 'LIABILITY', normalSide: 'CREDIT', balance: -245000, officeId: hq.id } }),
+        prisma.gLAccount.create({ data: { code: '2100', name: 'GST Payable', type: 'LIABILITY', normalSide: 'CREDIT', balance: -42000, officeId: hq.id } }),
+        // EQUITY accounts (normal side: CREDIT)
+        prisma.gLAccount.create({ data: { code: '3000', name: "Owner's Equity", type: 'EQUITY', normalSide: 'CREDIT', balance: -5000000, officeId: hq.id } }),
+        // REVENUE accounts (normal side: CREDIT)
+        prisma.gLAccount.create({ data: { code: '4000', name: 'Service Revenue', type: 'REVENUE', normalSide: 'CREDIT', balance: -127000, officeId: hq.id } }),
+        prisma.gLAccount.create({ data: { code: '4100', name: 'Product Sales', type: 'REVENUE', normalSide: 'CREDIT', balance: 0, officeId: hq.id } }),
+        // EXPENSE accounts (normal side: DEBIT)
+        prisma.gLAccount.create({ data: { code: '5000', name: 'Cost of Goods Sold', type: 'EXPENSE', normalSide: 'DEBIT', balance: 85000, officeId: hq.id } }),
+        prisma.gLAccount.create({ data: { code: '5100', name: 'Rent Expense', type: 'EXPENSE', normalSide: 'DEBIT', balance: 125000, officeId: hq.id } }),
+        prisma.gLAccount.create({ data: { code: '5200', name: 'Salaries & Wages', type: 'EXPENSE', normalSide: 'DEBIT', balance: 350000, officeId: hq.id } }),
+        prisma.gLAccount.create({ data: { code: '5300', name: 'Utilities Expense', type: 'EXPENSE', normalSide: 'DEBIT', balance: 45000, officeId: hq.id } }),
+        prisma.gLAccount.create({ data: { code: '5400', name: 'Maintenance Expense', type: 'EXPENSE', normalSide: 'DEBIT', balance: 13150, officeId: hq.id } }),
+    ]);
+    console.log(`   ✅ ${glAccounts.length} GL accounts`);
+
+    // Sample journal entries
+    console.log('📑 Creating sample journal entries...');
+    await prisma.journalEntry.create({
+        data: {
+            entryNumber: 'JE-2026-0001',
+            description: 'Record IT consulting revenue',
+            reference: 'INV-2026-012',
+            referenceType: 'INVOICE',
+            status: 'POSTED',
+            totalAmount: 85000,
+            officeId: hq.id,
+            createdById: superAdmin.id,
+            lines: {
+                create: [
+                    { accountId: glAccounts[2].id, debit: 85000, credit: 0, description: 'AR increase' },
+                    { accountId: glAccounts[8].id, debit: 0, credit: 85000, description: 'Service revenue' },
+                ],
+            },
+        },
+    });
+
+    await prisma.journalEntry.create({
+        data: {
+            entryNumber: 'JE-2026-0002',
+            description: 'Record rent payment',
+            reference: 'CHQ-4567',
+            referenceType: 'MANUAL',
+            status: 'POSTED',
+            totalAmount: 125000,
+            officeId: mumbai.id,
+            createdById: manager.id,
+            lines: {
+                create: [
+                    { accountId: glAccounts[11].id, debit: 125000, credit: 0, description: 'Rent expense' },
+                    { accountId: glAccounts[1].id, debit: 0, credit: 125000, description: 'Bank payment' },
+                ],
+            },
+        },
+    });
+    console.log(`   ✅ 2 journal entries`);
+
+    // ═══════════════════════════════════════════════════════════
     // SUMMARY
     // ═══════════════════════════════════════════════════════════
     console.log('\n═══════════════════════════════════════════════════');
@@ -574,6 +643,8 @@ async function main() {
     console.log('   Currency Rates .... 4');
     console.log('   Settings .......... 6');
     console.log('   Audit Logs ........ 4');
+    console.log('   GL Accounts ....... 15  (standard Indian CoA)');
+    console.log('   Journal Entries ... 2');
     console.log('═══════════════════════════════════════════════════');
     console.log('\n🔑 Login credentials:');
     console.log('   Super Admin . tirth@coreops.in / CoreOps@2026');

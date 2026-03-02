@@ -47,7 +47,7 @@ export function Notifications() {
         try {
             await api.put(`/notifications/${id}/read`);
             setNotifications(prev =>
-                prev.map(n => n._id === id ? { ...n, isRead: true, readAt: new Date().toISOString() } : n)
+                prev.map(n => n.id === id ? { ...n, isRead: true, readAt: new Date().toISOString() } : n)
             );
             setUnreadCount(prev => Math.max(0, prev - 1));
         } catch (err) {
@@ -76,8 +76,8 @@ export function Notifications() {
         setActionLoading(id);
         try {
             await api.delete(`/notifications/${id}`);
-            const notification = notifications.find(n => n._id === id);
-            setNotifications(prev => prev.filter(n => n._id !== id));
+            const notification = notifications.find(n => n.id === id);
+            setNotifications(prev => prev.filter(n => n.id !== id));
             if (notification && !notification.isRead) {
                 setUnreadCount(prev => Math.max(0, prev - 1));
             }
@@ -204,7 +204,7 @@ export function Notifications() {
 
                             return (
                                 <motion.div
-                                    key={notification._id}
+                                    key={notification.id}
                                     initial={{ opacity: 0, x: -20 }}
                                     animate={{ opacity: 1, x: 0 }}
                                     exit={{ opacity: 0, x: 20, height: 0 }}
@@ -243,12 +243,12 @@ export function Notifications() {
                                     <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                                         {!notification.isRead && (
                                             <button
-                                                onClick={() => markAsRead(notification._id)}
-                                                disabled={actionLoading === notification._id}
+                                                onClick={() => markAsRead(notification.id)}
+                                                disabled={actionLoading === notification.id}
                                                 className="p-2 hover:bg-[var(--bg-overlay)] rounded-lg text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors"
                                                 title="Mark as read"
                                             >
-                                                {actionLoading === notification._id ? (
+                                                {actionLoading === notification.id ? (
                                                     <Loader2 className="w-4 h-4 animate-spin" />
                                                 ) : (
                                                     <Check className="w-4 h-4" />
@@ -256,8 +256,8 @@ export function Notifications() {
                                             </button>
                                         )}
                                         <button
-                                            onClick={() => deleteNotification(notification._id)}
-                                            disabled={actionLoading === notification._id}
+                                            onClick={() => deleteNotification(notification.id)}
+                                            disabled={actionLoading === notification.id}
                                             className="p-2 hover:bg-red-500/20 rounded-lg text-[var(--text-secondary)] hover:text-red-400 transition-colors"
                                             title="Delete"
                                         >

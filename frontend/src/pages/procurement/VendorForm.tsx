@@ -15,11 +15,14 @@ export function VendorForm() {
     const { register, handleSubmit, reset, formState: { errors } } = useForm({
         defaultValues: {
             name: '',
-            type: 'MANUFACTURER',
-            contactPerson: { name: '', email: '', phone: '' },
-            address: { street: '', city: '', state: '', zipCode: '', country: '' },
-            paymentTerms: 'Net 30',
-            taxId: ''
+            vendorCode: '',
+            contactPerson: '',
+            email: '',
+            phone: '',
+            address: '',
+            gstNumber: '',
+            panNumber: '',
+            notes: ''
         }
     });
 
@@ -82,28 +85,26 @@ export function VendorForm() {
                             </div>
 
                             <div>
-                                <label className="block text-sm font-medium mb-1">Vendor Type</label>
-                                <select {...register('type')} className="w-full p-2 border rounded dark:bg-gray-800 dark:border-gray-700">
-                                    <option value="MANUFACTURER">Manufacturer</option>
-                                    <option value="DISTRIBUTOR">Distributor</option>
-                                    <option value="SERVICE_PROVIDER">Service Provider</option>
-                                    <option value="CONTRACTOR">Contractor</option>
-                                </select>
-                            </div>
-
-                            <div>
-                                <label className="block text-sm font-medium mb-1">Payment Terms</label>
-                                <select {...register('paymentTerms')} className="w-full p-2 border rounded dark:bg-gray-800 dark:border-gray-700">
-                                    <option value="Net 30">Net 30</option>
-                                    <option value="Net 60">Net 60</option>
-                                    <option value="Immediate">Immediate / COD</option>
-                                </select>
-                            </div>
-
-                            <div>
-                                <label className="block text-sm font-medium mb-1">Tax ID / GSTIN</label>
+                                <label className="block text-sm font-medium mb-1">Vendor Code *</label>
                                 <input
-                                    {...register('taxId')}
+                                    {...register('vendorCode', { required: 'Vendor Code is required' })}
+                                    className="w-full p-2 border rounded dark:bg-gray-800 dark:border-gray-700"
+                                />
+                                {errors.vendorCode && <span className="text-red-500 text-xs">{errors.vendorCode.message as string}</span>}
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-medium mb-1">GST Number</label>
+                                <input
+                                    {...register('gstNumber')}
+                                    className="w-full p-2 border rounded dark:bg-gray-800 dark:border-gray-700"
+                                />
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-medium mb-1">PAN Number</label>
+                                <input
+                                    {...register('panNumber')}
                                     className="w-full p-2 border rounded dark:bg-gray-800 dark:border-gray-700"
                                 />
                             </div>
@@ -116,7 +117,7 @@ export function VendorForm() {
                             <div>
                                 <label className="block text-sm font-medium mb-1">Name</label>
                                 <input
-                                    {...register('contactPerson.name')}
+                                    {...register('contactPerson')}
                                     className="w-full p-2 border rounded dark:bg-gray-800 dark:border-gray-700"
                                 />
                             </div>
@@ -124,7 +125,7 @@ export function VendorForm() {
                             <div>
                                 <label className="block text-sm font-medium mb-1">Email</label>
                                 <input
-                                    {...register('contactPerson.email')}
+                                    {...register('email')}
                                     type="email"
                                     className="w-full p-2 border rounded dark:bg-gray-800 dark:border-gray-700"
                                 />
@@ -133,7 +134,7 @@ export function VendorForm() {
                             <div>
                                 <label className="block text-sm font-medium mb-1">Phone</label>
                                 <input
-                                    {...register('contactPerson.phone')}
+                                    {...register('phone')}
                                     className="w-full p-2 border rounded dark:bg-gray-800 dark:border-gray-700"
                                 />
                             </div>
@@ -143,40 +144,13 @@ export function VendorForm() {
                         <div className="col-span-1 md:col-span-2 space-y-4">
                             <h3 className="font-semibold text-lg border-b pb-2">Address</h3>
 
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div className="md:col-span-2">
-                                    <label className="block text-sm font-medium mb-1">Street Address</label>
-                                    <input
-                                        {...register('address.street')}
-                                        className="w-full p-2 border rounded dark:bg-gray-800 dark:border-gray-700"
-                                    />
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-medium mb-1">City</label>
-                                    <input
-                                        {...register('address.city')}
-                                        className="w-full p-2 border rounded dark:bg-gray-800 dark:border-gray-700"
-                                    />
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-medium mb-1">State</label>
-                                    <input
-                                        {...register('address.state')}
-                                        className="w-full p-2 border rounded dark:bg-gray-800 dark:border-gray-700"
-                                    />
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-medium mb-1">Zip Code</label>
-                                    <input
-                                        {...register('address.zipCode')}
-                                        className="w-full p-2 border rounded dark:bg-gray-800 dark:border-gray-700"
-                                    />
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-medium mb-1">Country</label>
-                                    <input
-                                        {...register('address.country')}
-                                        className="w-full p-2 border rounded dark:bg-gray-800 dark:border-gray-700"
+                            <div className="grid grid-cols-1 gap-4">
+                                <div className="md:col-span-1">
+                                    <label className="block text-sm font-medium mb-1">Full Address</label>
+                                    <textarea
+                                        {...register('address')}
+                                        className="w-full p-2 border rounded dark:bg-gray-800 dark:border-gray-700 h-24 resize-none"
+                                        placeholder="Street, City, State, ZIP..."
                                     />
                                 </div>
                             </div>

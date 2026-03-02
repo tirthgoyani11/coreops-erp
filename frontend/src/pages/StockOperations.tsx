@@ -78,14 +78,14 @@ export function StockOperations() {
         setLoading(true);
         try {
             // Determine endpoint based on type
-            // const endpoint = `/inventory/${selectedItem._id}/${operationType.toLowerCase()}`;
+            // const endpoint = `/inventory/${selectedItem.id}/${operationType.toLowerCase()}`;
             // Payload varies slightly? Assuming unified or specific endpoints
             // Let's assume specific: /stock-in, /stock-out, /adjust
             // Actually usually it's better to have one 'transaction' endpoint or specific ones.
             // Let's go with specific endpoints on item:
             // POST /inventory/:id/stock-in { quantity, reason, reference }
 
-            const url = `/inventory/${selectedItem._id}/adjust`;
+            const url = `/inventory/${selectedItem.id}/adjust`;
 
             let type = 'adjustment';
             if (operationType === 'IN') type = 'stock_in';
@@ -99,7 +99,7 @@ export function StockOperations() {
             });
 
             toast.success('Stock operation completed successfully');
-            navigate(`/inventory/${selectedItem._id}`);
+            navigate(`/inventory/${selectedItem.id}`);
         } catch (error: any) {
             toast.error(error.response?.data?.message || 'Operation failed');
         } finally {
@@ -175,7 +175,7 @@ export function StockOperations() {
                                     <div className="absolute z-10 w-full mt-1 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-md shadow-lg max-h-60 overflow-auto">
                                         {searchResults.map((item: any) => (
                                             <div
-                                                key={item._id}
+                                                key={item.id}
                                                 className="p-3 hover:bg-gray-50 dark:hover:bg-gray-800 cursor-pointer flex justify-between items-center"
                                                 onClick={() => {
                                                     setSelectedItem(item);

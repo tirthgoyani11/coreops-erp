@@ -77,9 +77,9 @@ export function MyTickets() {
                 ) : (
                     tickets.map((ticket: any) => (
                         <Card
-                            key={ticket._id}
+                            key={ticket.id}
                             className="p-4 hover:bg-gray-50 dark:hover:bg-gray-800/50 cursor-pointer transition-colors"
-                            onClick={() => navigate(`/maintenance/${ticket._id}`)}
+                            onClick={() => navigate(`/maintenance/${ticket.id}`)}
                         >
                             <div className="flex justify-between">
                                 <div className="space-y-1">

@@ -5,9 +5,11 @@ interface AssetOverviewProps {
 }
 
 export function AssetOverview({ asset }: AssetOverviewProps) {
+    // Warranty check
+    const hasWarranty = asset.warrantyEnd && new Date(asset.warrantyEnd) > new Date();
+
     return (
         <div className="space-y-6">
-            {/* Main Info Grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
 
                 {/* Basic Details Card */}
@@ -40,34 +42,34 @@ export function AssetOverview({ asset }: AssetOverviewProps) {
                     </h3>
 
                     <div className="grid grid-cols-2 gap-4 text-sm">
-                        <DetailItem label="Office / Branch" value={`${asset.officeId?.name || 'Unassigned'} (${asset.officeId?.code || 'N/A'})`} />
-                        <DetailItem label="Building" value={asset.location?.building || 'N/A'} />
-                        <DetailItem label="Floor" value={asset.location?.floor || 'N/A'} />
-                        <DetailItem label="Room / Area" value={asset.location?.room || 'N/A'} />
+                        <DetailItem label="Office / Branch" value={`${asset.office?.name || 'Unassigned'} (${asset.office?.code || 'N/A'})`} />
+                        <DetailItem label="Building" value={asset.building || 'N/A'} />
+                        <DetailItem label="Floor" value={asset.floor || 'N/A'} />
+                        <DetailItem label="Room / Area" value={asset.room || 'N/A'} />
                     </div>
 
                     <div className="pt-4 border-t border-[var(--border-color)] flex items-center gap-3">
-                        <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white font-bold ${asset.location?.assignedTo ? 'bg-blue-500' : 'bg-[var(--bg-card-hover)]'}`}>
-                            <User size={20} className={asset.location?.assignedTo ? '' : 'text-[var(--text-secondary)]'} />
+                        <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white font-bold ${asset.assignedTo ? 'bg-blue-500' : 'bg-[var(--bg-card-hover)]'}`}>
+                            <User size={20} className={asset.assignedTo ? '' : 'text-[var(--text-secondary)]'} />
                         </div>
                         <div>
                             <p className="text-xs text-[var(--text-secondary)]">Assigned To</p>
-                            <p className={`text-sm font-medium ${asset.location?.assignedTo ? 'text-[var(--text-primary)]' : 'text-[var(--text-secondary)] italic'}`}>
-                                {asset.location?.assignedTo?.name || asset.location?.assignedTo?.email || 'Unassigned'}
+                            <p className={`text-sm font-medium ${asset.assignedTo ? 'text-[var(--text-primary)]' : 'text-[var(--text-secondary)] italic'}`}>
+                                {asset.assignedTo?.name || asset.assignedTo?.email || 'Unassigned'}
                             </p>
                         </div>
                     </div>
                 </div>
 
-                {/* Financial Summary (Mini) */}
+                {/* Financial Summary */}
                 <div className="bg-[var(--bg-card)] border border-[var(--border-color)] rounded-2xl p-6 space-y-4 hover:border-emerald-400/30 transition-colors">
                     <h3 className="text-lg font-semibold text-[var(--text-primary)] flex items-center gap-2">
                         <DollarSign size={20} className="text-emerald-400" />
                         Purchase Info
                     </h3>
                     <div className="grid grid-cols-2 gap-4 text-sm">
-                        <DetailItem label="Purchase Price" value={`$${asset.purchasePrice?.toFixed(2) || '0.00'}`} />
-                        <DetailItem label="Purchase Date" value={new Date(asset.purchaseDate).toLocaleDateString()} />
+                        <DetailItem label="Purchase Price" value={`$${(asset.purchasePrice ?? 0).toFixed(2)}`} />
+                        <DetailItem label="Purchase Date" value={asset.purchaseDate ? new Date(asset.purchaseDate).toLocaleDateString() : 'N/A'} />
                         <DetailItem label="Vendor" value={asset.vendorName || 'N/A'} />
                         <DetailItem label="Order No." value={asset.purchaseOrderNumber || 'N/A'} />
                     </div>
@@ -81,13 +83,13 @@ export function AssetOverview({ asset }: AssetOverviewProps) {
                     </h3>
 
                     <div className="flex items-center gap-4">
-                        <div className={`p-3 rounded-xl ${asset.warrantyExpiryDate ? 'bg-green-500/10 text-green-400' : 'bg-red-500/10 text-red-400'}`}>
+                        <div className={`p-3 rounded-xl ${hasWarranty ? 'bg-green-500/10 text-green-400' : 'bg-red-500/10 text-red-400'}`}>
                             <Calendar size={24} />
                         </div>
                         <div>
                             <p className="text-sm text-[var(--text-secondary)]">Warranty Expiry</p>
                             <p className="text-lg font-bold text-[var(--text-primary)]">
-                                {asset.warrantyExpiryDate ? new Date(asset.warrantyExpiryDate).toLocaleDateString() : 'No Warranty / Expired'}
+                                {asset.warrantyEnd ? new Date(asset.warrantyEnd).toLocaleDateString() : 'No Warranty / Expired'}
                             </p>
                         </div>
                     </div>

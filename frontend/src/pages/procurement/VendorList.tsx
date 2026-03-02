@@ -16,6 +16,7 @@ export function VendorList() {
     const [vendors, setVendors] = useState([]);
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
+    const [statusFilter, setStatusFilter] = useState('all');
 
     useEffect(() => {
         fetchVendors();
@@ -39,10 +40,14 @@ export function VendorList() {
         return 'text-red-600 bg-red-100';
     };
 
-    const filteredVendors = vendors.filter((v: any) =>
-        v.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        v.vendorCode.toLowerCase().includes(searchTerm.toLowerCase())
-    );
+    const filteredVendors = vendors.filter((v: any) => {
+        const matchesSearch = v.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            v.vendorCode.toLowerCase().includes(searchTerm.toLowerCase());
+        const matchesStatus = statusFilter === 'all' ? true :
+            statusFilter === 'active' ? (v.isActive && !v.isBlacklisted) :
+                statusFilter === 'blacklisted' ? v.isBlacklisted : true;
+        return matchesSearch && matchesStatus;
+    });
 
     return (
         <div className="space-y-6">
@@ -68,15 +73,24 @@ export function VendorList() {
                         className="w-full pl-10 pr-4 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-blue-500"
                     />
                 </div>
-                <Button variant="outline">
-                    <Filter className="w-4 h-4 mr-2" /> Filter
-                </Button>
+                <div className="relative">
+                    <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+                    <select
+                        value={statusFilter}
+                        onChange={(e) => setStatusFilter(e.target.value)}
+                        className="pl-10 pr-4 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-blue-500 appearance-none cursor-pointer"
+                    >
+                        <option value="all">All Vendors</option>
+                        <option value="active">Active</option>
+                        <option value="blacklisted">Blacklisted</option>
+                    </select>
+                </div>
             </div>
 
             {/* Vendor Grid */}
             <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
                 {filteredVendors.map((vendor: any) => (
-                    <Card key={vendor._id} className="p-5 hover:shadow-lg transition-shadow cursor-pointer" onClick={() => navigate(`/procurement/vendors/${vendor._id}`)}>
+                    <Card key={vendor.id} className="p-5 hover:shadow-lg transition-shadow cursor-pointer" onClick={() => navigate(`/procurement/vendors/${vendor.id}`)}>
                         <div className="flex justify-between items-start mb-4">
                             <div className="flex items-center gap-3">
                                 <div className="w-10 h-10 rounded-full bg-gray-100 dark:bg-gray-700 flex items-center justify-center text-lg font-bold text-gray-600 dark:text-gray-300">
@@ -88,30 +102,26 @@ export function VendorList() {
                                 </div>
                             </div>
                             <span className={`px-2 py-1 rounded text-xs font-medium ${vendor.isActive ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'}`}>
-                                {vendor.type}
+                                {vendor.isActive ? 'Active' : 'Inactive'}
                             </span>
                         </div>
 
-                        <div className="grid grid-cols-2 gap-4 mb-4 text-sm">
+                        <div className="mb-4 text-sm">
                             <div className="space-y-1">
                                 <p className="text-gray-500 text-xs">Contact</p>
-                                <p className="font-medium truncate">{vendor.contactPerson?.name || 'N/A'}</p>
-                                <p className="text-gray-400 text-xs truncate">{vendor.contactPerson?.email}</p>
-                            </div>
-                            <div className="space-y-1">
-                                <p className="text-gray-500 text-xs">Payment Terms</p>
-                                <p className="font-medium">{vendor.paymentTerms}</p>
+                                <p className="font-medium truncate">{vendor.contactPerson || 'No Contact Person'}</p>
+                                <p className="text-gray-400 text-xs truncate">{vendor.email}</p>
                             </div>
                         </div>
 
                         <div className="pt-4 border-t border-gray-100 dark:border-gray-700 flex justify-between items-center">
                             <div className="flex items-center gap-1">
                                 <Star className="w-4 h-4 text-yellow-400 fill-yellow-400" />
-                                <span className="text-sm font-bold">{vendor.performanceMetrics?.qualityRating || 0}/5</span>
+                                <span className="text-sm font-bold">{((vendor.reliabilityMetrics?.overallScore || 0) / 20).toFixed(1)}/5</span>
                             </div>
-                            <div className={`flex items-center gap-1 px-2 py-1 rounded text-xs font-bold ${getReliabilityColor(vendor.performanceMetrics?.onTimeDeliveries || 0)}`}>
+                            <div className={`flex items-center gap-1 px-2 py-1 rounded text-xs font-bold ${getReliabilityColor(vendor.reliabilityMetrics?.deliveryScore || 0)}`}>
                                 <Truck className="w-3 h-3" />
-                                {vendor.performanceMetrics?.onTimeDeliveries || 0}% On-Time
+                                {vendor.reliabilityMetrics?.deliveryScore || 0}% On-Time
                             </div>
                         </div>
                     </Card>

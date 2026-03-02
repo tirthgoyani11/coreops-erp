@@ -84,7 +84,7 @@ export function Assets() {
         }
     };
 
-    const totalValue = assets.reduce((sum, a) => sum + (a.purchaseInfo?.purchasePrice || 0), 0);
+    const totalValue = assets.reduce((sum, a) => sum + (a.purchasePrice || 0), 0);
 
     if (loading) {
         return (
@@ -172,7 +172,7 @@ export function Assets() {
 
                             return (
                                 <motion.div
-                                    key={asset._id}
+                                    key={asset.id}
                                     initial={{ opacity: 0, y: 20 }}
                                     animate={{ opacity: 1, y: 0 }}
                                     transition={{ delay: i * 0.05 }}
@@ -197,7 +197,7 @@ export function Assets() {
                                     </div>
 
                                     <div className="flex items-center justify-between pt-6 border-t border-[var(--border-color)] relative z-10">
-                                        <span className="text-xl font-bold text-[var(--text-primary)] tracking-tight">{formatCurrency(asset.purchaseInfo?.purchasePrice || 0)}</span>
+                                        <span className="text-xl font-bold text-[var(--text-primary)] tracking-tight">{formatCurrency(asset.purchasePrice || 0)}</span>
                                         <span className="text-xs px-2 py-1 rounded-full bg-[var(--bg-overlay)] text-[var(--text-secondary)]">{asset.status}</span>
                                     </div>
 
@@ -272,7 +272,7 @@ export function Assets() {
                                         >
                                             <option value="">Select Office</option>
                                             {offices.map(office => (
-                                                <option key={office._id} value={office._id}>
+                                                <option key={office.id} value={office.id}>
                                                     {office.name} ({office.code})
                                                 </option>
                                             ))}

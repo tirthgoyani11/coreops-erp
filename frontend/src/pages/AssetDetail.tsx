@@ -173,7 +173,7 @@ export function AssetDetail() {
         );
     }
 
-    const isCheckedOut = !!asset.location?.assignedTo;
+    const isCheckedOut = !!asset.assignedTo;
 
     const TABS = [
         { id: 'overview', label: 'Overview', icon: LayoutDashboard },
@@ -279,7 +279,7 @@ export function AssetDetail() {
                         </div>
                         <div>
                             <p className="text-sm text-[var(--text-secondary)]">Location</p>
-                            <p className="text-lg font-semibold text-[var(--text-primary)]">{asset.officeId?.name || 'Unassigned'}</p>
+                            <p className="text-lg font-semibold text-[var(--text-primary)]">{asset.office?.name || 'Unassigned'}</p>
                         </div>
                     </div>
 
@@ -290,7 +290,7 @@ export function AssetDetail() {
                         <div>
                             <p className="text-sm text-[var(--text-secondary)]">Purchase Date</p>
                             <p className="text-lg font-semibold text-[var(--text-primary)]">
-                                {new Date(asset.purchaseInfo?.purchaseDate || asset.purchaseDate || asset.createdAt).toLocaleDateString()}
+                                {new Date(asset.purchaseDate || asset.createdAt).toLocaleDateString()}
                             </p>
                         </div>
                     </div>
@@ -438,7 +438,7 @@ export function AssetDetail() {
                             >
                                 <option value="">Select a user...</option>
                                 {users.map(u => (
-                                    <option key={u._id} value={u._id}>{u.name} ({u.email})</option>
+                                    <option key={u.id} value={u.id}>{u.name} ({u.email})</option>
                                 ))}
                             </select>
 

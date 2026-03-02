@@ -8,7 +8,10 @@ const {
     adjustStock,
     transferStock,
     getLowStock,
-    getStockValuation
+    getStockValuation,
+    getDemandForecast,
+    getReorderCalc,
+    getConsumptionReport,
 } = require('../controllers/inventoryController');
 
 const protect = require('../middleware/verifyToken');
@@ -29,6 +32,11 @@ router.route('/reports/valuation')
 router.route('/transfer')
     .post(authorize('SUPER_ADMIN', 'ADMIN', 'MANAGER'), transferStock);
 
+// Phase 2 — Inventory Intelligence
+router.get('/reorder-calc', authorize('SUPER_ADMIN', 'ADMIN', 'MANAGER'), getReorderCalc);
+router.get('/consumption-report', getConsumptionReport);
+router.get('/forecast/:id', getDemandForecast);
+
 router.route('/:id')
     .get(getItem)
     .put(authorize('SUPER_ADMIN', 'ADMIN', 'MANAGER'), updateItem);
@@ -37,3 +45,4 @@ router.route('/:id/adjust')
     .post(adjustStock);
 
 module.exports = router;
+

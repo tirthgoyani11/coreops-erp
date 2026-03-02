@@ -47,7 +47,7 @@ const authValidation = {
             .withMessage('Invalid role'),
         body('officeId')
             .optional()
-            .isMongoId()
+            .isUUID()
             .withMessage('Invalid office ID'),
         validate,
     ],
@@ -76,7 +76,7 @@ const assetValidation = {
             .withMessage('Invalid currency'),
         body('officeId')
             .optional()
-            .isMongoId()
+            .isUUID()
             .withMessage('Invalid office ID'),
         body('status')
             .optional()
@@ -86,7 +86,7 @@ const assetValidation = {
     ],
     update: [
         param('id')
-            .isMongoId()
+            .isUUID()
             .withMessage('Invalid asset ID'),
         body('name')
             .optional()
@@ -101,7 +101,7 @@ const assetValidation = {
     ],
     getById: [
         param('id')
-            .isMongoId()
+            .isUUID()
             .withMessage('Invalid asset ID'),
         validate,
     ],
@@ -129,13 +129,13 @@ const inventoryValidation = {
             .withMessage('Unit price must be a positive number'),
         body('officeId')
             .optional()
-            .isMongoId()
+            .isUUID()
             .withMessage('Invalid office ID'),
         validate,
     ],
     update: [
         param('id')
-            .isMongoId()
+            .isUUID()
             .withMessage('Invalid inventory ID'),
         body('quantity')
             .optional()
@@ -149,7 +149,7 @@ const inventoryValidation = {
     ],
     getById: [
         param('id')
-            .isMongoId()
+            .isUUID()
             .withMessage('Invalid inventory ID'),
         validate,
     ],
@@ -184,13 +184,13 @@ const officeValidation = {
     ],
     update: [
         param('id')
-            .isMongoId()
+            .isUUID()
             .withMessage('Invalid office ID'),
         validate,
     ],
     getById: [
         param('id')
-            .isMongoId()
+            .isUUID()
             .withMessage('Invalid office ID'),
         validate,
     ],
@@ -202,7 +202,7 @@ const officeValidation = {
 const maintenanceValidation = {
     create: [
         body('assetId')
-            .isMongoId()
+            .isUUID()
             .withMessage('Invalid asset ID'),
         body('issueDescription')
             .trim()
@@ -222,7 +222,7 @@ const maintenanceValidation = {
     ],
     update: [
         param('id')
-            .isMongoId()
+            .isUUID()
             .withMessage('Invalid maintenance ID'),
         body('status')
             .optional()
@@ -232,7 +232,7 @@ const maintenanceValidation = {
     ],
     getById: [
         param('id')
-            .isMongoId()
+            .isUUID()
             .withMessage('Invalid maintenance ID'),
         validate,
     ],

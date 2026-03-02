@@ -1,11 +1,7 @@
 import { useState, useEffect } from 'react';
 import {
-    PieChart,
-    Pie,
-    Cell,
-    Tooltip,
-    Legend,
-    ResponsiveContainer
+    PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer,
+    ComposedChart, Line, Bar, XAxis, YAxis, CartesianGrid
 } from 'recharts';
 import {
     TrendingUp,
@@ -32,19 +28,36 @@ const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8'];
 export function MaintenanceAnalytics() {
     const [timeRange, setTimeRange] = useState('30d');
     const [inventoryStats, setInventoryStats] = useState<any>(null);
+    const [maintenanceTrends, setMaintenanceTrends] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
 
     // Initial Load
     useEffect(() => {
         const fetchAnalytics = async () => {
             try {
-                // Fetch Inventory Status (Real Data)
-                const invRes = await Promise.all([
+                // Fetch Inventory Status & Trends
+                const [invRes, trendsRes] = await Promise.all([
                     api.get('/analytics/inventory/status'),
-                    // api.get('/analytics/maintenance/trends') // For future use
+                    api.get('/analytics/maintenance/trends?months=12')
                 ]);
 
-                setInventoryStats(invRes[0].data.data);
+                setInventoryStats(invRes.data.data);
+
+                // Compute 90-day (3-month) rolling average for totalCost
+                const trends = trendsRes.data.data || [];
+                const trendsWithRolling = trends.map((t: any, index: number, arr: any[]) => {
+                    let sum = 0;
+                    let count = 0;
+                    for (let i = Math.max(0, index - 2); i <= index; i++) {
+                        sum += arr[i].totalCost;
+                        count++;
+                    }
+                    return {
+                        ...t,
+                        rollingAvg: Math.round(sum / count)
+                    };
+                });
+                setMaintenanceTrends(trendsWithRolling);
             } catch (error) {
                 console.error('Failed to load analytics:', error);
             } finally {
@@ -141,7 +154,7 @@ export function MaintenanceAnalytics() {
                             <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
                                 {lowStockItems.length > 0 ? (
                                     lowStockItems.map((item: any) => (
-                                        <tr key={item._id}>
+                                        <tr key={item.id}>
                                             <td className="py-2 font-medium">{item.name}</td>
                                             <td className="py-2 text-gray-500">{item.sku}</td>
                                             <td className="py-2 text-right font-bold text-red-600">{item.stock?.currentQuantity ?? item.quantity}</td>
@@ -161,6 +174,34 @@ export function MaintenanceAnalytics() {
                     </div>
                 </Card>
 
+                {/* Maintenance Cost Trends */}
+                <Card className="p-6 col-span-3">
+                    <h3 className="mb-4 text-lg font-semibold text-gray-900 dark:text-gray-100 flex items-center gap-2">
+                        <TrendingUp className="w-5 h-5 text-blue-500" /> Maintenance Cost Trends (90-Day Rolling Avg)
+                    </h3>
+                    <div className="h-[300px] w-full">
+                        <ResponsiveContainer width="100%" height="100%">
+                            <ComposedChart data={maintenanceTrends} margin={{ top: 20, right: 20, bottom: 20, left: 20 }}>
+                                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border-default)" />
+                                <XAxis dataKey="period" tick={{ fill: 'var(--text-muted)' }} tickLine={false} axisLine={false} />
+                                <YAxis yAxisId="left" tickFormatter={(v) => `₹${v}`} tick={{ fill: 'var(--text-muted)' }} tickLine={false} axisLine={false} />
+                                <YAxis yAxisId="right" orientation="right" tick={{ fill: 'var(--text-muted)' }} tickLine={false} axisLine={false} />
+                                <Tooltip
+                                    contentStyle={{ backgroundColor: 'var(--surface-elevated)', borderColor: 'var(--border-default)', borderRadius: 'var(--radius-md)' }}
+                                    formatter={(value: any, name: any) => [
+                                        name === 'ticketCount' ? value : `₹${value.toLocaleString()}`,
+                                        name === 'totalCost' ? 'Monthly Cost' : name === 'rollingAvg' ? '90-Day Rolling Avg' : 'Ticket Count'
+                                    ]}
+                                />
+                                <Legend />
+                                <Bar yAxisId="left" dataKey="totalCost" name="Monthly Cost" fill="var(--color-primary-muted)" radius={[4, 4, 0, 0]} />
+                                <Line yAxisId="left" type="monotone" dataKey="rollingAvg" name="90-Day Rolling Avg" stroke="var(--color-error)" strokeWidth={3} dot={{ r: 4 }} activeDot={{ r: 6 }} />
+                                <Line yAxisId="right" type="step" dataKey="ticketCount" name="Ticket Count" stroke="var(--color-success)" strokeWidth={2} dot={false} />
+                            </ComposedChart>
+                        </ResponsiveContainer>
+                    </div>
+                </Card>
+
                 {/* Inventory Distribution */}
                 <Card className="p-6 col-span-3 lg:col-span-1">
                     <h3 className="mb-4 text-lg font-semibold text-gray-900 dark:text-gray-100">Inventory Distribution</h3>
@@ -176,7 +217,7 @@ export function MaintenanceAnalytics() {
                                     fill="#8884d8"
                                     paddingAngle={5}
                                     dataKey="count"
-                                    nameKey="_id"
+                                    nameKey="id"
                                 >
                                     {byType.map((_entry: any, index: number) => (
                                         <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />

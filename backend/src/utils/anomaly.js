@@ -85,31 +85,34 @@ function calculateZScore(value, history) {
 /**
  * Detect duplicate transactions
  * @param {Object} params - { vendor, amount, date, officeId }
- * @param {Model} TransactionModel - Mongoose Transaction model
+ * @param {Object} prisma - Prisma client instance
  * @param {number} windowDays - Days to look back (default 7)
  * @returns {Object} { isDuplicate, matches, confidence, message }
  */
-async function detectDuplicateTransaction({ vendor, amount, date, officeId }, TransactionModel, windowDays = 7) {
+async function detectDuplicateTransaction({ vendor, amount, date, officeId }, prisma, windowDays = 7) {
     const targetDate = new Date(date || Date.now());
     const windowStart = new Date(targetDate);
     windowStart.setDate(windowStart.getDate() - windowDays);
 
-    const query = {
+    const where = {
         amount,
-        date: { $gte: windowStart, $lte: targetDate },
+        date: { gte: windowStart, lte: targetDate },
     };
-    if (officeId) query.officeId = officeId;
+    if (officeId) {
+        where.officeId = typeof officeId === 'string' ? officeId : officeId.id;
+    }
 
-    const matches = await TransactionModel.find(query)
-        .sort({ date: -1 })
-        .limit(5)
-        .lean();
+    const matches = await prisma.transaction.findMany({
+        where,
+        orderBy: { date: 'desc' },
+        take: 5,
+    });
 
     const isDuplicate = matches.length > 0;
     let confidence = 0;
 
     if (isDuplicate) {
-        // Higher confidence if same vendor + amount + similar date
+        // Higher confidence if same vendor/description + amount + similar date
         const exactMatches = matches.filter(m =>
             m.description && vendor &&
             m.description.toLowerCase().includes(vendor.toLowerCase())

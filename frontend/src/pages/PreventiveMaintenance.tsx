@@ -30,9 +30,9 @@ import {
 } from '../components/ui/Dialog';
 
 interface PMSchedule {
-    _id: string;
+    id: string;
     asset: {
-        _id: string;
+        id: string;
         name: string;
         assetTag: string;
     };
@@ -55,8 +55,8 @@ export function PreventiveMaintenance() {
     useEffect(() => {
         setSchedules([
             {
-                _id: '1',
-                asset: { _id: 'a1', name: 'Main HVAC Unit', assetTag: 'AST-001' },
+                id: '1',
+                asset: { id: 'a1', name: 'Main HVAC Unit', assetTag: 'AST-001' },
                 title: 'Monthly Filter Check',
                 frequency: 'monthly',
                 nextRun: '2024-03-15T09:00:00Z',
@@ -65,16 +65,16 @@ export function PreventiveMaintenance() {
                 assignedTo: { firstName: 'John', lastName: 'Doe' }
             },
             {
-                _id: '2',
-                asset: { _id: 'a2', name: 'Generator B', assetTag: 'AST-005' },
+                id: '2',
+                asset: { id: 'a2', name: 'Generator B', assetTag: 'AST-005' },
                 title: 'Annual Oil Change',
                 frequency: 'yearly',
                 nextRun: '2024-06-01T08:00:00Z',
                 status: 'active'
             },
             {
-                _id: '3',
-                asset: { _id: 'a3', name: 'Conveyor 1', assetTag: 'AST-012' },
+                id: '3',
+                asset: { id: 'a3', name: 'Conveyor 1', assetTag: 'AST-012' },
                 title: 'Weekly Belt Inspection',
                 frequency: 'weekly',
                 nextRun: '2024-02-26T07:00:00Z',
@@ -123,7 +123,7 @@ export function PreventiveMaintenance() {
 
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                 {schedules.map((schedule) => (
-                    <Card key={schedule._id} className="p-4 space-y-4 hover:shadow-md transition-shadow">
+                    <Card key={schedule.id} className="p-4 space-y-4 hover:shadow-md transition-shadow">
                         <div className="flex justify-between items-start">
                             <div className="space-y-1">
                                 <h3 className="font-semibold text-gray-900 dark:text-gray-100">{schedule.title}</h3>

@@ -5,7 +5,6 @@ import api from '../lib/api';
 import type { Office } from '../types';
 
 interface UserWithOffice {
-    _id: string;
     id: string;
     name: string;
     email: string;
@@ -249,7 +248,7 @@ export function Users() {
                                     >
                                         <option value="">Select an office</option>
                                         {offices.map((office) => (
-                                            <option key={office._id} value={office._id}>
+                                            <option key={office.id} value={office.id}>
                                                 {office.name} ({office.code})
                                             </option>
                                         ))}

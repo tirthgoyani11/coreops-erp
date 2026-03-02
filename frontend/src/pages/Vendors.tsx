@@ -4,30 +4,25 @@ import { Building2, Star, TrendingUp, Plus, X, Loader2, Search, Filter } from 'l
 import api from '../lib/api';
 
 interface Vendor {
-    _id: string;
+    id: string;
     vendorCode: string;
     name: string;
-    type: string;
-    contactInfo: {
-        email?: string;
-        phone?: string;
-        contactPerson?: string;
-    };
-    reliabilityScore: {
+    email?: string;
+    phone?: string;
+    contactPerson?: string;
+    address?: string;
+    reliabilityMetrics?: {
         overallScore: number;
         deliveryScore: number;
-        qualityScore: number;
+        fulfillmentScore: number;
     };
-    performanceMetrics: {
+    performanceMetrics?: {
         totalOrders: number;
         completedOrders: number;
-        onTimeDeliveryRate?: number;
     };
     isActive: boolean;
-    blacklisted: boolean;
+    isBlacklisted: boolean;
 }
-
-const VENDOR_TYPES = ['supplier', 'service_provider', 'both'];
 
 export function Vendors() {
     const [vendors, setVendors] = useState<Vendor[]>([]);
@@ -39,12 +34,11 @@ export function Vendors() {
 
     const [formData, setFormData] = useState({
         name: '',
-        type: 'supplier',
-        contactInfo: {
-            email: '',
-            phone: '',
-            primaryContact: ''
-        }
+        vendorCode: '',
+        email: '',
+        phone: '',
+        contactPerson: '',
+        address: ''
     });
 
     useEffect(() => {
@@ -55,10 +49,17 @@ export function Vendors() {
         try {
             const params: any = {};
             if (searchTerm) params.search = searchTerm;
-            if (filterType) params.type = filterType;
 
             const res = await api.get('/vendors', { params });
-            setVendors(res.data.data || []);
+            let allVendors = res.data.data || [];
+
+            if (filterType === 'active') {
+                allVendors = allVendors.filter((v: Vendor) => v.isActive && !v.isBlacklisted);
+            } else if (filterType === 'inactive') {
+                allVendors = allVendors.filter((v: Vendor) => !v.isActive || v.isBlacklisted);
+            }
+
+            setVendors(allVendors);
         } catch (error) {
             console.error(error);
         } finally {
@@ -74,9 +75,7 @@ export function Vendors() {
             await api.post('/vendors', formData);
             setShowModal(false);
             setFormData({
-                name: '',
-                type: 'supplier',
-                contactInfo: { email: '', phone: '', primaryContact: '' }
+                name: '', vendorCode: '', email: '', phone: '', contactPerson: '', address: ''
             });
             fetchVendors();
         } catch (error: any) {
@@ -94,9 +93,9 @@ export function Vendors() {
         return 'text-red-600 dark:text-red-400';
     };
 
-    const activeVendors = vendors.filter(v => v.isActive && !v.blacklisted);
+    const activeVendors = vendors.filter(v => v.isActive && !v.isBlacklisted);
     const avgScore = activeVendors.length > 0
-        ? Math.round(activeVendors.reduce((sum, v) => sum + (v.reliabilityScore?.overallScore || 0), 0) / activeVendors.length)
+        ? Math.round(activeVendors.reduce((sum, v) => sum + (v.reliabilityMetrics?.overallScore || 0), 0) / activeVendors.length)
         : 0;
 
     if (loading) {
@@ -163,10 +162,9 @@ export function Vendors() {
                         value={filterType}
                         onChange={e => setFilterType(e.target.value)}
                     >
-                        <option value="">All Types</option>
-                        {VENDOR_TYPES.map(type => (
-                            <option key={type} value={type}>{type}</option>
-                        ))}
+                        <option value="">All Statuses</option>
+                        <option value="active">Active</option>
+                        <option value="inactive">Inactive</option>
                     </select>
                 </div>
             </div>
@@ -188,7 +186,7 @@ export function Vendors() {
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                         {vendors.map((vendor, i) => (
                             <motion.div
-                                key={vendor._id}
+                                key={vendor.id}
                                 initial={{ opacity: 0, y: 20 }}
                                 animate={{ opacity: 1, y: 0 }}
                                 transition={{ delay: i * 0.05 }}
@@ -199,9 +197,9 @@ export function Vendors() {
                                         <Building2 className="w-6 h-6" />
                                     </div>
                                     <div className="flex items-center gap-2">
-                                        <Star className={`w-4 h-4 ${getScoreColor(vendor.reliabilityScore?.overallScore || 0)}`} />
-                                        <span className={`font-bold ${getScoreColor(vendor.reliabilityScore?.overallScore || 0)}`}>
-                                            {vendor.reliabilityScore?.overallScore || 0}%
+                                        <Star className={`w-4 h-4 ${getScoreColor(vendor.reliabilityMetrics?.overallScore || 0)}`} />
+                                        <span className={`font-bold ${getScoreColor(vendor.reliabilityMetrics?.overallScore || 0)}`}>
+                                            {vendor.reliabilityMetrics?.overallScore || 0}%
                                         </span>
                                     </div>
                                 </div>
@@ -212,11 +210,11 @@ export function Vendors() {
                                 </div>
 
                                 <div className="space-y-2 text-sm text-[var(--text-secondary)]">
-                                    <p className="flex items-center gap-2">
-                                        <span className="px-2 py-0.5 rounded-full bg-[var(--bg-overlay)] text-xs">{vendor.type}</span>
-                                    </p>
-                                    {vendor.contactInfo?.email && (
-                                        <p className="truncate">{vendor.contactInfo.email}</p>
+                                    {vendor.email && (
+                                        <p className="truncate">{vendor.email}</p>
+                                    )}
+                                    {vendor.phone && (
+                                        <p className="truncate">{vendor.phone}</p>
                                     )}
                                 </div>
 
@@ -267,18 +265,15 @@ export function Vendors() {
                                 </div>
 
                                 <div>
-                                    <label className="block text-xs font-bold text-[var(--text-secondary)] uppercase tracking-wider mb-2">Type</label>
-                                    <select
+                                    <label className="block text-xs font-bold text-[var(--text-secondary)] uppercase tracking-wider mb-2">Vendor Code *</label>
+                                    <input
+                                        type="text"
                                         className="w-full bg-[var(--bg-overlay)] border border-[var(--border-color)] rounded-xl px-4 py-3 text-[var(--text-primary)] focus:outline-none focus:border-[var(--primary)]"
-                                        value={formData.type}
-                                        onChange={e => setFormData({ ...formData, type: e.target.value })}
-                                    >
-                                        {VENDOR_TYPES.map(type => (
-                                            <option key={type} value={type}>
-                                                {type === 'supplier' ? 'Supplier' : type === 'service_provider' ? 'Service Provider' : 'Both'}
-                                            </option>
-                                        ))}
-                                    </select>
+                                        placeholder="e.g., VEN-001"
+                                        value={formData.vendorCode}
+                                        onChange={e => setFormData({ ...formData, vendorCode: e.target.value })}
+                                        required
+                                    />
                                 </div>
 
                                 <div>
@@ -287,8 +282,8 @@ export function Vendors() {
                                         type="email"
                                         className="w-full bg-[var(--bg-overlay)] border border-[var(--border-color)] rounded-xl px-4 py-3 text-[var(--text-primary)] focus:outline-none focus:border-[var(--primary)]"
                                         placeholder="vendor@example.com"
-                                        value={formData.contactInfo.email}
-                                        onChange={e => setFormData({ ...formData, contactInfo: { ...formData.contactInfo, email: e.target.value } })}
+                                        value={formData.email}
+                                        onChange={e => setFormData({ ...formData, email: e.target.value })}
                                         required
                                     />
                                 </div>
@@ -299,8 +294,19 @@ export function Vendors() {
                                         type="tel"
                                         className="w-full bg-[var(--bg-overlay)] border border-[var(--border-color)] rounded-xl px-4 py-3 text-[var(--text-primary)] focus:outline-none focus:border-[var(--primary)]"
                                         placeholder="+91 98765 43210"
-                                        value={formData.contactInfo.phone}
-                                        onChange={e => setFormData({ ...formData, contactInfo: { ...formData.contactInfo, phone: e.target.value } })}
+                                        value={formData.phone}
+                                        onChange={e => setFormData({ ...formData, phone: e.target.value })}
+                                    />
+                                </div>
+
+                                <div>
+                                    <label className="block text-xs font-bold text-[var(--text-secondary)] uppercase tracking-wider mb-2">Contact Person</label>
+                                    <input
+                                        type="text"
+                                        className="w-full bg-[var(--bg-overlay)] border border-[var(--border-color)] rounded-xl px-4 py-3 text-[var(--text-primary)] focus:outline-none focus:border-[var(--primary)]"
+                                        placeholder="John Doe"
+                                        value={formData.contactPerson}
+                                        onChange={e => setFormData({ ...formData, contactPerson: e.target.value })}
                                     />
                                 </div>
 

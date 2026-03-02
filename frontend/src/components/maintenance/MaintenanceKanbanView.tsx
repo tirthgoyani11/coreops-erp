@@ -51,7 +51,7 @@ export function MaintenanceKanbanView({ tickets, onRefresh }: MaintenanceKanbanV
         const newStatus = over.id as string; // We drop onto columns, so over.id = status
 
         // Find the ticket locally to check if status actually changed
-        const ticket = tickets.find(t => t._id === ticketId);
+        const ticket = tickets.find(t => t.id === ticketId);
         if (ticket && ticket.status !== newStatus) {
             // Optimistic Update can be hard with complex parent state, 
             // so we'll just trigger API and refresh
@@ -75,7 +75,7 @@ export function MaintenanceKanbanView({ tickets, onRefresh }: MaintenanceKanbanV
     }, {} as Record<string, any[]>);
 
     // Active ticket for overlay
-    const activeTicket = activeId ? tickets.find(t => t._id === activeId) : null;
+    const activeTicket = activeId ? tickets.find(t => t.id === activeId) : null;
 
     return (
         <DndContext

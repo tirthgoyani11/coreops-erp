@@ -5,7 +5,8 @@ const {
     getPOs,
     getPO,
     updatePO,
-    receiveGoods
+    receiveGoods,
+    approvePayment
 } = require('../controllers/purchaseOrderController');
 const verifyToken = require('../middleware/verifyToken');
 const authorize = require('../middleware/authorize');
@@ -21,5 +22,6 @@ router.route('/:id')
     .put(updatePO);
 
 router.post('/:id/receive', authorize('SUPER_ADMIN', 'MANAGER'), receiveGoods);
+router.post('/:id/approve-payment', authorize('SUPER_ADMIN', 'MANAGER'), approvePayment);
 
 module.exports = router;

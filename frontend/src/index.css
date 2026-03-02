@@ -4,113 +4,47 @@
 @custom-variant dark (&:is(.dark *));
 
 :root {
-  /* Brand Colors - Shared */
-  --primary: #6DFF8E;
-  /* Neon Green */
-  --primary-fg: #000000;
-  --primary-glow: rgba(185, 255, 102, 0.25);
+  /* Legacy aliases pointing to new design tokens */
+  --primary: var(--color-primary);
+  --primary-fg: var(--color-primary-fg);
+  --primary-glow: var(--color-primary-glow);
 
-  --accent-blue: #38bdf8;
-  --accent-purple: #c084fc;
-  --accent-rose: #fb7185;
-  --accent-orange: #fb923c;
+  --accent-blue: var(--color-accent-blue);
+  --accent-purple: var(--color-accent-purple);
+  --accent-rose: var(--color-accent-rose);
+  --accent-orange: var(--color-accent-orange);
 
-  /* Status Colors */
-  --status-success: #22c55e;
-  --status-warning: #f59e0b;
-  --status-error: #ef4444;
-  --status-info: #3b82f6;
+  --status-success: var(--color-success);
+  --status-warning: var(--color-warning);
+  --status-error: var(--color-error);
+  --status-info: var(--color-info);
 
-  /* --- LIGHT MODE DEFAULTS --- */
   /* Backgrounds */
-  --bg-background: #F9FAFB;
-  /* Enterprise Light Gray (User Spec) */
-  /* Cool off-white */
-  /* Cool off-white */
-  --bg-card: #ffffff;
-  /* Pure white cards for contrast */
-  --bg-card-hover: #f1f3f8;
-  /* Soft blue-gray hover */
-  --bg-sidebar: #0f172a;
-  /* Deep navy sidebar (premium feel) */
-  --bg-overlay: rgba(255, 255, 255, 0.85);
+  --bg-background: var(--surface-background);
+  --bg-card: var(--surface-card);
+  --bg-card-hover: var(--surface-card-hover);
+  --bg-hover: var(--surface-muted);
+  --bg-sidebar: var(--surface-sidebar);
+  --bg-overlay: var(--surface-overlay);
 
   /* Borders */
-  --border-color: #e2e5ef;
-  /* Cool-toned border */
-
-  /* Typography */
-  --text-primary: #0f172a;
-  /* Slate 900 - Deep navy for readability */
-  --text-secondary: #475569;
-  /* Slate 600 - Balanced medium */
-  --text-muted: #94a3b8;
-  /* Slate 400 - Subtle */
-
-  /* Sidebar text (always light for dark sidebar) */
-  --sidebar-text: #e2e8f0;
-  --sidebar-text-muted: #94a3b8;
-  --sidebar-hover: rgba(255, 255, 255, 0.08);
-  --sidebar-active: rgba(185, 255, 102, 0.12);
-  --sidebar-border: rgba(255, 255, 255, 0.06);
+  --border-color: var(--border-default);
 
   /* Shadows */
-  --shadow-card: 0 1px 3px rgba(15, 23, 42, 0.06), 0 1px 2px rgba(15, 23, 42, 0.04);
-  --shadow-card-hover: 0 4px 12px rgba(15, 23, 42, 0.08), 0 2px 4px rgba(15, 23, 42, 0.04);
-  --shadow-dropdown: 0 10px 25px rgba(15, 23, 42, 0.12);
+  --shadow-card: var(--shadow-sm);
+  --shadow-card-hover: var(--shadow-md);
+  --shadow-dropdown: var(--shadow-lg);
 
   /* Gradients */
-  --gradient-subtle: linear-gradient(135deg, #f8f9fc 0%, #eef1f8 100%);
-
-  /* Scrollbar */
-  --scrollbar-thumb: #cbd5e1;
-  /* Slate 300 */
-  --scrollbar-track: transparent;
+  --gradient-subtle: linear-gradient(135deg, var(--surface-background) 0%, var(--surface-card-hover) 100%);
 }
 
 /* --- DARK MODE OVERRIDES --- */
 .dark {
-  --primary-glow: rgba(185, 255, 102, 0.15);
-
-  /* Backgrounds */
-  --bg-background: #09090b;
-  /* Zinc 950 */
-  --bg-card: #18181b;
-  /* Zinc 900 */
-  --bg-card-hover: #27272a;
-  /* Zinc 800 */
-  --bg-sidebar: #0c0c0e;
-  /* Near-black sidebar */
-  --bg-overlay: rgba(9, 9, 11, 0.8);
-
-  /* Borders */
-  --border-color: rgba(255, 255, 255, 0.08);
-
-  /* Typography */
-  --text-primary: #fafafa;
-  --text-secondary: #a1a1aa;
-  /* Zinc 400 */
-  --text-muted: #52525b;
-  /* Zinc 600 */
-
-  /* Sidebar text (same as page text in dark) */
-  --sidebar-text: #fafafa;
-  --sidebar-text-muted: #52525b;
-  --sidebar-hover: rgba(255, 255, 255, 0.06);
-  --sidebar-active: rgba(185, 255, 102, 0.1);
-  --sidebar-border: rgba(255, 255, 255, 0.06);
-
-  /* Shadows */
-  --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.3);
-  --shadow-card-hover: 0 4px 12px rgba(0, 0, 0, 0.4);
-  --shadow-dropdown: 0 10px 25px rgba(0, 0, 0, 0.5);
-
-  /* Gradients */
-  --gradient-subtle: linear-gradient(135deg, #09090b 0%, #18181b 100%);
-
-  /* Scrollbar */
-  --scrollbar-thumb: #27272a;
-  /* Zinc 800 */
+  /* Let design-tokens handle the actual dark mode values, we just alias here again if needed, 
+     though technically CSS variables inherit, so we don't even need aliases inside .dark if 
+     they point to variables that themselves change in .dark! */
+  --gradient-subtle: linear-gradient(135deg, var(--surface-background) 0%, var(--surface-card) 100%);
 }
 
 body {
@@ -158,4 +92,24 @@ input:-webkit-autofill:active {
     -webkit-box-shadow: 0 0 0 30px #F8FAFC inset !important;
     -webkit-text-fill-color: #0F172A !important;
   }
+}
+
+/* --- SKELETON SHIMMER --- */
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.skeleton-shimmer {
+  background: linear-gradient(90deg,
+      var(--bg-hover) 25%,
+      var(--border-color) 50%,
+      var(--bg-hover) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s ease-in-out infinite;
 }

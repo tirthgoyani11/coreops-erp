@@ -1,13 +1,13 @@
 const express = require('express');
 const router = express.Router();
 const currencyService = require('../services/currencyService');
-const CurrencyRate = require('../models/CurrencyRate');
+const prisma = require('../config/prisma');
 const verifyToken = require('../middleware/verifyToken');
 const authorize = require('../middleware/authorize');
 
 /**
- * Currency Rate Routes
- * 
+ * Currency Rate Routes (Prisma)
+ *
  * GET /api/currency/rates - Get all current rates
  * GET /api/currency/convert - Convert amount between currencies
  * GET /api/currency/historical/:date - Get historical rates
@@ -62,18 +62,37 @@ router.get('/convert', async (req, res) => {
 
         let result;
         if (source === 'database') {
-            // Use stored rates from database
-            result = await CurrencyRate.convert(numAmount, from, to);
-            result.source = 'database';
+            // Use stored rates from Prisma
+            const fromRate = await prisma.currencyRate.findFirst({
+                where: { baseCurrency: 'USD', targetCurrency: from.toUpperCase() },
+                orderBy: { fetchedAt: 'desc' },
+            });
+            const toRate = await prisma.currencyRate.findFirst({
+                where: { baseCurrency: 'USD', targetCurrency: to.toUpperCase() },
+                orderBy: { fetchedAt: 'desc' },
+            });
+
+            if (!fromRate || !toRate) {
+                return res.status(404).json({
+                    success: false,
+                    message: `No stored rate found for ${from} or ${to}`,
+                });
+            }
+
+            const crossRate = toRate.rate / fromRate.rate;
+            result = {
+                from: from.toUpperCase(),
+                to: to.toUpperCase(),
+                amount: numAmount,
+                result: numAmount * crossRate,
+                rate: crossRate,
+                source: 'database',
+            };
         } else {
-            // Use live rates from API
             result = await currencyService.convertLive(numAmount, from, to);
         }
 
-        res.json({
-            success: true,
-            data: result,
-        });
+        res.json({ success: true, data: result });
     } catch (error) {
         res.status(500).json({
             success: false,
@@ -97,7 +116,11 @@ router.get('/rate', async (req, res) => {
 
         let rate;
         if (source === 'database') {
-            rate = await CurrencyRate.getLatestRate(from, to);
+            const stored = await prisma.currencyRate.findFirst({
+                where: { baseCurrency: from.toUpperCase(), targetCurrency: to.toUpperCase() },
+                orderBy: { fetchedAt: 'desc' },
+            });
+            rate = stored?.rate || null;
         } else {
             rate = await currencyService.getLiveRate(from, to);
         }
@@ -133,7 +156,6 @@ router.get('/historical/:date', async (req, res) => {
         const { date } = req.params;
         const { base = 'USD' } = req.query;
 
-        // Validate date format (YYYY-MM-DD)
         if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
             return res.status(400).json({
                 success: false,
@@ -202,24 +224,29 @@ router.post('/manual', verifyToken, authorize('SUPER_ADMIN', 'MANAGER'), async (
             });
         }
 
-        const rateDate = date ? new Date(date) : new Date();
-        rateDate.setHours(0, 0, 0, 0);
-
-        const newRate = await CurrencyRate.findOneAndUpdate(
-            {
-                baseCurrency: baseCurrency.toUpperCase(),
-                targetCurrency: targetCurrency.toUpperCase(),
-                date: rateDate,
+        const newRate = await prisma.currencyRate.upsert({
+            where: {
+                id: await prisma.currencyRate.findFirst({
+                    where: {
+                        baseCurrency: baseCurrency.toUpperCase(),
+                        targetCurrency: targetCurrency.toUpperCase(),
+                    },
+                    select: { id: true },
+                }).then(r => r?.id || 'new-' + Date.now()),
             },
-            {
+            update: {
+                rate: parseFloat(rate),
+                source: 'manual',
+                fetchedAt: date ? new Date(date) : new Date(),
+            },
+            create: {
                 baseCurrency: baseCurrency.toUpperCase(),
                 targetCurrency: targetCurrency.toUpperCase(),
                 rate: parseFloat(rate),
-                date: rateDate,
                 source: 'manual',
+                fetchedAt: date ? new Date(date) : new Date(),
             },
-            { upsert: true, new: true }
-        );
+        });
 
         res.status(201).json({
             success: true,

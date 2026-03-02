@@ -49,7 +49,7 @@ export function TransactionList() {
                     </thead>
                     <tbody className="divide-y divide-gray-100 dark:divide-gray-700 bg-white dark:bg-gray-800">
                         {transactions.map((tx: any) => (
-                            <tr key={tx._id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                            <tr key={tx.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50">
                                 <td className="px-6 py-4 text-gray-500">
                                     {new Date(tx.date).toLocaleDateString()}
                                 </td>

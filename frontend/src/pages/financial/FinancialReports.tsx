@@ -20,7 +20,7 @@ import {
 import api from '../../lib/api';
 
 interface Transaction {
-    _id: string;
+    id: string;
     type: 'INCOME' | 'EXPENSE';
     category: string;
     amount: number;
@@ -31,10 +31,8 @@ interface Transaction {
 
 interface Budget {
     category: string;
-    amount: {
-        limit: number;
-        spent: number;
-    };
+    limit: number;
+    spent: number;
 }
 
 export function FinancialReports() {
@@ -72,9 +70,9 @@ export function FinancialReports() {
     const budgetVsActualData = useMemo(() => {
         return budgets.map(b => ({
             name: b.category,
-            Budget: b.amount.limit,
-            Actual: b.amount.spent,
-            fill: b.amount.spent > b.amount.limit ? '#ef4444' : '#10b981' // Red if over budget
+            Budget: b.limit,
+            Actual: b.spent,
+            fill: b.spent > b.limit ? '#ef4444' : '#10b981' // Red if over budget
         })).filter(b => b.Budget > 0); // Only show active budgets
     }, [budgets]);
 
@@ -224,10 +222,10 @@ export function FinancialReports() {
                         </thead>
                         <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
                             {pendingTransactions.slice(0, 5).map((tx) => (
-                                <tr key={tx._id} className="hover:bg-gray-50 dark:hover:bg-gray-800/50">
+                                <tr key={tx.id} className="hover:bg-gray-50 dark:hover:bg-gray-800/50">
                                     <td className="px-6 py-4 font-medium">{new Date(tx.date).toLocaleDateString()}</td>
                                     <td className="px-6 py-4">{tx.description}</td>
-                                    <td className="px-6 py-4 text-gray-500 font-mono text-xs">REF-{tx._id.slice(-6)}</td>
+                                    <td className="px-6 py-4 text-gray-500 font-mono text-xs">REF-{tx.id.slice(-6)}</td>
                                     <td className={`px-6 py-4 text-right font-medium ${tx.type === 'INCOME' ? 'text-green-600' : 'text-red-600'}`}>
                                         {tx.type === 'INCOME' ? '+' : '-'}₹{tx.amount.toLocaleString()}
                                     </td>

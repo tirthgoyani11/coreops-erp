@@ -43,12 +43,20 @@ export function Inventory() {
         setLoading(true);
         try {
             const params = new URLSearchParams();
-            params.append('type', activeTab === 'products' ? 'Product' : 'SparePart');
-            if (filters.stockStatus !== 'all') params.append('stockStatus', filters.stockStatus);
+            params.append('type', activeTab === 'products' ? 'PRODUCT' : 'SPARE');
+            if (filters.stockStatus === 'low_stock') params.append('lowStock', 'true');
 
-            // Backend search/filter usually
             const res = await api.get(`/inventory?${params.toString()}`);
-            setItems(res.data.data);
+            let data = res.data.data || [];
+
+            // Client-side filter for out_of_stock and in_stock
+            if (filters.stockStatus === 'out_of_stock') {
+                data = data.filter((item: any) => item.currentQuantity === 0);
+            } else if (filters.stockStatus === 'in_stock') {
+                data = data.filter((item: any) => item.currentQuantity > item.reorderPoint);
+            }
+
+            setItems(data);
 
             // Also fetch stats if needed (or separate endpoint)
             // For now, let's assume `inventory/stats` exists or we calculate locally
@@ -70,8 +78,8 @@ export function Inventory() {
     // or debounced server-side. for MVP, client-filter.
 
     const filteredItems = items.filter((item: any) =>
-        item.name.toLowerCase().includes(filters.search.toLowerCase()) ||
-        item.sku.toLowerCase().includes(filters.search.toLowerCase())
+        item.name?.toLowerCase().includes(filters.search.toLowerCase()) ||
+        (item.sku || '').toLowerCase().includes(filters.search.toLowerCase())
     );
 
     return (

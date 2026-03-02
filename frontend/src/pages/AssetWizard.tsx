@@ -37,7 +37,7 @@ export function AssetWizard() {
         model: '',
         serialNumber: '',
         description: '',
-        officeId: (user?.officeId as any)?._id || user?.officeId || '',
+        officeId: (user?.officeId as any)?.id || user?.officeId || '',
         building: '',
         floor: '',
         room: '',
@@ -65,16 +65,16 @@ export function AssetWizard() {
                         model: asset.model || '',
                         serialNumber: asset.serialNumber || '',
                         description: asset.description || '',
-                        officeId: asset.officeId?._id || asset.officeId || '',
-                        building: asset.location?.building || '',
-                        floor: asset.location?.floor || '',
-                        room: asset.location?.room || '',
-                        purchasePrice: (asset.purchaseInfo?.purchasePrice || asset.purchaseCost)?.toString() || '',
-                        purchaseDate: asset.purchaseInfo?.purchaseDate ? new Date(asset.purchaseInfo.purchaseDate).toISOString().split('T')[0] : '',
-                        vendorName: '', // Cannot securely recover string vendor name from description easily without regex, leaving empty for now
-                        warrantyExpiryDate: asset.purchaseInfo?.warranty?.endDate ? new Date(asset.purchaseInfo.warranty.endDate).toISOString().split('T')[0] : '',
+                        officeId: asset.officeId || '',
+                        building: asset.building || '',
+                        floor: asset.floor || '',
+                        room: asset.room || '',
+                        purchasePrice: (asset.purchasePrice || asset.purchaseCost)?.toString() || '',
+                        purchaseDate: asset.purchaseDate ? new Date(asset.purchaseDate).toISOString().split('T')[0] : '',
+                        vendorName: '',
+                        warrantyExpiryDate: asset.warrantyEnd ? new Date(asset.warrantyEnd).toISOString().split('T')[0] : '',
                         status: asset.status || 'ACTIVE',
-                        assignedTo: asset.assignedTo || ''
+                        assignedTo: asset.assignedToId || asset.assignedTo?.id || ''
                     });
                 } catch (error) {
                     console.error("Failed to load asset for editing", error);

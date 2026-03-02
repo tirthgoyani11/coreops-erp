@@ -59,7 +59,7 @@ export function PurchaseOrderList() {
 
             {/* Filters */}
             <div className="flex flex-wrap gap-2 text-sm">
-                {['ALL', 'DRAFT', 'ORDERED', 'RECEIVED'].map((status) => (
+                {['ALL', 'DRAFT', 'PENDING_APPROVAL', 'APPROVED', 'ORDERED', 'PARTIALLY_RECEIVED', 'RECEIVED', 'CANCELLED'].map((status) => (
                     <button
                         key={status}
                         onClick={() => setStatusFilter(status)}
@@ -68,7 +68,7 @@ export function PurchaseOrderList() {
                             : 'bg-[var(--bg-card)] text-[var(--text-secondary)] border-[var(--border-color)] hover:bg-[var(--bg-card-hover)]'
                             }`}
                     >
-                        {status}
+                        {status.replace(/_/g, ' ')}
                     </button>
                 ))}
             </div>
@@ -76,7 +76,7 @@ export function PurchaseOrderList() {
             {/* List */}
             <div className="grid gap-4">
                 {orders.map((po: any) => (
-                    <Card key={po._id} className="p-4 hover:shadow-md transition-shadow cursor-pointer" onClick={() => navigate(`/procurement/orders/${po._id}`)}>
+                    <Card key={po.id} className="p-4 hover:shadow-md transition-shadow cursor-pointer" onClick={() => navigate(`/procurement/orders/${po.id}`)}>
                         <div className="flex flex-col md:flex-row justify-between md:items-center gap-4">
                             <div className="flex items-start gap-4">
                                 <div className="p-3 bg-[var(--primary)]/10 rounded-lg">
@@ -87,7 +87,7 @@ export function PurchaseOrderList() {
                                         {po.poNumber}
                                         {getStatusBadge(po.status)}
                                     </h3>
-                                    <p className="text-sm text-gray-500 mt-1">{po.vendorId?.name}</p>
+                                    <p className="text-sm text-gray-500 mt-1">{po.vendor?.name || 'Unknown Vendor'}</p>
                                     <div className="flex items-center gap-4 mt-2 text-xs text-gray-400">
                                         <div className="flex items-center gap-1">
                                             <Calendar className="w-3 h-3" />

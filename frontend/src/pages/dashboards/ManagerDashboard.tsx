@@ -13,47 +13,38 @@ import {
 import { StatCard } from '../../components/dashboard/StatCard';
 import { DashboardChart } from '../../components/dashboard/DashboardChart';
 import api from '../../lib/api';
+import { formatCurrency } from '../../lib/utils';
 
 interface ApprovalItem {
-    _id: string;
+    id: string;
     ticketNumber: string;
     title: string;
+    issueDescription?: string;
     estimatedCost: number;
     office?: { name: string };
-    priority: 'low' | 'medium' | 'high' | 'critical';
+    priority: 'low' | 'medium' | 'high' | 'critical' | 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
 }
 
 interface ManagerStats {
     branchAssets: number;
-    todaysTickets: number;
+    openTickets: number;
     pendingApprovals: number;
     mtdExpenses: number;
-    budgetUsed: number;
-    technicianCount: number;
+    totalInventory: number;
+    lowStockCount: number;
 }
 
 // Priority colors
-const priorityColors = {
+const priorityColors: Record<string, string> = {
     low: 'bg-blue-500/10 text-blue-400 border-blue-500/20',
     medium: 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20',
     high: 'bg-orange-500/10 text-orange-400 border-orange-500/20',
     critical: 'bg-red-500/10 text-red-400 border-red-500/20',
+    LOW: 'bg-blue-500/10 text-blue-400 border-blue-500/20',
+    MEDIUM: 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20',
+    HIGH: 'bg-orange-500/10 text-orange-400 border-orange-500/20',
+    CRITICAL: 'bg-red-500/10 text-red-400 border-red-500/20',
 };
-
-// Inventory status data
-const inventoryStatusData = [
-    { name: 'In Stock', value: 85 },
-    { name: 'Low Stock', value: 12 },
-    { name: 'Out of Stock', value: 3 },
-];
-
-// MTD expenses data
-const expensesData = [
-    { name: 'Week 1', value: 12500 },
-    { name: 'Week 2', value: 18200 },
-    { name: 'Week 3', value: 15800 },
-    { name: 'Week 4', value: 22400 },
-];
 
 // Approval Queue Component
 const ApprovalQueue = memo(function ApprovalQueue({
@@ -85,7 +76,6 @@ const ApprovalQueue = memo(function ApprovalQueue({
         <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-
             className="bg-[var(--bg-card)] border border-[var(--border-color)] rounded-2xl p-6"
         >
             <div className="flex items-center justify-between mb-4">
@@ -104,7 +94,7 @@ const ApprovalQueue = memo(function ApprovalQueue({
                 ) : (
                     items.map((item, index) => (
                         <motion.div
-                            key={item._id}
+                            key={item.id}
                             initial={{ opacity: 0, x: -10 }}
                             animate={{ opacity: 1, x: 0 }}
                             transition={{ delay: index * 0.05 }}
@@ -116,25 +106,27 @@ const ApprovalQueue = memo(function ApprovalQueue({
                                         <span className="text-xs font-mono text-[var(--primary)]">
                                             #{item.ticketNumber}
                                         </span>
-                                        <span className={`text-xs px-2 py-0.5 rounded-full border ${priorityColors[item.priority]}`}>
+                                        <span className={`text-xs px-2 py-0.5 rounded-full border ${priorityColors[item.priority] || priorityColors.medium}`}>
                                             {item.priority}
                                         </span>
                                     </div>
-                                    <p className="text-sm text-[var(--text-primary)] font-medium truncate">{item.title}</p>
+                                    <p className="text-sm text-[var(--text-primary)] font-medium truncate">
+                                        {item.title || item.issueDescription || 'Maintenance Request'}
+                                    </p>
                                     <div className="flex items-center gap-3 mt-1 text-xs text-[var(--text-secondary)]">
-                                        <span>₹{item.estimatedCost.toLocaleString()}</span>
+                                        <span>₹{(item.estimatedCost || 0).toLocaleString()}</span>
                                         {item.office && <span>• {item.office.name}</span>}
                                     </div>
                                 </div>
                                 <div className="flex items-center gap-2">
                                     <button
-                                        onClick={() => onApprove(item._id)}
+                                        onClick={() => onApprove(item.id)}
                                         className="p-2 rounded-lg bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 transition-colors"
                                     >
                                         <CheckCircle2 className="w-4 h-4" />
                                     </button>
                                     <button
-                                        onClick={() => onReject(item._id)}
+                                        onClick={() => onReject(item.id)}
                                         className="p-2 rounded-lg bg-red-500/10 text-red-400 hover:bg-red-500/20 transition-colors"
                                     >
                                         <XCircle className="w-4 h-4" />
@@ -152,41 +144,80 @@ const ApprovalQueue = memo(function ApprovalQueue({
 // Main Manager Dashboard Component
 export const ManagerDashboard = memo(function ManagerDashboard() {
     const navigate = useNavigate();
-    const [stats, _setStats] = useState<ManagerStats>({
-        branchAssets: 245,
-        todaysTickets: 8,
-        pendingApprovals: 5,
-        mtdExpenses: 68900,
-        budgetUsed: 72,
-        technicianCount: 12,
+    const [stats, setStats] = useState<ManagerStats>({
+        branchAssets: 0,
+        openTickets: 0,
+        pendingApprovals: 0,
+        mtdExpenses: 0,
+        totalInventory: 0,
+        lowStockCount: 0,
     });
     const [approvals, setApprovals] = useState<ApprovalItem[]>([]);
     const [loading, setLoading] = useState(true);
+    const [inventoryChartData, setInventoryChartData] = useState<{ name: string; value: number }[]>([]);
+    const [expensesChartData, setExpensesChartData] = useState<{ name: string; value: number }[]>([]);
+    const [technicianCount, setTechnicianCount] = useState(0);
 
     useEffect(() => {
         const fetchData = async () => {
             try {
                 setLoading(true);
 
-                // Fetch approval queue
-                const approvalsRes = await api.get('/maintenance?status=pending_approval&limit=5');
+                const [dashRes, approvalsRes, inventoryRes, trendsRes, usersRes] = await Promise.allSettled([
+                    api.get('/analytics/dashboard'),
+                    api.get('/maintenance?approvalStatus=PENDING&limit=5'),
+                    api.get('/analytics/inventory/status'),
+                    api.get('/analytics/maintenance/trends?months=6'),
+                    api.get('/users?role=TECHNICIAN&limit=1'),
+                ]);
 
-                if (approvalsRes.data?.data) {
-                    setApprovals(approvalsRes.data.data);
-                } else {
-                    // Demo data
-                    setApprovals([
-                        { _id: '1', ticketNumber: 'MT-789', title: 'HVAC Compressor Repair', estimatedCost: 12500, priority: 'high' },
-                        { _id: '2', ticketNumber: 'MT-792', title: 'Server Room AC Maintenance', estimatedCost: 8200, priority: 'critical' },
-                        { _id: '3', ticketNumber: 'MT-795', title: 'Office Printer Replacement', estimatedCost: 25000, priority: 'medium' },
+                // Dashboard stats
+                if (dashRes.status === 'fulfilled' && dashRes.value.data?.data) {
+                    const d = dashRes.value.data.data;
+                    const expense = d.finance?.monthlyTransactions?.find((t: any) => t.id === 'EXPENSE');
+                    setStats({
+                        branchAssets: d.assets?.total || 0,
+                        openTickets: d.maintenance?.openTickets || 0,
+                        pendingApprovals: d.maintenance?.pendingApprovals || 0,
+                        mtdExpenses: expense?.total || 0,
+                        totalInventory: d.inventory?.total || 0,
+                        lowStockCount: d.inventory?.lowStock || 0,
+                    });
+                }
+
+                // Approval queue
+                if (approvalsRes.status === 'fulfilled' && approvalsRes.value.data?.data) {
+                    setApprovals(approvalsRes.value.data.data);
+                }
+
+                // Inventory chart
+                if (inventoryRes.status === 'fulfilled' && inventoryRes.value.data?.data) {
+                    const inv = inventoryRes.value.data.data;
+                    const total = inv.byType?.reduce((s: number, t: any) => s + t.totalQuantity, 0) || 0;
+                    const lowStock = inv.lowStockItems?.length || 0;
+                    setInventoryChartData([
+                        { name: 'In Stock', value: Math.max(0, total - lowStock) },
+                        { name: 'Low Stock', value: lowStock },
                     ]);
                 }
+
+                // Expenses trend
+                if (trendsRes.status === 'fulfilled' && trendsRes.value.data?.data) {
+                    setExpensesChartData(
+                        trendsRes.value.data.data.map((t: any) => ({
+                            name: new Date(t.period + '-01').toLocaleString('default', { month: 'short' }),
+                            value: Math.round(t.totalCost),
+                        }))
+                    );
+                }
+
+                // Technician count
+                if (usersRes.status === 'fulfilled') {
+                    const pagination = usersRes.value.data?.pagination;
+                    setTechnicianCount(pagination?.totalResults || pagination?.total || 0);
+                }
             } catch (error) {
-                // Use demo data on error
-                setApprovals([
-                    { _id: '1', ticketNumber: 'MT-789', title: 'HVAC Compressor Repair', estimatedCost: 12500, priority: 'high' },
-                    { _id: '2', ticketNumber: 'MT-792', title: 'Server Room AC Maintenance', estimatedCost: 8200, priority: 'critical' },
-                ]);
+                console.error('Failed to load manager dashboard:', error);
             } finally {
                 setLoading(false);
             }
@@ -198,19 +229,18 @@ export const ManagerDashboard = memo(function ManagerDashboard() {
     const handleApprove = async (id: string) => {
         try {
             await api.patch(`/maintenance/${id}/approve`);
-            setApprovals(prev => prev.filter(a => a._id !== id));
+            setApprovals(prev => prev.filter(a => a.id !== id));
         } catch (error) {
-            // Demo mode - just remove from list
-            setApprovals(prev => prev.filter(a => a._id !== id));
+            console.error('Approval failed:', error);
         }
     };
 
     const handleReject = async (id: string) => {
         try {
             await api.patch(`/maintenance/${id}/reject`);
-            setApprovals(prev => prev.filter(a => a._id !== id));
+            setApprovals(prev => prev.filter(a => a.id !== id));
         } catch (error) {
-            setApprovals(prev => prev.filter(a => a._id !== id));
+            console.error('Rejection failed:', error);
         }
     };
 
@@ -235,43 +265,41 @@ export const ManagerDashboard = memo(function ManagerDashboard() {
                     onClick={() => navigate('/assets')}
                 />
                 <StatCard
-                    title="Today's Tickets"
-                    value={stats.todaysTickets}
+                    title="Open Tickets"
+                    value={stats.openTickets}
                     icon={ClipboardCheck}
-                    change={-15}
-                    changeLabel="vs yesterday"
                     color="blue"
                     loading={loading}
                     onClick={() => navigate('/maintenance')}
                 />
                 <StatCard
                     title="MTD Expenses"
-                    value={`₹${stats.mtdExpenses.toLocaleString()}`}
+                    value={formatCurrency(stats.mtdExpenses)}
                     icon={DollarSign}
                     color="orange"
                     loading={loading}
                 />
                 <StatCard
-                    title="Budget Used"
-                    value={`${stats.budgetUsed}%`}
+                    title="Pending Approvals"
+                    value={stats.pendingApprovals}
                     icon={TrendingUp}
-                    color={stats.budgetUsed > 80 ? 'red' : 'green'}
+                    color={stats.pendingApprovals > 5 ? 'red' : 'green'}
                     loading={loading}
                 />
             </div>
 
-            {/* Second Row: Charts + Stats */}
+            {/* Charts Row */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <DashboardChart
                     type="donut"
-                    data={inventoryStatusData}
+                    data={inventoryChartData}
                     title="Inventory Status"
                     loading={loading}
                 />
                 <DashboardChart
                     type="bar"
-                    data={expensesData}
-                    title="Weekly Expenses Trend"
+                    data={expensesChartData}
+                    title="Monthly Maintenance Costs"
                     loading={loading}
                 />
             </div>
@@ -293,29 +321,29 @@ export const ManagerDashboard = memo(function ManagerDashboard() {
                     animate={{ opacity: 1, y: 0 }}
                     className="bg-[var(--bg-card)] border border-[var(--border-color)] rounded-2xl p-6"
                 >
-                    <h3 className="text-[var(--text-primary)] font-medium mb-4">Technician Workload</h3>
+                    <h3 className="text-[var(--text-primary)] font-medium mb-4">Team Overview</h3>
                     <div className="flex items-center gap-4 mb-4">
                         <div className="w-12 h-12 rounded-xl bg-blue-500/10 flex items-center justify-center">
                             <Users className="w-6 h-6 text-blue-400" />
                         </div>
                         <div>
-                            <p className="text-2xl font-bold text-[var(--text-primary)]">{stats.technicianCount}</p>
-                            <p className="text-sm text-[var(--text-secondary)]">Active Technicians</p>
+                            <p className="text-2xl font-bold text-[var(--text-primary)]">{technicianCount}</p>
+                            <p className="text-sm text-[var(--text-secondary)]">Technicians</p>
                         </div>
                     </div>
 
                     <div className="space-y-3">
                         <div className="flex items-center justify-between text-sm">
-                            <span className="text-[var(--text-secondary)]">Avg Tickets/Tech</span>
-                            <span className="text-[var(--text-primary)] font-medium">4.2</span>
+                            <span className="text-[var(--text-secondary)]">Inventory Items</span>
+                            <span className="text-[var(--text-primary)] font-medium">{stats.totalInventory}</span>
                         </div>
                         <div className="flex items-center justify-between text-sm">
-                            <span className="text-[var(--text-secondary)]">Overloaded</span>
-                            <span className="text-orange-400 font-medium">2</span>
+                            <span className="text-[var(--text-secondary)]">Low Stock Alerts</span>
+                            <span className="text-orange-400 font-medium">{stats.lowStockCount}</span>
                         </div>
                         <div className="flex items-center justify-between text-sm">
-                            <span className="text-[var(--text-secondary)]">Available</span>
-                            <span className="text-emerald-400 font-medium">4</span>
+                            <span className="text-[var(--text-secondary)]">Open Tickets</span>
+                            <span className="text-blue-400 font-medium">{stats.openTickets}</span>
                         </div>
                     </div>
 

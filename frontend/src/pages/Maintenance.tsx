@@ -71,9 +71,9 @@ export function Maintenance() {
 
     // Derived filtered tickets for client-side search (since backend search might be partial)
     const filteredTickets = tickets.filter((ticket: any) =>
-        ticket.ticketNumber.toLowerCase().includes(filters.search.toLowerCase()) ||
-        ticket.issueDescription.toLowerCase().includes(filters.search.toLowerCase()) ||
-        ticket.assetId?.name.toLowerCase().includes(filters.search.toLowerCase())
+        (ticket.ticketNumber || '').toLowerCase().includes(filters.search.toLowerCase()) ||
+        (ticket.issueDescription || '').toLowerCase().includes(filters.search.toLowerCase()) ||
+        (ticket.asset?.name || '').toLowerCase().includes(filters.search.toLowerCase())
     );
 
     return (
@@ -140,7 +140,10 @@ export function Maintenance() {
                                 <SelectItem value="REQUESTED">Requested</SelectItem>
                                 <SelectItem value="IN_PROGRESS">In Progress</SelectItem>
                                 <SelectItem value="PENDING_PARTS">Pending Parts</SelectItem>
+                                <SelectItem value="APPROVED">Approved</SelectItem>
+                                <SelectItem value="REJECTED">Rejected</SelectItem>
                                 <SelectItem value="COMPLETED">Completed</SelectItem>
+                                <SelectItem value="CLOSED">Closed</SelectItem>
                             </SelectContent>
                         </Select>
 
@@ -153,10 +156,10 @@ export function Maintenance() {
                             </SelectTrigger>
                             <SelectContent>
                                 <SelectItem value="all">All Priorities</SelectItem>
-                                <SelectItem value="critical">Critical</SelectItem>
-                                <SelectItem value="high">High</SelectItem>
-                                <SelectItem value="medium">Medium</SelectItem>
-                                <SelectItem value="low">Low</SelectItem>
+                                <SelectItem value="CRITICAL">Critical</SelectItem>
+                                <SelectItem value="HIGH">High</SelectItem>
+                                <SelectItem value="MEDIUM">Medium</SelectItem>
+                                <SelectItem value="LOW">Low</SelectItem>
                             </SelectContent>
                         </Select>
                     </div>

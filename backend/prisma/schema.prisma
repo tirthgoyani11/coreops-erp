@@ -245,6 +245,8 @@ enum AiIntent {
   PREDICT_MAINTENANCE
   MATCH_INVOICE
   FORECAST_BUDGET
+  CREATE_ASSET
+  REFILL_INVENTORY
   GENERAL
 }
 
@@ -307,6 +309,8 @@ model Office {
   transactions       Transaction[]
   budgets            Budget[]
   aiOperations       AiOperation[]
+  glAccounts         GLAccount[]
+  journalEntries     JournalEntry[]
 
   @@index([name, country])
   @@index([parentId])
@@ -366,6 +370,7 @@ model User {
   aiOperations         AiOperation[]     @relation("AiOperationUser")
   aiApprovals          AiOperation[]     @relation("AiOperationApprover")
   stockMovements       StockMovement[]
+  createdJournalEntries JournalEntry[]    @relation("JournalEntryCreator")
 
   @@index([role, officeId])
   @@index([officeId])
@@ -694,12 +699,15 @@ model Transaction {
   recordedById  String?
   recordedBy    User?             @relation(fields: [recordedById], references: [id])
   status        TransactionStatus @default(CLEARED)
-  glAccountId   String?           // FK for Phase 2 GL integration
+  glAccountId   String?
+  glAccount     GLAccount?        @relation(fields: [glAccountId], references: [id])
+  journalLines  JournalEntryLine[]
   createdAt     DateTime          @default(now())
 
   @@index([officeId, date(sort: Desc)])
   @@index([type, category])
   @@index([status])
+  @@index([glAccountId])
 }
 
 model Budget {
@@ -848,6 +856,87 @@ model Invoice {
 
   @@index([officeId, status])
   @@index([dueDate])
+}
+
+// ─── GENERAL LEDGER (Phase 2) ───────────────────────────────────
+
+enum GLAccountType {
+  ASSET
+  LIABILITY
+  EQUITY
+  REVENUE
+  EXPENSE
+}
+
+enum JournalStatus {
+  DRAFT
+  POSTED
+  REVERSED
+}
+
+model GLAccount {
+  id            String         @id @default(uuid())
+  code          String         @unique  // "1000", "2100", "4000"
+  name          String                  // "Cash", "Accounts Receivable"
+  type          GLAccountType
+  parentId      String?
+  parent        GLAccount?     @relation("GLHierarchy", fields: [parentId], references: [id])
+  children      GLAccount[]    @relation("GLHierarchy")
+  description   String?
+  isActive      Boolean        @default(true)
+  balance       Float          @default(0) // running balance
+  normalSide    String         @default("DEBIT") // DEBIT or CREDIT
+  officeId      String?
+  office        Office?        @relation(fields: [officeId], references: [id])
+  journalLines  JournalEntryLine[]
+  transactions  Transaction[]
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  @@index([type])
+  @@index([parentId])
+  @@index([officeId])
+}
+
+model JournalEntry {
+  id            String         @id @default(uuid())
+  entryNumber   String         @unique  // "JE-2026-0001"
+  date          DateTime       @default(now())
+  description   String?
+  reference     String?        // PO number, invoice ID, etc.
+  referenceType String?        // "PURCHASE_ORDER", "INVOICE", "MANUAL"
+  status        JournalStatus  @default(DRAFT)
+  totalAmount   Float          @default(0) // total of one side
+  officeId      String?
+  office        Office?        @relation(fields: [officeId], references: [id])
+  createdById   String?
+  createdBy     User?          @relation("JournalEntryCreator", fields: [createdById], references: [id])
+  lines         JournalEntryLine[]
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  @@index([date(sort: Desc)])
+  @@index([status])
+  @@index([officeId, date(sort: Desc)])
+  @@index([referenceType, reference])
+}
+
+model JournalEntryLine {
+  id              String        @id @default(uuid())
+  journalEntryId  String
+  journalEntry    JournalEntry  @relation(fields: [journalEntryId], references: [id], onDelete: Cascade)
+  accountId       String
+  account         GLAccount     @relation(fields: [accountId], references: [id])
+  debit           Float         @default(0)
+  credit          Float         @default(0)
+  description     String?
+  transactionId   String?       // link back to source transaction
+  transaction     Transaction?  @relation(fields: [transactionId], references: [id])
+  createdAt       DateTime      @default(now())
+
+  @@index([journalEntryId])
+  @@index([accountId])
+  @@index([transactionId])
 }
 
 // ─── AI OPERATION (Explainability Audit Trail) ──────────────────

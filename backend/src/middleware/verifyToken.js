@@ -41,10 +41,8 @@ const verifyToken = async (req, res, next) => {
         // Remove password from user object
         const { password, passwordResetToken, passwordResetExpires, ...safeUser } = user;
 
-        // Map office for backward compat: req.user.officeId now holds the office object
-        // but also keep the raw string ID accessible
-        safeUser._id = safeUser.id; // Backward compat for code using _id
-        safeUser.officeId = safeUser.office || safeUser.officeId;
+        // Keep officeId as the raw UUID string for Prisma FK lookups
+        // The full office object is accessible via req.user.office
 
         req.user = safeUser;
         next();

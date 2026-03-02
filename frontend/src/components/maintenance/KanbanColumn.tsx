@@ -27,7 +27,7 @@ export function KanbanColumn({ id, title, color, tickets }: KanbanColumnProps) {
                 className="flex-1 p-3 overflow-y-auto space-y-3 min-h-[200px]"
             >
                 {tickets.map(ticket => (
-                    <KanbanCard key={ticket._id} ticket={ticket} />
+                    <KanbanCard key={ticket.id} ticket={ticket} />
                 ))}
             </div>
         </div>

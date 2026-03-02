@@ -3,17 +3,19 @@ import { Card } from '../ui/Card';
 import { Badge } from '../ui/Badge';
 import { Button } from '../ui/Button';
 import { Eye, AlertTriangle } from 'lucide-react';
+
 interface InventoryItem {
-    _id: string;
+    id: string;
     name: string;
     sku: string;
     category: string;
-    quantity: number;
-    minQuantity: number;
+    currentQuantity: number;
+    reorderPoint: number;
     unit: string;
-    unitPrice: number;
-    location: string;
-    lastRestocked?: string;
+    costPrice: number | null;
+    unitCost: number | null;
+    storageLocation: string | null;
+    lastRestockDate?: string;
 }
 
 interface InventoryTableViewProps {
@@ -56,12 +58,13 @@ export function InventoryTableView({ items, type }: InventoryTableViewProps) {
                     </thead>
                     <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
                         {items.map((item) => {
-                            const isLowStock = item.quantity <= item.minQuantity;
+                            const isLowStock = item.currentQuantity <= item.reorderPoint;
+                            const price = item.costPrice ?? item.unitCost ?? 0;
                             return (
                                 <tr
-                                    key={item._id}
+                                    key={item.id}
                                     className="group hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors cursor-pointer"
-                                    onClick={() => navigate(`/inventory/${item._id}`)}
+                                    onClick={() => navigate(`/inventory/${item.id}`)}
                                 >
                                     <td className="px-4 py-3 font-medium text-gray-900 dark:text-gray-100">
                                         {item.sku}
@@ -77,18 +80,18 @@ export function InventoryTableView({ items, type }: InventoryTableViewProps) {
                                     <td className="px-4 py-3 text-gray-500 capitalize">{item.category}</td>
                                     <td className="px-4 py-3 text-right">
                                         <div className="flex items-center justify-end gap-2">
-                                            <Badge variant={item.quantity === 0 ? 'destructive' : isLowStock ? 'warning' : 'secondary'}>
-                                                {item.quantity} {item.unit}
+                                            <Badge variant={item.currentQuantity === 0 ? 'destructive' : isLowStock ? 'warning' : 'secondary'}>
+                                                {item.currentQuantity} {item.unit}
                                             </Badge>
                                         </div>
                                     </td>
                                     <td className="px-4 py-3 text-right font-medium">
-                                        ₹{item.unitPrice?.toLocaleString() ?? '0'}
+                                        ₹{price.toLocaleString()}
                                     </td>
-                                    <td className="px-4 py-3 text-gray-500">{item.location || '-'}</td>
+                                    <td className="px-4 py-3 text-gray-500">{item.storageLocation || '-'}</td>
                                     <td className="px-4 py-3 text-right" onClick={(e) => e.stopPropagation()}>
                                         <div className="flex justify-end gap-2">
-                                            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => navigate(`/inventory/${item._id}`)}>
+                                            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => navigate(`/inventory/${item.id}`)}>
                                                 <Eye className="w-4 h-4" />
                                             </Button>
                                         </div>

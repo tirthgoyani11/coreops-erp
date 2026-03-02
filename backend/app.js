@@ -27,6 +27,7 @@ const profileRoutes = require('./src/routes/profileRoutes');
 const settingsRoutes = require('./src/routes/settingsRoutes');
 const documentRoutes = require('./src/routes/documentRoutes');
 const financeRoutes = require('./src/routes/financeRoutes');
+const glRoutes = require('./src/routes/glRoutes');
 const aiRoutes = require('./src/routes/aiRoutes');
 const procurementMatchRoutes = require('./src/routes/procurementMatchRoutes');
 // Trigger restart for finance routes - V2
@@ -146,6 +147,7 @@ app.use('/api/profile', profileRoutes);
 app.use('/api/settings', settingsRoutes);
 app.use('/api/documents', documentRoutes);
 app.use('/api/finance', financeRoutes);
+app.use('/api/gl', glRoutes);
 app.use('/api/ai', aiRoutes);
 app.use('/api/procurement', procurementMatchRoutes);
 

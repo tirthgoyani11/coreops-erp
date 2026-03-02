@@ -58,9 +58,9 @@ exports.getDashboardStats = async (req, res) => {
                 assets: {
                     total: totalAssets, active: activeAssets,
                     byStatus: [
-                        { _id: 'ACTIVE', count: activeAssets },
-                        { _id: 'MAINTENANCE', count: maintenanceAssets },
-                        { _id: 'RETIRED', count: retiredAssets },
+                        { id: 'ACTIVE', count: activeAssets },
+                        { id: 'MAINTENANCE', count: maintenanceAssets },
+                        { id: 'RETIRED', count: retiredAssets },
                     ],
                     totalValue: assetValueAgg._sum.currentBookValue || 0,
                 },
@@ -69,8 +69,8 @@ exports.getDashboardStats = async (req, res) => {
                 vendors: { total: vendorCount },
                 finance: {
                     monthlyTransactions: [
-                        { _id: 'INCOME', total: incomeAgg._sum.amount || 0, count: incomeAgg._count.id },
-                        { _id: 'EXPENSE', total: expenseAgg._sum.amount || 0, count: expenseAgg._count.id },
+                        { id: 'INCOME', total: incomeAgg._sum.amount || 0, count: incomeAgg._count.id },
+                        { id: 'EXPENSE', total: expenseAgg._sum.amount || 0, count: expenseAgg._count.id },
                     ],
                 },
             },
@@ -95,7 +95,7 @@ exports.getAssetsByCategory = async (req, res) => {
         res.json({
             success: true,
             data: result.map(r => ({
-                _id: r.category,
+                id: r.category,
                 count: r._count.id,
                 totalValue: r._sum.currentBookValue || 0,
                 totalPurchasePrice: r._sum.purchasePrice || 0,
@@ -126,7 +126,7 @@ exports.getDepreciationSummary = async (req, res) => {
         }
 
         const result = Object.entries(byCategory).map(([cat, data]) => ({
-            _id: cat,
+            id: cat,
             ...data,
             totalDepreciation: data.totalPurchasePrice - data.totalBookValue,
         })).sort((a, b) => b.totalDepreciation - a.totalDepreciation);
@@ -215,8 +215,8 @@ exports.getInventoryStatus = async (req, res) => {
         res.json({
             success: true,
             data: {
-                byType: Object.entries(byType).map(([k, v]) => ({ _id: k, ...v })),
-                byCategory: Object.entries(byCategory).map(([k, v]) => ({ _id: k, ...v })).sort((a, b) => b.count - a.count).slice(0, 10),
+                byType: Object.entries(byType).map(([k, v]) => ({ id: k, ...v })),
+                byCategory: Object.entries(byCategory).map(([k, v]) => ({ id: k, ...v })).sort((a, b) => b.count - a.count).slice(0, 10),
                 lowStockItems,
                 totalInventoryValue,
             },
@@ -254,7 +254,7 @@ exports.getFinanceSummary = async (req, res) => {
         }
 
         const result = Object.entries(groups).map(([type, data]) => ({
-            _id: type,
+            id: type,
             typeTotal: data.typeTotal,
             categories: Object.entries(data.categories).map(([cat, v]) => ({ category: cat, ...v })),
         }));

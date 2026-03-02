@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { StatCard } from '../../components/dashboard/StatCard';
 import { DashboardChart } from '../../components/dashboard/DashboardChart';
+import api from '../../lib/api';
 
 interface ViewerStats {
     totalAssets: number;
@@ -41,38 +42,60 @@ const ExportButton = memo(function ExportButton({
     );
 });
 
-// Summary data
-const assetByTypeData = [
-    { name: 'IT Equipment', value: 420 },
-    { name: 'Furniture', value: 280 },
-    { name: 'Vehicles', value: 85 },
-    { name: 'Machinery', value: 165 },
-    { name: 'Other', value: 50 },
-];
-
-const ticketTrendData = [
-    { name: 'Mon', value: 12 },
-    { name: 'Tue', value: 19 },
-    { name: 'Wed', value: 15 },
-    { name: 'Thu', value: 22 },
-    { name: 'Fri', value: 18 },
-    { name: 'Sat', value: 8 },
-    { name: 'Sun', value: 5 },
-];
-
 // Main Viewer Dashboard
 export const ViewerDashboard = memo(function ViewerDashboard() {
-    const [stats, _setStats] = useState<ViewerStats>({
-        totalAssets: 1000,
-        maintenanceTickets: 87,
-        inventoryItems: 2458,
+    const [stats, setStats] = useState<ViewerStats>({
+        totalAssets: 0,
+        maintenanceTickets: 0,
+        inventoryItems: 0,
     });
     const [loading, setLoading] = useState(true);
+    const [assetCategoryData, setAssetCategoryData] = useState<{ name: string; value: number }[]>([]);
+    const [maintenanceTrendData, setMaintenanceTrendData] = useState<{ name: string; value: number }[]>([]);
 
     useEffect(() => {
-        // Simulate loading
-        const timer = setTimeout(() => setLoading(false), 800);
-        return () => clearTimeout(timer);
+        async function fetchData() {
+            try {
+                const [dashRes, categoryRes, trendsRes] = await Promise.allSettled([
+                    api.get('/analytics/dashboard'),
+                    api.get('/analytics/assets/by-category'),
+                    api.get('/analytics/maintenance/trends?months=4'),
+                ]);
+
+                // Dashboard stats
+                if (dashRes.status === 'fulfilled' && dashRes.value.data?.data) {
+                    const d = dashRes.value.data.data;
+                    setStats({
+                        totalAssets: d.assets?.total || 0,
+                        maintenanceTickets: d.maintenance?.openTickets || 0,
+                        inventoryItems: d.inventory?.total || 0,
+                    });
+                }
+
+                // Asset by category chart
+                if (categoryRes.status === 'fulfilled' && categoryRes.value.data?.data) {
+                    setAssetCategoryData(
+                        categoryRes.value.data.data.map((c: any) => ({ name: c.id, value: c.count }))
+                    );
+                }
+
+                // Maintenance trends chart
+                if (trendsRes.status === 'fulfilled' && trendsRes.value.data?.data) {
+                    setMaintenanceTrendData(
+                        trendsRes.value.data.data.map((t: any) => ({
+                            name: new Date(t.period + '-01').toLocaleString('default', { month: 'short' }),
+                            value: t.ticketCount,
+                        }))
+                    );
+                }
+            } catch {
+                // Keep defaults
+            } finally {
+                setLoading(false);
+            }
+        }
+
+        fetchData();
     }, []);
 
     return (
@@ -118,14 +141,14 @@ export const ViewerDashboard = memo(function ViewerDashboard() {
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <DashboardChart
                     type="pie"
-                    data={assetByTypeData}
+                    data={assetCategoryData}
                     title="Assets by Category"
                     loading={loading}
                 />
                 <DashboardChart
                     type="line"
-                    data={ticketTrendData}
-                    title="Weekly Ticket Trend"
+                    data={maintenanceTrendData}
+                    title="Maintenance Ticket Trend"
                     loading={loading}
                 />
             </div>

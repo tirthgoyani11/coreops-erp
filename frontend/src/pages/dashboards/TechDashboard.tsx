@@ -109,9 +109,9 @@ export function TechDashboard() {
                     ) : (
                         myTickets.map((ticket: any) => (
                             <Card
-                                key={ticket._id}
+                                key={ticket.id}
                                 className="p-4 hover:shadow-md transition-shadow cursor-pointer border-l-4 border-l-blue-500"
-                                onClick={() => navigate(`/maintenance/${ticket._id}`)}
+                                onClick={() => navigate(`/maintenance/${ticket.id}`)}
                             >
                                 <div className="flex justify-between items-start">
                                     <div className="space-y-1">

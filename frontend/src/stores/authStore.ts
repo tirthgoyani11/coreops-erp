@@ -29,6 +29,8 @@ interface AuthState {
  * - On page reload: checkAuth() calls /auth/refresh to get a new access token from cookie
  * - On 401 TOKEN_EXPIRED: api.ts interceptor auto-refreshes and retries
  */
+let authRefreshPromise: Promise<void> | null = null;
+
 export const useAuthStore = create<AuthState>()(
     (set, _get) => ({
         user: null,
@@ -44,7 +46,6 @@ export const useAuthStore = create<AuthState>()(
                 const { data } = await api.post<AuthResponse>('/auth/login', credentials);
 
                 if (data.success) {
-                    // Store access token in memory only (NEVER localStorage)
                     setAccessToken(data.token);
                     set({
                         user: data.user,
@@ -66,7 +67,6 @@ export const useAuthStore = create<AuthState>()(
 
         logout: async () => {
             try {
-                // Call backend to revoke refresh token family + clear cookie
                 await api.post('/auth/logout');
             } catch {
                 // Logout should succeed even if API fails
@@ -81,24 +81,32 @@ export const useAuthStore = create<AuthState>()(
         },
 
         checkAuth: async () => {
-            // On page load, try to restore session using httpOnly refresh cookie
-            try {
-                const { data } = await api.post('/auth/refresh');
-                if (data.success && data.token) {
-                    setAccessToken(data.token);
-                    set({
-                        user: data.user,
-                        token: data.token,
-                        isAuthenticated: true,
-                        isInitializing: false,
-                    });
-                    return;
+            // Deduplicate concurrent checkAuth calls (fixes React Strict Mode race condition)
+            if (authRefreshPromise) return authRefreshPromise;
+
+            authRefreshPromise = (async () => {
+                try {
+                    const { data } = await api.post('/auth/refresh');
+                    if (data.success && data.token) {
+                        setAccessToken(data.token);
+                        set({
+                            user: data.user,
+                            token: data.token,
+                            isAuthenticated: true,
+                            isInitializing: false,
+                        });
+                        authRefreshPromise = null;
+                        return;
+                    }
+                } catch {
+                    // No valid refresh cookie — user needs to re-login
                 }
-            } catch {
-                // No valid refresh cookie — user needs to re-login
-            }
-            setAccessToken(null);
-            set({ isAuthenticated: false, user: null, token: null, isInitializing: false });
+                setAccessToken(null);
+                set({ isAuthenticated: false, user: null, token: null, isInitializing: false });
+                authRefreshPromise = null;
+            })();
+
+            return authRefreshPromise;
         },
 
         hasPermission: (feature: string) => {

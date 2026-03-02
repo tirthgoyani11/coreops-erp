@@ -13,10 +13,10 @@ interface AssetFinancialsProps {
 }
 
 export function AssetFinancials({ asset }: AssetFinancialsProps) {
-    // Read from correct backend paths — purchaseInfo.purchasePrice or legacy purchaseCost
-    const purchasePrice = asset.purchaseInfo?.purchasePrice || asset.purchaseCost || asset.purchasePrice || 0;
-    const purchaseYear = new Date(asset.purchaseInfo?.purchaseDate || asset.purchaseDate || new Date()).getFullYear();
-    const currency = asset.purchaseInfo?.currency || asset.currency || 'INR';
+    // Read from flat Prisma fields
+    const purchasePrice = asset.purchasePrice || asset.purchaseCost || 0;
+    const purchaseYear = new Date(asset.purchaseDate || new Date()).getFullYear();
+    const currency = asset.currency || 'INR';
 
     // Use backend depreciation data if available, otherwise calculate
     const usefulLife = asset.depreciation?.usefulLife || 5;

@@ -16,6 +16,8 @@ import {
     User,
     Ticket,
     DollarSign,
+    BookOpen,
+    LineChart,
     type LucideIcon
 } from 'lucide-react';
 
@@ -208,6 +210,32 @@ export const NAV_ITEMS: NavItem[] = [
         path: '/financial',
         icon: DollarSign,
         roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF', 'VIEWER']
+    },
+
+    // Phase 2 — General Ledger
+    {
+        label: 'General Ledger',
+        path: '/gl',
+        icon: BookOpen,
+        roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'VIEWER']
+    },
+    {
+        label: 'Profit & Loss',
+        path: '/profit-loss',
+        icon: LineChart,
+        roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'VIEWER']
+    },
+    {
+        label: 'Cash Flow',
+        path: '/cash-flow',
+        icon: DollarSign,
+        roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'VIEWER']
+    },
+    {
+        label: 'Inventory Intel',
+        path: '/inventory-analytics',
+        icon: BarChart3,
+        roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF']
     },
 
     // Analytics - Not for Technician

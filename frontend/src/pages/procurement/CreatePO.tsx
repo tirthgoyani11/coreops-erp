@@ -47,20 +47,34 @@ export function CreatePO() {
 
     const onProductSelect = (index: number, e: any) => {
         const prodId = e.target.value;
-        const product: any = products.find((p: any) => p._id === prodId);
+        const product: any = products.find((p: any) => p.id === prodId);
         if (product) {
-            setValue(`items.${index}.inventoryId` as any, product._id);
+            setValue(`items.${index}.inventoryId` as any, product.id);
             setValue(`items.${index}.name` as any, product.name);
             setValue(`items.${index}.description` as any, product.description);
-            setValue(`items.${index}.unitPrice` as any, product.cost?.unitCost || 0);
+            setValue(`items.${index}.unitPrice` as any, product.unitCost || product.costPrice || 0);
         }
     };
 
+    const [submitError, setSubmitError] = useState('');
+
     const onSubmit = async (data: any) => {
+        setSubmitError('');
         try {
-            await api.post('/purchase-orders', data);
+            // Convert string values from number inputs to actual numbers
+            const payload = {
+                ...data,
+                items: data.items.map((item: any) => ({
+                    ...item,
+                    quantity: Number(item.quantity) || 0,
+                    unitPrice: Number(item.unitPrice) || 0,
+                })),
+            };
+            await api.post('/purchase-orders', payload);
             navigate('/procurement/orders');
-        } catch (error) {
+        } catch (error: any) {
+            const msg = error?.response?.data?.error || error?.response?.data?.message || 'Failed to create PO. Please check all fields.';
+            setSubmitError(msg);
             console.error('Failed to create PO:', error);
         }
     };
@@ -86,7 +100,7 @@ export function CreatePO() {
                             >
                                 <option value="">Select Vendor...</option>
                                 {vendors.map((v: any) => (
-                                    <option key={v._id} value={v._id}>{v.name}</option>
+                                    <option key={v.id} value={v.id}>{v.name}</option>
                                 ))}
                             </select>
                             {errors.vendorId && <span className="text-red-500 text-xs">Required</span>}
@@ -121,7 +135,7 @@ export function CreatePO() {
                                     >
                                         <option value="">Custom Item...</option>
                                         {products.map((p: any) => (
-                                            <option key={p._id} value={p._id}>{p.name}</option>
+                                            <option key={p.id} value={p.id}>{p.name}</option>
                                         ))}
                                     </select>
                                 </div>
@@ -162,6 +176,12 @@ export function CreatePO() {
                         Total: ₹{totalAmount.toLocaleString()}
                     </div>
                 </Card>
+
+                {submitError && (
+                    <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-red-700 dark:text-red-300 text-sm">
+                        {submitError}
+                    </div>
+                )}
 
                 <div className="flex justify-end">
                     <Button type="submit" size="lg">

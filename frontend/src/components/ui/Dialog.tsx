@@ -1,23 +1,29 @@
 import * as React from "react"
 import { X } from "lucide-react"
-
 import { cn } from "../../lib/utils"
 
-
-
-// Re-implementing with Context for better control
 interface DialogContextType {
     open: boolean;
     onOpenChange: (open: boolean) => void;
 }
 const DialogContext = React.createContext<DialogContextType>({ open: false, onOpenChange: () => { } });
 
-const DialogRoot = ({ open = false, onOpenChange, children }: { open?: boolean, onOpenChange?: (open: boolean) => void, children: React.ReactNode }) => {
+export interface DialogProps {
+    open?: boolean
+    onOpenChange?: (open: boolean) => void
+    children: React.ReactNode
+}
+
+const DialogRoot = ({ open = false, onOpenChange, children }: DialogProps) => {
     return (
         <DialogContext.Provider value={{ open, onOpenChange: onOpenChange || (() => { }) }}>
             {open && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm animate-in fade-in-0">
-                    <div className="absolute inset-0" onClick={() => onOpenChange?.(false)} />
+                <div className="fixed inset-0 z-50 flex items-center justify-center">
+                    {/* Backdrop */}
+                    <div
+                        className="absolute inset-0 bg-black/60 backdrop-blur-sm animate-in fade-in-0 duration-200"
+                        onClick={() => onOpenChange?.(false)}
+                    />
                     {children}
                 </div>
             )}
@@ -27,22 +33,33 @@ const DialogRoot = ({ open = false, onOpenChange, children }: { open?: boolean, 
 
 const DialogContentWithContext = React.forwardRef<
     HTMLDivElement,
-    React.HTMLAttributes<HTMLDivElement>
->(({ className, children, ...props }, ref) => {
+    React.HTMLAttributes<HTMLDivElement> & { size?: 'sm' | 'default' | 'lg' | 'xl' }
+>(({ className, children, size = 'default', ...props }, ref) => {
     const { onOpenChange } = React.useContext(DialogContext);
+
+    const sizes = {
+        sm: 'max-w-sm',
+        default: 'max-w-lg',
+        lg: 'max-w-2xl',
+        xl: 'max-w-4xl',
+    }
+
     return (
         <div
             ref={ref}
             className={cn(
-                "relative z-50 grid w-full max-w-lg gap-4 border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-950 p-6 shadow-lg duration-200 sm:rounded-lg animate-in zoom-in-95 slide-in-from-bottom-2",
+                "relative z-50 grid w-full gap-4 p-6 shadow-[var(--shadow-xl)] duration-200 sm:rounded-[var(--radius-xl)]",
+                "border border-[var(--border-default)] bg-[var(--surface-elevated)] text-[var(--text-primary)]",
+                "animate-in zoom-in-95 slide-in-from-bottom-2",
+                sizes[size],
                 className
             )}
-            onClick={(e) => e.stopPropagation()} // Prevent closing when clicking inside
+            onClick={(e) => e.stopPropagation()}
             {...props}
         >
             {children}
             <button
-                className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none"
+                className="absolute right-4 top-4 rounded-md p-1 opacity-70 transition-all hover:opacity-100 hover:bg-[var(--surface-muted)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
                 onClick={() => onOpenChange(false)}
             >
                 <X className="h-4 w-4" />
@@ -88,7 +105,7 @@ const DialogTitle = React.forwardRef<
     <h2
         ref={ref}
         className={cn(
-            "text-lg font-semibold leading-none tracking-tight",
+            "text-lg font-semibold leading-none tracking-tight text-[var(--text-primary)]",
             className
         )}
         {...props}
@@ -102,15 +119,13 @@ const DialogDescription = React.forwardRef<
 >(({ className, ...props }, ref) => (
     <p
         ref={ref}
-        className={cn("text-sm text-muted-foreground text-gray-500 dark:text-gray-400", className)}
+        className={cn("text-sm text-[var(--text-secondary)]", className)}
         {...props}
     />
 ))
 DialogDescription.displayName = "DialogDescription"
 
-// Exports matching Radix interface roughly
 export const Dialog = DialogRoot;
 export const DialogContent = DialogContentWithContext;
 export { DialogHeader, DialogFooter, DialogTitle, DialogDescription };
-// Placeholder for Trigger if needed, though we use controlled state mostly
 export const DialogTrigger = ({ children, onClick }: any) => <div onClick={onClick}>{children}</div>;

@@ -324,3 +324,239 @@ exports.getStockValuation = async (req, res) => {
         res.status(500).json({ success: false, message: 'Server Error', error: error.message });
     }
 };
+
+// ─── PHASE 2: INVENTORY INTELLIGENCE ───────────────────────────
+
+// @desc    Demand forecast for an item (next 30/60/90 days)
+// @route   GET /api/inventory/forecast/:id
+// @access  Private
+// Algorithm: ERPNext-standard — avg daily consumption × projection period
+exports.getDemandForecast = async (req, res) => {
+    try {
+        const item = await prisma.inventory.findUnique({ where: { id: req.params.id } });
+        if (!item) return res.status(404).json({ success: false, message: 'Item not found' });
+
+        // Get stock OUT movements (last 90 days for historical data)
+        const ninetyDaysAgo = new Date();
+        ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
+
+        const movements = await prisma.stockMovement.findMany({
+            where: {
+                inventoryId: item.id,
+                type: { in: ['STOCK_OUT', 'TRANSFER'] },
+                date: { gte: ninetyDaysAgo },
+            },
+            orderBy: { date: 'asc' },
+        });
+
+        // Calculate average daily consumption
+        const totalConsumed = movements.reduce((s, m) => s + Math.abs(m.quantity), 0);
+        const dayRange = movements.length > 0
+            ? Math.max(1, Math.ceil((Date.now() - new Date(movements[0].date)) / (1000 * 60 * 60 * 24)))
+            : 90;
+        const avgDailyConsumption = totalConsumed / dayRange;
+
+        // Projections
+        const periods = [30, 60, 90];
+        const forecast = periods.map(days => ({
+            period: `${days} days`,
+            projectedDemand: Math.round(avgDailyConsumption * days),
+            currentStock: item.currentQuantity,
+            stockoutDate: avgDailyConsumption > 0
+                ? new Date(Date.now() + (item.currentQuantity / avgDailyConsumption) * 24 * 60 * 60 * 1000)
+                : null,
+            willStockOut: avgDailyConsumption > 0 && item.currentQuantity < avgDailyConsumption * days,
+        }));
+
+        // Weekly breakdown (last 12 weeks)
+        const weeklyConsumption = [];
+        for (let i = 11; i >= 0; i--) {
+            const weekStart = new Date();
+            weekStart.setDate(weekStart.getDate() - (i + 1) * 7);
+            const weekEnd = new Date();
+            weekEnd.setDate(weekEnd.getDate() - i * 7);
+
+            const weekMoves = movements.filter(m => {
+                const d = new Date(m.date);
+                return d >= weekStart && d < weekEnd;
+            });
+
+            weeklyConsumption.push({
+                week: `W${12 - i}`,
+                startDate: weekStart,
+                consumed: weekMoves.reduce((s, m) => s + Math.abs(m.quantity), 0),
+            });
+        }
+
+        res.json({
+            success: true,
+            data: {
+                item: { id: item.id, name: item.name, sku: item.sku, currentQuantity: item.currentQuantity },
+                avgDailyConsumption: Math.round(avgDailyConsumption * 100) / 100,
+                totalConsumedLast90Days: totalConsumed,
+                forecast,
+                weeklyConsumption,
+                reorderRecommendation: {
+                    reorderPoint: Math.round(avgDailyConsumption * 14) + (item.minimumQuantity || 5), // 2 weeks lead time + safety
+                    reorderQuantity: Math.round(avgDailyConsumption * 30), // 1 month supply
+                    currentReorderPoint: item.reorderPoint,
+                },
+            },
+        });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+};
+
+// @desc    Auto-calculated reorder points for all items
+// @route   GET /api/inventory/reorder-calc
+// @access  Private (Manager/Admin)
+// Formula (ERPNext): reorder_level = (avg_daily_consumption × lead_time_days) + safety_stock
+exports.getReorderCalc = async (req, res) => {
+    try {
+        const { leadTimeDays = 14 } = req.query;
+        const leadTime = parseInt(leadTimeDays);
+
+        const where = { isActive: true };
+        if (req.user.role !== 'SUPER_ADMIN') {
+            const oid = req.user.office?.id || req.user.officeId;
+            where.officeId = typeof oid === 'object' ? oid.id : oid;
+        }
+
+        const items = await prisma.inventory.findMany({
+            where,
+            include: {
+                stockMovements: {
+                    where: {
+                        type: { in: ['STOCK_OUT', 'TRANSFER'] },
+                        date: { gte: new Date(Date.now() - 90 * 24 * 60 * 60 * 1000) },
+                    },
+                },
+            },
+        });
+
+        const recommendations = items.map(item => {
+            const totalConsumed = item.stockMovements.reduce((s, m) => s + Math.abs(m.quantity), 0);
+            const avgDaily = totalConsumed / 90;
+            const safetyStock = item.minimumQuantity || 5;
+
+            const recommendedReorderPoint = Math.round(avgDaily * leadTime + safetyStock);
+            const recommendedReorderQty = Math.round(avgDaily * 30); // 1 month
+
+            return {
+                id: item.id,
+                name: item.name,
+                sku: item.sku,
+                type: item.type,
+                currentQuantity: item.currentQuantity,
+                currentReorderPoint: item.reorderPoint,
+                currentReorderQty: item.reorderQuantity,
+                avgDailyConsumption: Math.round(avgDaily * 100) / 100,
+                recommendedReorderPoint,
+                recommendedReorderQty: Math.max(recommendedReorderQty, 1),
+                needsUpdate: item.reorderPoint !== recommendedReorderPoint,
+                status: item.currentQuantity <= recommendedReorderPoint ? 'REORDER_NOW' :
+                    item.currentQuantity <= recommendedReorderPoint * 1.5 ? 'LOW' : 'OK',
+            };
+        });
+
+        const needsReorder = recommendations.filter(r => r.status === 'REORDER_NOW');
+        const needsUpdate = recommendations.filter(r => r.needsUpdate);
+
+        res.json({
+            success: true,
+            data: {
+                recommendations,
+                summary: {
+                    total: recommendations.length,
+                    reorderNow: needsReorder.length,
+                    lowStock: recommendations.filter(r => r.status === 'LOW').length,
+                    needsConfigUpdate: needsUpdate.length,
+                },
+                config: { leadTimeDays: leadTime },
+            },
+        });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+};
+
+// @desc    Consumption analytics report
+// @route   GET /api/inventory/consumption-report
+// @access  Private
+exports.getConsumptionReport = async (req, res) => {
+    try {
+        const { startDate, endDate, category } = req.query;
+        const now = new Date();
+        const start = startDate ? new Date(startDate) : new Date(now.getFullYear(), now.getMonth() - 3, 1);
+        const end = endDate ? new Date(endDate) : now;
+
+        const moveWhere = {
+            type: { in: ['STOCK_OUT', 'TRANSFER'] },
+            date: { gte: start, lte: end },
+        };
+
+        // Get movements with inventory info
+        const movements = await prisma.stockMovement.findMany({
+            where: moveWhere,
+            include: {
+                inventory: { select: { id: true, name: true, sku: true, category: true, type: true, unitCost: true, costPrice: true } },
+            },
+            orderBy: { date: 'desc' },
+        });
+
+        // Group by category
+        const byCategory = {};
+        for (const m of movements) {
+            const cat = m.inventory?.category || 'Uncategorized';
+            if (category && cat !== category) continue;
+
+            if (!byCategory[cat]) byCategory[cat] = { quantity: 0, value: 0, items: new Set() };
+            byCategory[cat].quantity += Math.abs(m.quantity);
+            byCategory[cat].value += Math.abs(m.quantity) * (m.inventory?.unitCost || m.inventory?.costPrice || 0);
+            byCategory[cat].items.add(m.inventory?.id);
+        }
+
+        const categoryBreakdown = Object.entries(byCategory).map(([cat, data]) => ({
+            category: cat,
+            totalQuantity: data.quantity,
+            totalValue: Math.round(data.value * 100) / 100,
+            uniqueItems: data.items.size,
+        })).sort((a, b) => b.totalValue - a.totalValue);
+
+        // Top consumers (by value)
+        const byItem = {};
+        for (const m of movements) {
+            if (!m.inventory) continue;
+            const id = m.inventory.id;
+            if (!byItem[id]) byItem[id] = { ...m.inventory, quantity: 0, value: 0 };
+            byItem[id].quantity += Math.abs(m.quantity);
+            byItem[id].value += Math.abs(m.quantity) * (m.inventory.unitCost || m.inventory.costPrice || 0);
+        }
+
+        const topConsumers = Object.values(byItem)
+            .sort((a, b) => b.value - a.value)
+            .slice(0, 10)
+            .map(i => ({
+                id: i.id, name: i.name, sku: i.sku, category: i.category,
+                totalQuantity: i.quantity,
+                totalValue: Math.round(i.value * 100) / 100,
+            }));
+
+        res.json({
+            success: true,
+            data: {
+                period: { startDate: start, endDate: end },
+                totalMovements: movements.length,
+                totalQuantityConsumed: movements.reduce((s, m) => s + Math.abs(m.quantity), 0),
+                totalValueConsumed: Math.round(movements.reduce((s, m) =>
+                    s + Math.abs(m.quantity) * (m.inventory?.unitCost || m.inventory?.costPrice || 0), 0) * 100) / 100,
+                categoryBreakdown,
+                topConsumers,
+            },
+        });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+};
+

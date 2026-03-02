@@ -13,8 +13,8 @@ export function MaintenanceCalendarView({ tickets }: MaintenanceCalendarViewProp
     const navigate = useNavigate();
 
     const events = tickets.map(ticket => ({
-        id: ticket._id,
-        title: `${ticket.ticketNumber} - ${ticket.assetId?.name || 'Asset'}`,
+        id: ticket.id,
+        title: `${ticket.ticketNumber} - ${ticket.asset?.name || 'Asset'}`,
         start: ticket.assignedDate || ticket.createdAt, // Or schedulded date if we add it
         end: ticket.completedDate, // If completed
         backgroundColor: ticket.status === 'COMPLETED' ? '#10b981' :

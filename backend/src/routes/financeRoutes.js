@@ -4,7 +4,10 @@ const {
     getTransactions,
     createTransaction,
     getBudgets,
-    setBudget
+    setBudget,
+    getAPAging,
+    getARAging,
+    getGSTSummary,
 } = require('../controllers/financeController');
 const verifyToken = require('../middleware/verifyToken');
 const authorize = require('../middleware/authorize');
@@ -19,4 +22,10 @@ router.route('/budgets')
     .get(getBudgets)
     .post(authorize('SUPER_ADMIN', 'ADMIN', 'MANAGER'), setBudget);
 
+// Phase 2 — Financial Intelligence
+router.get('/ap-aging', getAPAging);
+router.get('/ar-aging', getARAging);
+router.get('/gst-summary', getGSTSummary);
+
 module.exports = router;
+

@@ -36,6 +36,10 @@ import { PurchaseOrderList } from './pages/procurement/PurchaseOrderList';
 import { CreatePO } from './pages/procurement/CreatePO';
 import { PurchaseOrderDetail } from './pages/procurement/PurchaseOrderDetail';
 import { Financial } from './pages/financial/Financial';
+import { GLDashboard } from './pages/financial/GLDashboard';
+import { ProfitLoss } from './pages/financial/ProfitLoss';
+import { CashFlow } from './pages/financial/CashFlow';
+import { InventoryAnalytics } from './pages/financial/InventoryAnalytics';
 import { Analytics } from './pages/Analytics';
 import { Notifications } from './pages/Notifications';
 import NotificationPreferences from './pages/NotificationPreferences';
@@ -151,8 +155,6 @@ function App() {
             <Route path="/assets/map" element={<RoleGuard allowedRoles={['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF', 'TECHNICIAN', 'VIEWER']}><AssetMap /></RoleGuard>} />
 
 
-            {/* Inventory - All roles (CRUD scope varies by role) */}
-            <Route path="/inventory" element={<Inventory />} />
 
             {/* Inventory - All roles can view */}
             <Route path="/inventory" element={<RoleGuard allowedRoles={['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF', 'TECHNICIAN', 'VIEWER']}><Inventory /></RoleGuard>} />
@@ -192,6 +194,12 @@ function App() {
 
             {/* Financial - Managers + Viewer */}
             <Route path="/financial" element={<RoleGuard allowedRoles={['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF', 'VIEWER']}><Financial /></RoleGuard>} />
+
+            {/* Phase 2 — GL, P&L, Cash Flow, Inventory Analytics */}
+            <Route path="/gl" element={<RoleGuard allowedRoles={['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'VIEWER']}><GLDashboard /></RoleGuard>} />
+            <Route path="/profit-loss" element={<RoleGuard allowedRoles={['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'VIEWER']}><ProfitLoss /></RoleGuard>} />
+            <Route path="/cash-flow" element={<RoleGuard allowedRoles={['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'VIEWER']}><CashFlow /></RoleGuard>} />
+            <Route path="/inventory-analytics" element={<RoleGuard allowedRoles={['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF']}><InventoryAnalytics /></RoleGuard>} />
 
             {/* Analytics - Not for Technician */}
             <Route

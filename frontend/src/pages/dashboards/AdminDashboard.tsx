@@ -4,19 +4,21 @@ import {
     Package,
     Wrench,
     ClipboardCheck,
-    Activity,
     Clock,
     User,
     ChevronRight,
+    DollarSign,
+    AlertTriangle,
 } from 'lucide-react';
 import { StatCard } from '../../components/dashboard/StatCard';
 import { DashboardChart } from '../../components/dashboard/DashboardChart';
 import { QuickActions } from '../../components/dashboard/QuickActions';
 import api from '../../lib/api';
+import { formatCurrency } from '../../lib/utils';
 
 // Types
 interface AuditLogEntry {
-    _id: string;
+    id: string;
     user?: { name: string };
     action: string;
     createdAt: string;
@@ -24,37 +26,16 @@ interface AuditLogEntry {
 
 interface DashboardStats {
     totalAssets: number;
+    activeAssets: number;
+    totalAssetValue: number;
     activeTickets: number;
     pendingApprovals: number;
-    systemHealth: number;
-    assetsChange?: number;
-    ticketsChange?: number;
+    totalInventory: number;
+    lowStock: number;
+    totalVendors: number;
+    monthlyIncome: number;
+    monthlyExpense: number;
 }
-
-// Mock data for charts (replace with API calls)
-const assetDistributionData = [
-    { name: 'Mumbai', value: 450 },
-    { name: 'Delhi', value: 320 },
-    { name: 'Bangalore', value: 280 },
-    { name: 'Chennai', value: 190 },
-    { name: 'Other', value: 120 },
-];
-
-const monthlyCostsData = [
-    { name: 'Jan', value: 12000 },
-    { name: 'Feb', value: 19000 },
-    { name: 'Mar', value: 15000 },
-    { name: 'Apr', value: 22000 },
-    { name: 'May', value: 18000 },
-    { name: 'Jun', value: 25000 },
-];
-
-const inventoryTurnoverData = [
-    { name: 'Q1', value: 4.2 },
-    { name: 'Q2', value: 3.8 },
-    { name: 'Q3', value: 5.1 },
-    { name: 'Q4', value: 4.6 },
-];
 
 // Audit Log Table Component
 const AuditLogTable = memo(function AuditLogTable({ logs, loading }: { logs: AuditLogEntry[]; loading: boolean }) {
@@ -103,7 +84,7 @@ const AuditLogTable = memo(function AuditLogTable({ logs, loading }: { logs: Aud
                 ) : (
                     logs.map((log, index) => (
                         <motion.div
-                            key={log._id}
+                            key={log.id}
                             initial={{ opacity: 0, x: -10 }}
                             animate={{ opacity: 1, x: 0 }}
                             transition={{ delay: index * 0.05 }}
@@ -135,48 +116,83 @@ const AuditLogTable = memo(function AuditLogTable({ logs, loading }: { logs: Aud
 export const AdminDashboard = memo(function AdminDashboard() {
     const [stats, setStats] = useState<DashboardStats>({
         totalAssets: 0,
+        activeAssets: 0,
+        totalAssetValue: 0,
         activeTickets: 0,
         pendingApprovals: 0,
-        systemHealth: 99.9,
+        totalInventory: 0,
+        lowStock: 0,
+        totalVendors: 0,
+        monthlyIncome: 0,
+        monthlyExpense: 0,
     });
     const [auditLogs, setAuditLogs] = useState<AuditLogEntry[]>([]);
     const [loading, setLoading] = useState(true);
+
+    // Chart data from API
+    const [assetCategoryData, setAssetCategoryData] = useState<{ name: string; value: number }[]>([]);
+    const [maintenanceTrendData, setMaintenanceTrendData] = useState<{ name: string; value: number }[]>([]);
+    const [inventoryData, setInventoryData] = useState<{ name: string; value: number }[]>([]);
 
     useEffect(() => {
         const fetchDashboardData = async () => {
             try {
                 setLoading(true);
 
-                // Fetch stats in parallel
-                const [assetsRes, logsRes] = await Promise.allSettled([
+                // Fetch all data in parallel
+                const [dashboardRes, logsRes, categoryRes, trendsRes, inventoryRes] = await Promise.allSettled([
                     api.get('/analytics/dashboard'),
                     api.get('/audit-logs?limit=8'),
+                    api.get('/analytics/assets/by-category'),
+                    api.get('/analytics/maintenance/trends?months=6'),
+                    api.get('/analytics/inventory/status'),
                 ]);
 
-                if (assetsRes.status === 'fulfilled' && assetsRes.value.data?.data) {
-                    const data = assetsRes.value.data.data;
+                // Dashboard stats
+                if (dashboardRes.status === 'fulfilled' && dashboardRes.value.data?.data) {
+                    const d = dashboardRes.value.data.data;
                     setStats({
-                        totalAssets: data.assets?.total || 1360,
-                        activeTickets: data.maintenance?.openTickets || 87,
-                        pendingApprovals: data.maintenance?.pendingApprovals || 12,
-                        systemHealth: 98.5, // Mock for now
-                        assetsChange: 5, // Mock
-                        ticketsChange: -2, // Mock
-                    });
-                } else {
-                    // Use demo data if API fails
-                    setStats({
-                        totalAssets: 1360,
-                        activeTickets: 87,
-                        pendingApprovals: 12,
-                        systemHealth: 99.9,
-                        assetsChange: 5,
-                        ticketsChange: -12,
+                        totalAssets: d.assets?.total || 0,
+                        activeAssets: d.assets?.active || 0,
+                        totalAssetValue: d.assets?.totalValue || 0,
+                        activeTickets: d.maintenance?.openTickets || 0,
+                        pendingApprovals: d.maintenance?.pendingApprovals || 0,
+                        totalInventory: d.inventory?.total || 0,
+                        lowStock: d.inventory?.lowStock || 0,
+                        totalVendors: d.vendors?.total || 0,
+                        monthlyIncome: d.finance?.monthlyTransactions?.find((t: any) => t.id === 'INCOME')?.total || 0,
+                        monthlyExpense: d.finance?.monthlyTransactions?.find((t: any) => t.id === 'EXPENSE')?.total || 0,
                     });
                 }
 
+                // Audit logs
                 if (logsRes.status === 'fulfilled' && logsRes.value.data?.data) {
                     setAuditLogs(logsRes.value.data.data);
+                }
+
+                // Asset categories chart
+                if (categoryRes.status === 'fulfilled' && categoryRes.value.data?.data) {
+                    setAssetCategoryData(
+                        categoryRes.value.data.data.map((c: any) => ({ name: c.id, value: c.count }))
+                    );
+                }
+
+                // Maintenance trends chart
+                if (trendsRes.status === 'fulfilled' && trendsRes.value.data?.data) {
+                    setMaintenanceTrendData(
+                        trendsRes.value.data.data.map((t: any) => ({
+                            name: new Date(t.period + '-01').toLocaleString('default', { month: 'short' }),
+                            value: Math.round(t.totalCost),
+                        }))
+                    );
+                }
+
+                // Inventory status chart
+                if (inventoryRes.status === 'fulfilled' && inventoryRes.value.data?.data) {
+                    const inv = inventoryRes.value.data.data;
+                    setInventoryData(
+                        inv.byType?.map((t: any) => ({ name: t.id, value: t.totalQuantity })) || []
+                    );
                 }
             } catch (error) {
                 console.error('Failed to fetch dashboard data:', error);
@@ -210,10 +226,8 @@ export const AdminDashboard = memo(function AdminDashboard() {
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 <StatCard
                     title="Total Assets"
-                    value={`$${(stats.totalAssets * 3800).toLocaleString()}`}
+                    value={stats.totalAssets}
                     icon={Package}
-                    change={stats.assetsChange}
-                    changeLabel="this month"
                     color="primary"
                     loading={loading}
                 />
@@ -221,8 +235,6 @@ export const AdminDashboard = memo(function AdminDashboard() {
                     title="Active Tickets"
                     value={stats.activeTickets}
                     icon={Wrench}
-                    change={stats.ticketsChange}
-                    changeLabel="vs last week"
                     color="blue"
                     loading={loading}
                 />
@@ -234,32 +246,55 @@ export const AdminDashboard = memo(function AdminDashboard() {
                     loading={loading}
                 />
                 <StatCard
-                    title="System Health"
-                    value={`${stats.systemHealth}%`}
-                    icon={Activity}
+                    title="Asset Value"
+                    value={formatCurrency(stats.totalAssetValue)}
+                    icon={DollarSign}
                     color="green"
                     loading={loading}
                 />
+            </div>
+
+            {/* Secondary Stats */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                <div className="bg-[var(--bg-card)] border border-[var(--border-color)] rounded-2xl p-4">
+                    <p className="text-xs text-[var(--text-secondary)] mb-1">Inventory Items</p>
+                    <p className="text-xl font-bold text-[var(--text-primary)]">{stats.totalInventory}</p>
+                </div>
+                <div className="bg-[var(--bg-card)] border border-[var(--border-color)] rounded-2xl p-4">
+                    <div className="flex items-center gap-1">
+                        <AlertTriangle className="w-3 h-3 text-amber-400" />
+                        <p className="text-xs text-[var(--text-secondary)]">Low Stock</p>
+                    </div>
+                    <p className="text-xl font-bold text-amber-400">{stats.lowStock}</p>
+                </div>
+                <div className="bg-[var(--bg-card)] border border-[var(--border-color)] rounded-2xl p-4">
+                    <p className="text-xs text-[var(--text-secondary)] mb-1">Vendors</p>
+                    <p className="text-xl font-bold text-[var(--text-primary)]">{stats.totalVendors}</p>
+                </div>
+                <div className="bg-[var(--bg-card)] border border-[var(--border-color)] rounded-2xl p-4">
+                    <p className="text-xs text-[var(--text-secondary)] mb-1">Active Assets</p>
+                    <p className="text-xl font-bold text-emerald-400">{stats.activeAssets}</p>
+                </div>
             </div>
 
             {/* Charts Row */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 <DashboardChart
                     type="pie"
-                    data={assetDistributionData}
-                    title="Asset Distribution by Location"
+                    data={assetCategoryData}
+                    title="Assets by Category"
                     loading={loading}
                 />
                 <DashboardChart
                     type="line"
-                    data={monthlyCostsData}
+                    data={maintenanceTrendData}
                     title="Monthly Maintenance Costs"
                     loading={loading}
                 />
                 <DashboardChart
                     type="bar"
-                    data={inventoryTurnoverData}
-                    title="Inventory Turnover Rate"
+                    data={inventoryData}
+                    title="Inventory by Type"
                     loading={loading}
                 />
             </div>

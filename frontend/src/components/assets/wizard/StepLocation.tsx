@@ -73,7 +73,7 @@ export function StepLocation({ data, updateData, errors }: StepLocationProps) {
                         >
                             <option value="">Select Office</option>
                             {offices.map(office => (
-                                <option key={office._id} value={office._id}>{office.name} ({office.code})</option>
+                                <option key={office.id} value={office.id}>{office.name} ({office.code})</option>
                             ))}
                             {/* Fallback if no offices loaded yet */}
                             {!offices.length && <option value="" disabled>Loading offices...</option>}
@@ -137,7 +137,7 @@ export function StepLocation({ data, updateData, errors }: StepLocationProps) {
                         >
                             <option value="">No assignment</option>
                             {users.map(u => (
-                                <option key={u._id} value={u._id}>{u.name} — {u.email}</option>
+                                <option key={u.id} value={u.id}>{u.name} — {u.email}</option>
                             ))}
                         </select>
                     </div>
