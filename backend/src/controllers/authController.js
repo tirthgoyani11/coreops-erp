@@ -38,20 +38,22 @@ function generateFamily() {
 }
 
 function setRefreshCookie(res, token) {
+    const isProduction = process.env.NODE_ENV === 'production';
     res.cookie('refreshToken', token, {
         httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'strict',
+        secure: isProduction,
+        sameSite: isProduction ? 'none' : 'strict',
         maxAge: REFRESH_TOKEN_DAYS * 24 * 60 * 60 * 1000,
         path: '/api/auth',
     });
 }
 
 function clearRefreshCookie(res) {
+    const isProduction = process.env.NODE_ENV === 'production';
     res.clearCookie('refreshToken', {
         httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'strict',
+        secure: isProduction,
+        sameSite: isProduction ? 'none' : 'strict',
         path: '/api/auth',
     });
 }
