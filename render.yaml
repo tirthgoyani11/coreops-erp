@@ -2,6 +2,7 @@ services:
   - type: web
     name: coreops-backend
     env: node
+    rootDir: backend
     region: ohio
     plan: free
     buildCommand: npm install && npx prisma generate
