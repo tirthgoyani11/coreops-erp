@@ -21,6 +21,12 @@ async function execute(intent, entities, context) {
         MATCH_INVOICE: matchInvoice,
         CREATE_ASSET: createAsset,
         REFILL_INVENTORY: refillInventory,
+        // v3 — New handlers
+        CREATE_TICKET: createTicket,
+        UPDATE_ASSET: updateAsset,
+        GET_LOW_STOCK: getLowStock,
+        GET_ASSET_STATS: getAssetStats,
+        SET_BUDGET: setBudget,
     };
 
     const handler = handlers[intent];
@@ -218,7 +224,9 @@ async function createAsset(entities, context) {
     }
 
     const status = entities.assetStatus || 'ACTIVE';
-    const category = entities.assetCategory || 'DEVICE';
+    const VALID_CATS = ['LAPTOP', 'COMPUTER', 'FURNITURE', 'VEHICLE', 'EQUIPMENT', 'PHONE', 'PRINTER', 'SERVER', 'NETWORK', 'MACHINERY', 'OTHER'];
+    let category = entities.assetCategory || 'OTHER';
+    if (!VALID_CATS.includes(category)) category = 'OTHER';
 
     const asset = await prisma.asset.create({
         data: {
@@ -381,6 +389,180 @@ async function matchInvoice(entities, context) {
         success: true,
         message: `Invoice matched to PO ${po.poNumber} from ${po.vendor?.name || 'Unknown Vendor'}. Total: ₹${po.totalAmount}.`,
         data: { poNumber: po.poNumber, vendor: po.vendor?.name, totalAmount: po.totalAmount, items: po.items.length },
+    };
+}
+
+// ─── v3: NEW HANDLERS ───────────────────────────────────────────
+
+async function createTicket(entities, context) {
+    const description = entities.description || entities.additionalContext;
+    if (!description) return { success: false, message: 'Please describe the maintenance issue.' };
+
+    let officeId = context.officeId;
+    if (!officeId) {
+        const dbUser = await prisma.user.findUnique({ where: { id: context.userId }, select: { officeId: true } });
+        officeId = dbUser?.officeId;
+    }
+    if (!officeId) {
+        const firstOffice = await prisma.office.findFirst({ select: { id: true } });
+        officeId = firstOffice?.id;
+    }
+
+    // Find asset if specified
+    let assetId = entities.assetId;
+    if (!assetId) {
+        const firstAsset = await prisma.asset.findFirst({ where: { officeId, status: 'ACTIVE' }, select: { id: true } });
+        assetId = firstAsset?.id;
+    }
+    if (!assetId) return { success: false, message: 'No active assets found to create a ticket for. Please specify an asset.' };
+
+    // Generate ticket number
+    const counter = await prisma.counter.upsert({
+        where: { name: 'maintenance_ticket' },
+        update: { sequence: { increment: 1 } },
+        create: { name: 'maintenance_ticket', prefix: 'MT-', sequence: 1 },
+    });
+    const ticketNumber = `MT-${String(counter.sequence).padStart(4, '0')}`;
+
+    const ticket = await prisma.maintenanceTicket.create({
+        data: {
+            ticketNumber,
+            assetId,
+            officeId,
+            issueDescription: description,
+            priority: entities.priority || 'MEDIUM',
+            requestedById: context.userId,
+        },
+    });
+
+    return {
+        success: true,
+        message: `🔧 **Maintenance Ticket Created!**\n\n` +
+            `• **Ticket**: ${ticket.ticketNumber}\n` +
+            `• **Issue**: ${description}\n` +
+            `• **Priority**: ${ticket.priority}\n` +
+            `• **Status**: ${ticket.status}`,
+        data: ticket,
+    };
+}
+
+async function updateAsset(entities, context) {
+    const assetId = entities.assetId || entities.guai;
+    if (!assetId) return { success: false, message: 'Please specify which asset to update (ID or GUAI).' };
+
+    const asset = await prisma.asset.findFirst({
+        where: {
+            OR: [
+                { id: assetId },
+                { guai: { contains: assetId, mode: 'insensitive' } },
+                { name: { contains: assetId, mode: 'insensitive' } },
+            ],
+        },
+    });
+    if (!asset) return { success: false, message: `Asset "${assetId}" not found.` };
+
+    const updateData = {};
+    if (entities.name) updateData.name = entities.name;
+    if (entities.assetStatus) updateData.status = entities.assetStatus;
+    if (entities.assetCategory) updateData.category = entities.assetCategory;
+    if (entities.location) updateData.building = entities.location;
+
+    if (Object.keys(updateData).length === 0) {
+        return { success: false, message: 'No update fields specified. What would you like to change?' };
+    }
+
+    const updated = await prisma.asset.update({ where: { id: asset.id }, data: updateData });
+
+    return {
+        success: true,
+        message: `✅ **Asset Updated!**\n\n` +
+            `• **Asset**: ${updated.name} (${updated.guai})\n` +
+            `• **Fields changed**: ${Object.keys(updateData).join(', ')}`,
+        data: updated,
+    };
+}
+
+async function getLowStock(entities, context) {
+    const lowItems = await prisma.inventory.findMany({
+        where: { currentQuantity: { lte: 10 } },
+        orderBy: { currentQuantity: 'asc' },
+        take: 10,
+        select: { name: true, currentQuantity: true, minimumQuantity: true, reorderPoint: true, unit: true },
+    });
+
+    if (lowItems.length === 0) {
+        return { success: true, message: '✅ All inventory items are sufficiently stocked. No low-stock alerts.' };
+    }
+
+    let msg = `⚠️ **Low Stock Alert** — ${lowItems.length} items need attention:\n\n`;
+    for (const item of lowItems) {
+        const emoji = item.currentQuantity <= item.minimumQuantity ? '🔴' : '🟡';
+        msg += `${emoji} **${item.name}**: ${item.currentQuantity} ${item.unit} (min: ${item.minimumQuantity})\n`;
+    }
+
+    return { success: true, message: msg, data: lowItems };
+}
+
+async function getAssetStats(entities, context) {
+    const where = {};
+    if (context.officeId) where.officeId = context.officeId;
+
+    const [total, active, maintenance, retired, valueAgg] = await Promise.all([
+        prisma.asset.count({ where }),
+        prisma.asset.count({ where: { ...where, status: 'ACTIVE' } }),
+        prisma.asset.count({ where: { ...where, status: 'MAINTENANCE' } }),
+        prisma.asset.count({ where: { ...where, status: 'RETIRED' } }),
+        prisma.asset.aggregate({ where, _sum: { purchasePrice: true } }),
+    ]);
+
+    const totalValue = valueAgg._sum.purchasePrice || 0;
+
+    return {
+        success: true,
+        message: `📊 **Asset Overview**\n\n` +
+            `| Metric | Value |\n|--------|-------|\n` +
+            `| Total Assets | ${total} |\n` +
+            `| Active | ${active} |\n` +
+            `| In Maintenance | ${maintenance} |\n` +
+            `| Retired | ${retired} |\n` +
+            `| Total Value | ₹${totalValue.toLocaleString('en-IN')} |`,
+        data: { total, active, maintenance, retired, totalValue },
+    };
+}
+
+async function setBudget(entities, context) {
+    const category = entities.category || 'General';
+    const limit = entities.amount;
+    if (!limit) return { success: false, message: 'Please specify a budget limit amount.' };
+
+    let officeId = context.officeId;
+    if (!officeId) {
+        const dbUser = await prisma.user.findUnique({ where: { id: context.userId }, select: { officeId: true } });
+        officeId = dbUser?.officeId;
+    }
+    if (!officeId) {
+        const firstOffice = await prisma.office.findFirst({ select: { id: true } });
+        officeId = firstOffice?.id;
+    }
+
+    const now = new Date();
+    const month = entities.month || now.getMonth() + 1;
+    const year = entities.year || now.getFullYear();
+
+    const budget = await prisma.budget.upsert({
+        where: { officeId_category_month_year: { officeId, category, month, year } },
+        update: { limit: parseFloat(limit) },
+        create: { officeId, category, month, year, limit: parseFloat(limit) },
+    });
+
+    return {
+        success: true,
+        message: `💰 **Budget Set!**\n\n` +
+            `• **Category**: ${budget.category}\n` +
+            `• **Month**: ${month}/${year}\n` +
+            `• **Limit**: ₹${parseFloat(limit).toLocaleString('en-IN')}\n` +
+            `• **Spent**: ₹${budget.spent.toLocaleString('en-IN')}`,
+        data: budget,
     };
 }
 
