@@ -75,7 +75,12 @@ function sanitizeUser(user) {
 exports.register = asyncHandler(async (req, res, next) => {
     const { name, email, password, role, officeId } = req.body;
 
-    if (role !== 'SUPER_ADMIN' && !officeId) {
+    // Security: Prevent MANAGER from creating high-level roles
+    if (req.user.role === 'MANAGER' && ['SUPER_ADMIN', 'ADMIN', 'MANAGER'].includes(role)) {
+        return next(new AppError('Managers can only create Staff, Technicians, or Viewers', 403));
+    }
+
+    if (role !== 'SUPER_ADMIN' && role !== 'ADMIN' && !officeId) {
         return next(new AppError('Office is required for non-admin users', 400));
     }
 
@@ -88,7 +93,7 @@ exports.register = asyncHandler(async (req, res, next) => {
             email: email.toLowerCase().trim(),
             password: hashedPassword,
             role: role || 'STAFF',
-            officeId: role === 'SUPER_ADMIN' ? null : officeId,
+            officeId: (role === 'SUPER_ADMIN' || role === 'ADMIN') ? null : officeId,
             ...permissions,
         },
     });

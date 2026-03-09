@@ -31,6 +31,9 @@ export function Yeti({ emailLength = 0, isPasswordFocused, showPassword }: YetiP
 
     // Initial Setup
     useEffect(() => {
+        // Guard: wait until all refs are attached
+        if (!armLRef.current || !armRRef.current || !mouthRef.current || !eyeLRef.current || !eyeRRef.current) return;
+
         // Set initial arm positions (Hidden/Down)
         gsap.set(armLRef.current, { x: -93, y: 220, rotation: 105, transformOrigin: "top left", visibility: 'hidden' });
         gsap.set(armRRef.current, { x: -93, y: 220, rotation: -105, transformOrigin: "top right", visibility: 'hidden' });

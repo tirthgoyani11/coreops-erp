@@ -43,7 +43,7 @@ const authValidation = {
             .withMessage('Password must contain uppercase, lowercase, and number'),
         body('role')
             .optional()
-            .isIn(['SUPER_ADMIN', 'MANAGER', 'STAFF'])
+            .isIn(['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF', 'TECHNICIAN', 'VIEWER'])
             .withMessage('Invalid role'),
         body('officeId')
             .optional()

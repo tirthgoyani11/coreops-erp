@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Users as UsersIcon, Plus, Mail, Shield, Loader2, Search, Building2 } from 'lucide-react';
 import api from '../lib/api';
@@ -16,7 +17,8 @@ interface UserWithOffice {
 import type { UserRole } from '../types';
 
 export function Users() {
-    const [users] = useState<UserWithOffice[]>([]);
+    const navigate = useNavigate();
+    const [users, setUsers] = useState<UserWithOffice[]>([]);
     const [offices, setOffices] = useState<Office[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
@@ -30,13 +32,19 @@ export function Users() {
     });
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [currentUserRole, setCurrentUserRole] = useState<string>('STAFF');
 
     const fetchData = async () => {
         try {
             setIsLoading(true);
-            // Note: You'll need to add a /api/users endpoint to the backend
-            // For now, we'll show a placeholder
-            const officesRes = await api.get('/offices');
+            const [usersRes, officesRes] = await Promise.all([
+                api.get('/users'),
+                api.get('/offices'),
+            ]);
+
+            if (usersRes.data.success) {
+                setUsers(usersRes.data.data);
+            }
             if (officesRes.data.success) {
                 setOffices(officesRes.data.data);
             }
@@ -48,6 +56,10 @@ export function Users() {
     };
 
     useEffect(() => {
+        const storedUser = localStorage.getItem('user');
+        if (storedUser) {
+            setCurrentUserRole(JSON.parse(storedUser).role);
+        }
         fetchData();
     }, []);
 
@@ -65,7 +77,8 @@ export function Users() {
             if (data.success) {
                 setShowCreateModal(false);
                 setFormData({ name: '', email: '', password: '', role: 'STAFF', officeId: '' });
-                // Refresh users list
+                fetchData(); // Refresh users list
+                alert('User created successfully');
             }
         } catch (err: any) {
             setError(err.response?.data?.message || 'Failed to create user');
@@ -144,7 +157,8 @@ export function Users() {
                             initial={{ opacity: 0, y: 20 }}
                             animate={{ opacity: 1, y: 0 }}
                             transition={{ delay: index * 0.05 }}
-                            className="bg-[var(--bg-card)] border border-[var(--border-color)] rounded-xl p-5"
+                            onClick={() => navigate(`/users/${user.id}`)}
+                            className="bg-[var(--bg-card)] border border-[var(--border-color)] rounded-xl p-5 cursor-pointer hover:border-[var(--primary)] transition-all"
                         >
                             <div className="flex items-start gap-3">
                                 <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[var(--primary)] to-cyan-500 flex items-center justify-center text-black font-bold">
@@ -230,14 +244,18 @@ export function Users() {
                                     onChange={(e) => setFormData({ ...formData, role: e.target.value as any })}
                                     className="w-full px-3 py-2 bg-[var(--bg-overlay)] border border-[var(--border-color)] rounded-lg text-[var(--text-primary)] focus:outline-none focus:border-[var(--primary)]"
                                 >
-                                    <option value="SUPER_ADMIN">Super Admin</option>
-                                    <option value="MANAGER">Manager</option>
+                                    {['SUPER_ADMIN', 'ADMIN'].includes(currentUserRole) && (
+                                        <>
+                                            <option value="SUPER_ADMIN">Super Admin</option>
+                                            <option value="MANAGER">Manager</option>
+                                        </>
+                                    )}
                                     <option value="STAFF">Staff</option>
                                     <option value="TECHNICIAN">Technician</option>
                                     <option value="VIEWER">Viewer</option>
                                 </select>
                             </div>
-                            {formData.role !== 'SUPER_ADMIN' && (
+                            {formData.role !== 'SUPER_ADMIN' && currentUserRole === 'SUPER_ADMIN' && (
                                 <div>
                                     <label className="block text-sm text-[var(--text-secondary)] mb-1.5">Office</label>
                                     <select
@@ -247,6 +265,25 @@ export function Users() {
                                         required
                                     >
                                         <option value="">Select an office</option>
+                                        {offices.map((office) => (
+                                            <option key={office.id} value={office.id}>
+                                                {office.name} ({office.code})
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+                            )}
+                            {formData.role !== 'SUPER_ADMIN' && currentUserRole === 'MANAGER' && (
+                                <div>
+                                    <label className="block text-sm text-[var(--text-secondary)] mb-1.5">Office</label>
+                                    <select
+                                        value={formData.officeId}
+                                        onChange={(e) => setFormData({ ...formData, officeId: e.target.value })}
+                                        className="w-full px-3 py-2 bg-[var(--bg-overlay)] border border-[var(--border-color)] rounded-lg text-[var(--text-primary)] focus:outline-none focus:border-[var(--primary)]"
+                                        required
+                                    >
+                                        <option value="">Select an office</option>
+                                        {/* Managers can only assign users to their own office, but we'll show all they fetch for now */}
                                         {offices.map((office) => (
                                             <option key={office.id} value={office.id}>
                                                 {office.name} ({office.code})

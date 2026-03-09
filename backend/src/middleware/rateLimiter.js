@@ -39,8 +39,21 @@ const seedLimiter = rateLimit({
     },
 });
 
+// Write operation limiter — prevents bulk abuse on POST/PUT/DELETE
+const writeLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 60, // 60 write operations per 15 minutes
+    message: {
+        success: false,
+        message: 'Too many write operations. Please slow down.',
+    },
+    standardHeaders: true,
+    legacyHeaders: false,
+});
+
 module.exports = {
     generalLimiter,
     authLimiter,
     seedLimiter,
+    writeLimiter,
 };

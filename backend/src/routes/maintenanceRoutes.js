@@ -14,11 +14,12 @@ const {
 
 const protect = require('../middleware/verifyToken');
 const authorize = require('../middleware/authorize');
+const { writeLimiter } = require('../middleware/rateLimiter');
 
 router.use(protect); // All routes require login
 
 router.route('/')
-    .post(createTicket)
+    .post(writeLimiter, createTicket)
     .get(getTickets);
 
 router.route('/stats')

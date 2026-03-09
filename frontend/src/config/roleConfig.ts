@@ -7,17 +7,13 @@ import {
     Truck,
     ShoppingCart,
     BarChart3,
-    Building2,
-    Users,
     Shield,
-    Settings,
     Bell,
     FileText,
     User,
     Ticket,
     DollarSign,
     BookOpen,
-    LineChart,
     type LucideIcon
 } from 'lucide-react';
 
@@ -27,10 +23,11 @@ import {
 
 export interface NavItem {
     label: string;
-    path: string;
+    path?: string;
     icon: LucideIcon;
     roles: UserRole[];  // Which roles can see this item
     badge?: 'approvals' | 'notifications'; // Dynamic badges
+    subItems?: { label: string; path: string; roles: UserRole[] }[];
 }
 
 export interface RoleConfig {
@@ -156,7 +153,7 @@ export const NAV_ITEMS: NavItem[] = [
         roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF', 'TECHNICIAN', 'VIEWER']
     },
 
-    // Assets - Managers/Staff can CRUD, Tech/Viewer read-only
+    // Assets
     {
         label: 'Assets',
         path: '/assets',
@@ -164,15 +161,23 @@ export const NAV_ITEMS: NavItem[] = [
         roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF', 'TECHNICIAN', 'VIEWER']
     },
 
-    // Inventory - Managers/Staff full, Tech consume only, Viewer read
+    // Inventory Group
     {
         label: 'Inventory',
-        path: '/inventory',
         icon: Package,
-        roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF', 'TECHNICIAN', 'VIEWER']
+        roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF', 'TECHNICIAN', 'VIEWER'],
+        subItems: [
+            { label: 'Overview', path: '/inventory', roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF', 'TECHNICIAN', 'VIEWER'] },
+            { label: 'Batch Tracking', path: '/inventory/batches', roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF', 'TECHNICIAN', 'VIEWER'] },
+            { label: 'Stocktake', path: '/inventory/stocktake', roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF', 'TECHNICIAN', 'VIEWER'] },
+            { label: 'Transfers', path: '/inventory/transfer', roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF'] },
+            { label: 'Returns', path: '/inventory/returns', roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF'] },
+            { label: 'Valuations', path: '/inventory/valuation', roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF'] },
+            { label: 'Analytics', path: '/inventory-analytics', roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF'] }
+        ]
     },
 
-    // Maintenance - Everyone except Viewer
+    // Maintenance
     {
         label: 'Maintenance',
         path: '/maintenance',
@@ -180,7 +185,7 @@ export const NAV_ITEMS: NavItem[] = [
         roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF', 'TECHNICIAN', 'VIEWER']
     },
 
-    // My Tickets - Technicians only (simplified view)
+    // My Tickets
     {
         label: 'My Tickets',
         path: '/my-tickets',
@@ -188,7 +193,7 @@ export const NAV_ITEMS: NavItem[] = [
         roles: ['TECHNICIAN']
     },
 
-    // Vendors - Managers/Staff and above
+    // Vendors
     {
         label: 'Vendors',
         path: '/vendors',
@@ -196,49 +201,39 @@ export const NAV_ITEMS: NavItem[] = [
         roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF', 'VIEWER']
     },
 
-    // Purchase Orders - Managers/Staff only
+    // Procurement Group
     {
-        label: 'Purchase Orders',
-        path: '/purchase-orders',
+        label: 'Procurement',
         icon: ShoppingCart,
-        roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF']
+        roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF'],
+        subItems: [
+            { label: 'Purchase Orders', path: '/purchase-orders', roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF'] },
+            { label: 'Requisitions', path: '/procurement/requisitions', roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF'] },
+            { label: 'RFQs & Bidding', path: '/procurement/rfq', roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF'] },
+            { label: 'Goods Receipt', path: '/procurement/grn', roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF'] }
+        ]
     },
 
-    // Financial - Managers/Staff only (or Viewer read)
+    // Financial Group
     {
         label: 'Financial',
-        path: '/financial',
         icon: DollarSign,
-        roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF', 'VIEWER']
+        roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF', 'VIEWER', 'TECHNICIAN'],
+        subItems: [
+            { label: 'Overview', path: '/financial', roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF', 'VIEWER'] },
+            { label: 'General Ledger', path: '/gl', roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'VIEWER'] },
+            { label: 'Balance Sheet', path: '/balance-sheet', roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'VIEWER'] },
+            { label: 'Profit & Loss', path: '/profit-loss', roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'VIEWER'] },
+            { label: 'Cash Flow', path: '/cash-flow', roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'VIEWER'] },
+            { label: 'AP Aging', path: '/finance/ap-aging', roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'VIEWER'] },
+            { label: 'AR Aging', path: '/finance/ar-aging', roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'VIEWER'] },
+            { label: 'Bank Reconciliation', path: '/bank-reconciliation', roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER'] },
+            { label: 'Year End Close', path: '/year-end-close', roles: ['SUPER_ADMIN'] },
+            { label: 'Expense Claims', path: '/expense-claims', roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF', 'TECHNICIAN'] }
+        ]
     },
 
-    // Phase 2 — General Ledger
-    {
-        label: 'General Ledger',
-        path: '/gl',
-        icon: BookOpen,
-        roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'VIEWER']
-    },
-    {
-        label: 'Profit & Loss',
-        path: '/profit-loss',
-        icon: LineChart,
-        roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'VIEWER']
-    },
-    {
-        label: 'Cash Flow',
-        path: '/cash-flow',
-        icon: DollarSign,
-        roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'VIEWER']
-    },
-    {
-        label: 'Inventory Intel',
-        path: '/inventory-analytics',
-        icon: BarChart3,
-        roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF']
-    },
-
-    // Analytics - Not for Technician
+    // Analytics
     {
         label: 'Analytics',
         path: '/analytics',
@@ -246,7 +241,7 @@ export const NAV_ITEMS: NavItem[] = [
         roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF', 'VIEWER']
     },
 
-    // Reports - Viewer can export
+    // Reports
     {
         label: 'Reports',
         path: '/reports',
@@ -254,39 +249,27 @@ export const NAV_ITEMS: NavItem[] = [
         roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF', 'VIEWER']
     },
 
-    // Offices - Admins only
+    // Administration Group
     {
-        label: 'Organizations',
-        path: '/offices',
-        icon: Building2,
-        roles: ['SUPER_ADMIN', 'ADMIN']
-    },
-
-    // Branches - Managers can view
-    {
-        label: 'Branches',
-        path: '/branches',
-        icon: Building2,
-        roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER']
-    },
-
-    // Users - Varies by role
-    {
-        label: 'Users',
-        path: '/users',
-        icon: Users,
-        roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF']
-    },
-
-    // Audit Logs - Admin + read for Viewer
-    {
-        label: 'Audit Logs',
-        path: '/audit-logs',
+        label: 'Administration',
         icon: Shield,
-        roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF', 'VIEWER']
+        roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF', 'VIEWER'],
+        subItems: [
+            { label: 'Organizations', path: '/offices', roles: ['SUPER_ADMIN', 'ADMIN'] },
+            { label: 'Branches', path: '/branches', roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER'] },
+            { label: 'Users', path: '/users', roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF'] },
+            { label: 'Audit Logs', path: '/audit-logs', roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF', 'VIEWER'] },
+            { label: 'Settings', path: '/settings', roles: ['SUPER_ADMIN'] }
+        ]
     },
 
-    // Notifications - Everyone
+    // Shared / System
+    {
+        label: 'Documents',
+        path: '/documents',
+        icon: BookOpen,
+        roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF', 'TECHNICIAN', 'VIEWER']
+    },
     {
         label: 'Notifications',
         path: '/notifications',
@@ -294,24 +277,6 @@ export const NAV_ITEMS: NavItem[] = [
         roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF', 'TECHNICIAN', 'VIEWER'],
         badge: 'notifications'
     },
-
-    // Settings - Admin only
-    {
-        label: 'Settings',
-        path: '/settings',
-        icon: Settings,
-        roles: ['SUPER_ADMIN']
-    },
-
-    // Documents - All roles
-    {
-        label: 'Documents',
-        path: '/documents',
-        icon: FileText,
-        roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF', 'TECHNICIAN', 'VIEWER']
-    },
-
-    // Profile - All roles
     {
         label: 'Profile',
         path: '/profile',

@@ -1,11 +1,12 @@
 /**
  * Kaggle Inference Service — Smart Fallback Bridge
  * 
- * 3-tier: Kaggle GPU → Ollama → Built-in
+ * 4-tier: Kimi K2.5 (NVIDIA) → Kaggle GPU → Ollama → Built-in
  * FAST: Health-checks once, then skips unreachable providers instantly.
  */
 
 const logger = require('../utils/logger');
+const kimiService = require('./kimiService');
 
 const KAGGLE_URL = process.env.KAGGLE_INFERENCE_URL || '';
 const KAGGLE_TIMEOUT = 120000;  // 120s max for huge Universal RAG context processing
@@ -117,12 +118,22 @@ async function callOllama(model, prompt, options = {}) {
 // ─── Public API ─────────────────────────────────────────
 
 async function reasoning(prompt, options = {}) {
+    // Tier 0: Kimi K2.5 via NVIDIA NIM
+    const kimi = await kimiService.generateText(prompt, {
+        systemPrompt: options.systemPrompt,
+        maxTokens: options.maxTokens,
+        temperature: options.temperature,
+    });
+    if (kimi?.text) return { ...kimi, source: 'kimi-k2.5' };
+
+    // Tier 1: Kaggle GPU
     const kaggle = await callKaggle('/api/reasoning', {
         prompt, system_prompt: options.systemPrompt,
         max_tokens: options.maxTokens, temperature: options.temperature,
     });
     if (kaggle?.text) return { ...kaggle, source: 'kaggle' };
 
+    // Tier 2: Local Ollama
     const ollama = await callOllama('planning', prompt, options);
     if (ollama?.text) return { ...ollama, source: 'ollama' };
 
@@ -136,10 +147,19 @@ async function vision(imageBase64, prompt = 'Extract all text from this document
 }
 
 async function intent(prompt, systemPrompt) {
+    // Tier 0: Kimi K2.5 via NVIDIA NIM
+    const kimi = await kimiService.generateJSON(prompt, {
+        systemPrompt,
+        temperature: 0.1,
+        maxTokens: 512,
+    });
+    if (kimi?.parsed) return { ...kimi, source: 'kimi-k2.5' };
+
+    // Tier 1: Kaggle GPU
     const kaggle = await callKaggle('/api/intent', { prompt, system_prompt: systemPrompt });
     if (kaggle?.parsed) return { ...kaggle, source: 'kaggle' };
 
-    // Ollama JSON generation
+    // Tier 2: Ollama JSON generation
     if (await probeProvider('ollama')) {
         try {
             const aiService = require('./aiService');
@@ -153,12 +173,22 @@ async function intent(prompt, systemPrompt) {
 }
 
 async function chat(prompt, options = {}) {
+    // Tier 0: Kimi K2.5 via NVIDIA NIM
+    const kimi = await kimiService.generateText(prompt, {
+        systemPrompt: options.systemPrompt || 'You are OpsPilot, an AI assistant for CoreOps ERP.',
+        maxTokens: options.maxTokens,
+        temperature: options.temperature,
+    });
+    if (kimi?.text) return { ...kimi, source: 'kimi-k2.5' };
+
+    // Tier 1: Kaggle GPU
     const kaggle = await callKaggle('/api/chat', {
         prompt, system_prompt: options.systemPrompt || 'You are OpsPilot, an AI assistant for CoreOps ERP.',
         max_tokens: options.maxTokens, temperature: options.temperature,
     });
     if (kaggle?.text) return { ...kaggle, source: 'kaggle' };
 
+    // Tier 2: Local Ollama
     const ollama = await callOllama('intent', prompt, options);
     if (ollama?.text) return { ...ollama, source: 'ollama' };
 
@@ -176,7 +206,8 @@ async function healthCheck() {
     providerStatus.kaggle.lastCheck = 0;
     providerStatus.ollama.lastCheck = 0;
 
-    const [kaggleUp, ollamaUp] = await Promise.all([
+    const [kimiHealth, kaggleUp, ollamaUp] = await Promise.all([
+        kimiService.healthCheck(),
         probeProvider('kaggle'),
         probeProvider('ollama'),
     ]);
@@ -194,6 +225,7 @@ async function healthCheck() {
     }
 
     return {
+        'kimi-k2.5': kimiHealth,
         kaggle: kaggleInfo,
         ollama: { available: ollamaUp },
     };

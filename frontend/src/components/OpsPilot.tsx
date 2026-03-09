@@ -1,9 +1,9 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useMemo } from 'react';
 import api from '../lib/api';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
     MessageSquare, X, Send, Brain, Eye, Search,
-    User, Loader2, Zap
+    User, Loader2, Zap, Sparkles
 } from 'lucide-react';
 
 interface Message {
@@ -19,11 +19,166 @@ interface Message {
 
 const MODEL_ICONS: Record<string, { icon: typeof Brain; color: string; label: string }> = {
     reasoning: { icon: Brain, color: '#8b5cf6', label: 'DeepSeek-R1' },
+    'intent-llm': { icon: Zap, color: '#f59e0b', label: 'Opus 1.0' },
+    'local-classifier': { icon: Zap, color: '#22c55e', label: 'Local' },
     vision: { icon: Eye, color: '#3b82f6', label: 'Qwen2.5-VL' },
-    intent: { icon: Zap, color: '#f59e0b', label: 'Qwen3-4B' },
-    chat: { icon: MessageSquare, color: '#10b981', label: 'Phi-3.5' },
+    intent: { icon: Zap, color: '#f59e0b', label: 'Opus 1.0' },
+    chat: { icon: MessageSquare, color: '#10b981', label: 'Opus 1.0' },
     search: { icon: Search, color: '#ef4444', label: 'Web Search' },
 };
+
+// ─── Lightweight Markdown Renderer ──────────────────────────────
+
+function renderInlineMarkdown(text: string): React.ReactNode[] {
+    // Parse **bold** and the rest as text
+    const parts: React.ReactNode[] = [];
+    const regex = /\*\*(.+?)\*\*/g;
+    let lastIndex = 0;
+    let match;
+    let key = 0;
+
+    while ((match = regex.exec(text)) !== null) {
+        if (match.index > lastIndex) {
+            parts.push(text.slice(lastIndex, match.index));
+        }
+        parts.push(<strong key={key++} style={{ fontWeight: 600 }}>{match[1]}</strong>);
+        lastIndex = match.index + match[0].length;
+    }
+    if (lastIndex < text.length) {
+        parts.push(text.slice(lastIndex));
+    }
+    return parts;
+}
+
+function MarkdownTable({ lines }: { lines: string[] }) {
+    // Parse markdown table lines
+    const rows = lines
+        .filter(l => l.trim().startsWith('|'))
+        .map(l =>
+            l.split('|')
+                .slice(1, -1)
+                .map(cell => cell.trim())
+        )
+        .filter(cells => cells.length > 0 && !cells.every(c => /^[-:]+$/.test(c)));
+
+    if (rows.length < 1) return null;
+
+    const header = rows[0];
+    const body = rows.slice(1);
+
+    return (
+        <div style={{
+            overflowX: 'auto',
+            margin: '8px 0',
+            borderRadius: '8px',
+            border: '1px solid rgba(128,128,128,0.2)',
+        }}>
+            <table style={{
+                width: '100%',
+                borderCollapse: 'collapse',
+                fontSize: '13px',
+                lineHeight: '1.5',
+            }}>
+                <thead>
+                    <tr>
+                        {header.map((cell, i) => (
+                            <th key={i} style={{
+                                padding: '7px 10px',
+                                textAlign: 'left',
+                                fontWeight: 600,
+                                background: 'rgba(128,128,128,0.12)',
+                                borderBottom: '2px solid rgba(128,128,128,0.2)',
+                                whiteSpace: 'nowrap',
+                                color: 'var(--text-primary)',
+                            }}>
+                                {renderInlineMarkdown(cell)}
+                            </th>
+                        ))}
+                    </tr>
+                </thead>
+                <tbody>
+                    {body.map((row, i) => (
+                        <tr key={i} style={{
+                            background: i % 2 === 0 ? 'transparent' : 'rgba(128,128,128,0.06)',
+                        }}>
+                            {row.map((cell, j) => (
+                                <td key={j} style={{
+                                    padding: '6px 10px',
+                                    borderBottom: '1px solid rgba(128,128,128,0.12)',
+                                    color: 'var(--text-primary)',
+                                }}>
+                                    {renderInlineMarkdown(cell)}
+                                </td>
+                            ))}
+                        </tr>
+                    ))}
+                </tbody>
+            </table>
+        </div>
+    );
+}
+
+function MarkdownContent({ content }: { content: string }) {
+    const elements = useMemo(() => {
+        const lines = content.split('\n');
+        const result: React.ReactNode[] = [];
+        let i = 0;
+        let key = 0;
+
+        while (i < lines.length) {
+            const line = lines[i];
+            const trimmed = line.trim();
+
+            // Table block: collect consecutive | lines
+            if (trimmed.startsWith('|')) {
+                const tableLines: string[] = [];
+                while (i < lines.length && lines[i].trim().startsWith('|')) {
+                    tableLines.push(lines[i]);
+                    i++;
+                }
+                result.push(<MarkdownTable key={key++} lines={tableLines} />);
+                continue;
+            }
+
+            // Empty line → spacer
+            if (trimmed === '') {
+                result.push(<div key={key++} style={{ height: '6px' }} />);
+                i++;
+                continue;
+            }
+
+            // Bullet point (• or - at start)
+            if (/^[•\-]\s/.test(trimmed)) {
+                const bulletText = trimmed.replace(/^[•\-]\s*/, '');
+                result.push(
+                    <div key={key++} style={{
+                        display: 'flex',
+                        gap: '6px',
+                        padding: '2px 0',
+                        lineHeight: '1.55',
+                    }}>
+                        <span style={{ flexShrink: 0 }}>•</span>
+                        <span>{renderInlineMarkdown(bulletText)}</span>
+                    </div>
+                );
+                i++;
+                continue;
+            }
+
+            // Regular line with inline markdown
+            result.push(
+                <div key={key++} style={{ padding: '1px 0', lineHeight: '1.55' }}>
+                    {renderInlineMarkdown(trimmed)}
+                </div>
+            );
+            i++;
+        }
+
+        return result;
+    }, [content]);
+
+    return <>{elements}</>;
+}
 
 function TypewriterMessage({ content, isNew }: { content: string, isNew: boolean }) {
     const [displayed, setDisplayed] = useState(isNew ? '' : content);
@@ -33,25 +188,19 @@ function TypewriterMessage({ content, isNew }: { content: string, isNew: boolean
         let i = 0;
         const interval = setInterval(() => {
             if (i < content.length) {
-                // Type 5 characters at a time for a fast, readable stream effect
-                const nextChunk = i + 5;
+                // Type 8 characters at a time for a fast, readable stream effect
+                const nextChunk = i + 8;
                 setDisplayed(content.slice(0, nextChunk));
                 i = nextChunk;
             } else {
                 clearInterval(interval);
                 setDisplayed(content);
             }
-        }, 15);
+        }, 12);
         return () => clearInterval(interval);
     }, [content, isNew]);
 
-    return (
-        <>
-            {displayed.split('**').map((part, i) =>
-                i % 2 === 0 ? part : <strong key={i}>{part}</strong>
-            )}
-        </>
-    );
+    return <MarkdownContent content={displayed} />;
 }
 
 export function OpsPilot() {
@@ -141,9 +290,10 @@ export function OpsPilot() {
     };
 
     const quickActions = [
-        "Show budget summary",
-        "Any expense anomalies?",
-        "List pending POs",
+        "📊 Dashboard summary",
+        "📦 List inventory",
+        "📋 Pending POs",
+        "🔧 Open tickets",
     ];
 
     return (
@@ -203,7 +353,7 @@ export function OpsPilot() {
                                 </div>
                                 <div>
                                     <h3 className="text-white font-semibold text-sm">OpsPilot AI</h3>
-                                    <p className="text-white/70 text-xs">Multi-LLM Agent • 4 Models</p>
+                                    <p className="text-white/70 text-xs">Multi-LLM Agent • Opus 1.0</p>
                                 </div>
                             </div>
                             <div className="flex items-center gap-2">
@@ -253,9 +403,7 @@ export function OpsPilot() {
                                                     {msg.role === 'assistant' ? (
                                                         <TypewriterMessage content={msg.content} isNew={msg.id === typingMsgId} />
                                                     ) : (
-                                                        msg.content.split('**').map((part, i) =>
-                                                            i % 2 === 0 ? part : <strong key={i}>{part}</strong>
-                                                        )
+                                                        <MarkdownContent content={msg.content} />
                                                     )}
                                                 </div>
 
@@ -265,6 +413,11 @@ export function OpsPilot() {
                                                         {msg.modelsUsed.map((m, i) => {
                                                             const info = MODEL_ICONS[m.model] || MODEL_ICONS.chat;
                                                             const Icon = info.icon;
+                                                            const sourceLabel = m.source === 'kimi-k2.5' ? 'Opus 1.0'
+                                                                : m.source === 'kaggle' ? 'Kaggle GPU'
+                                                                : m.source === 'ollama' ? info.label
+                                                                : m.source === 'local' ? 'Local'
+                                                                : info.label;
                                                             return (
                                                                 <span
                                                                     key={i}
@@ -276,7 +429,7 @@ export function OpsPilot() {
                                                                     }}
                                                                 >
                                                                     <Icon className="w-2.5 h-2.5" />
-                                                                    {info.label}
+                                                                    {sourceLabel}
                                                                 </span>
                                                             );
                                                         })}
@@ -378,7 +531,7 @@ export function OpsPilot() {
                                 </button>
                             </div>
                             <p className="text-center mt-2 text-[10px]" style={{ color: 'var(--text-muted)' }}>
-                                Powered by DeepSeek-R1 • Qwen2.5-VL • Qwen3 • Phi-3.5
+                                Powered by Opus 1.0 • DeepSeek-R1 • Multi-LLM Orchestrator
                             </p>
                         </div>
                     </motion.div>

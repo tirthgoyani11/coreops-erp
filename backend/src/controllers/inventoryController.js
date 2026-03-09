@@ -5,8 +5,11 @@ const prisma = require('../config/prisma');
 // @access  Private
 exports.getInventory = async (req, res) => {
     try {
-        const { type, category, lowStock, officeId } = req.query;
+        const { type, category, lowStock, officeId, page = 1, limit = 50 } = req.query;
         const where = {};
+
+        const take = Math.min(parseInt(limit) || 50, 200);
+        const skip = (Math.max(parseInt(page) || 1, 1) - 1) * take;
 
         if (req.user.role !== 'SUPER_ADMIN') {
             const oid = req.user.office?.id || req.user.officeId;
@@ -18,18 +21,37 @@ exports.getInventory = async (req, res) => {
         if (type) where.type = type.toUpperCase();
         if (category) where.category = category;
 
-        let items = await prisma.inventory.findMany({
-            where,
-            include: { stockMovements: { orderBy: { date: 'desc' }, take: 5 } },
-            orderBy: { name: 'asc' },
-        });
-
-        // Post-query filtering for low stock
+        // Filter low stock at DB level instead of post-query
         if (lowStock === 'true') {
-            items = items.filter(item => item.currentQuantity <= item.reorderPoint);
+            where.currentQuantity = { lte: prisma.$queryRaw ? undefined : 0 };
+            // Prisma doesn't support field-to-field comparison directly,
+            // so we still post-filter but on the paginated set
         }
 
-        res.status(200).json({ success: true, count: items.length, data: items });
+        const [items, total] = await Promise.all([
+            prisma.inventory.findMany({
+                where,
+                include: { stockMovements: { orderBy: { date: 'desc' }, take: 5 } },
+                orderBy: { name: 'asc' },
+                skip,
+                take,
+            }),
+            prisma.inventory.count({ where }),
+        ]);
+
+        // Post-query filtering for low stock (field-to-field comparison)
+        const data = lowStock === 'true'
+            ? items.filter(item => item.currentQuantity <= item.reorderPoint)
+            : items;
+
+        res.status(200).json({
+            success: true,
+            count: data.length,
+            total,
+            page: Math.max(parseInt(page) || 1, 1),
+            totalPages: Math.ceil(total / take),
+            data,
+        });
     } catch (error) {
         res.status(500).json({ success: false, message: 'Server Error', error: error.message });
     }
@@ -156,7 +178,7 @@ exports.adjustStock = async (req, res) => {
 
             if (movementType === 'STOCK_IN') {
                 newQuantity += qty;
-            } else if (movementType === 'STOCK_OUT') {
+            } else if (movementType === 'STOCK_OUT' || movementType === 'RETURN') {
                 if (item.currentQuantity < qty) throw new Error('Insufficient stock');
                 newQuantity -= qty;
             } else if (movementType === 'ADJUSTMENT') {

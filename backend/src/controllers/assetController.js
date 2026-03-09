@@ -44,6 +44,14 @@ exports.createAsset = asyncHandler(async (req, res, next) => {
 
     if (!targetOfficeId) return next(new AppError('Office is required', 400));
 
+    // Validate unique serial number
+    if (serialNumber) {
+        const existing = await prisma.asset.findFirst({ where: { serialNumber } });
+        if (existing) {
+            return next(new AppError(`Asset with serial number "${serialNumber}" already exists (${existing.guai})`, 409));
+        }
+    }
+
     const guai = await generateGUAI(targetOfficeId);
 
     let asset = await prisma.asset.create({

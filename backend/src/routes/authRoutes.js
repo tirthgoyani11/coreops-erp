@@ -17,9 +17,10 @@ const verifyToken = require('../middleware/verifyToken');
 const authorize = require('../middleware/authorize');
 const { authLimiter, seedLimiter } = require('../middleware/rateLimiter');
 const { authValidation } = require('../middleware/validation');
+const auditMiddleware = require('../middleware/auditMiddleware');
 
 // Public routes with rate limiting and validation
-router.post('/login', authLimiter, authValidation.login, login);
+router.post('/login', authLimiter, authValidation.login, auditMiddleware('LOGIN', 'SYSTEM_RESOURCE'), login);
 router.post('/seed', seedLimiter, seedAdmin);
 
 // Password reset routes (public with rate limiting)
@@ -36,7 +37,7 @@ router.post('/refresh', authLimiter, refreshToken);
 router.post('/logout', logout);
 
 // Protected routes with validation
-router.post('/register', verifyToken, authorize('SUPER_ADMIN', 'ADMIN'), authValidation.register, register);
+router.post('/register', verifyToken, authorize('SUPER_ADMIN', 'ADMIN', 'MANAGER'), authValidation.register, register);
 router.get('/me', verifyToken, getMe);
 
 module.exports = router;

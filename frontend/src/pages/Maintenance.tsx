@@ -7,7 +7,11 @@ import {
     Calendar as CalendarIcon,
     Plus,
     Search,
-    Kanban as KanbanIcon
+    Kanban as KanbanIcon,
+    ShieldCheck,
+    GanttChart,
+    ClipboardCheck,
+    BarChart3
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
@@ -93,6 +97,59 @@ export function Maintenance() {
                         New Ticket
                     </Button>
                 )}
+            </div>
+
+            {/* Sub-page Navigation */}
+            <div className="flex flex-wrap gap-2">
+                <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => navigate('/maintenance/preventive')}
+                    className="gap-1.5"
+                >
+                    <ClipboardCheck className="w-4 h-4" />
+                    PM Schedules
+                </Button>
+                {(hasPermission('tickets.approve')) && (
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => navigate('/maintenance/sla')}
+                        className="gap-1.5"
+                    >
+                        <ShieldCheck className="w-4 h-4" />
+                        SLA Dashboard
+                    </Button>
+                )}
+                <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => navigate('/maintenance/calendar')}
+                    className="gap-1.5"
+                >
+                    <CalendarIcon className="w-4 h-4" />
+                    Calendar
+                </Button>
+                {(hasPermission('tickets.approve')) && (
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => navigate('/maintenance/gantt')}
+                        className="gap-1.5"
+                    >
+                        <GanttChart className="w-4 h-4" />
+                        Gantt
+                    </Button>
+                )}
+                <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => navigate('/maintenance/analytics')}
+                    className="gap-1.5"
+                >
+                    <BarChart3 className="w-4 h-4" />
+                    Analytics
+                </Button>
             </div>
 
             {/* Controls */}

@@ -3,11 +3,12 @@
  * 
  * Architecture:
  *   1. Local keyword classifier (sub-1ms, zero LLM calls)
- *   2. If ambiguous → LLM intent classifier (Kaggle/Ollama)
+ *   2. If ambiguous → LLM intent classifier (Kimi K2.5 → Kaggle → Ollama)
  *   3. Entity extraction + enum validation
  *   4. Hardcoded handler execution via agentExecutor
  *   5. For queries → LLM synthesis on live ERP snapshot
  * 
+ * LLM Provider Priority: Kimi K2.5 (NVIDIA NIM) → Kaggle GPU (ngrok) → Ollama (local)
  * NEVER lets the LLM generate Prisma/SQL. All DB ops are in agentExecutor.
  */
 
@@ -33,7 +34,34 @@ const INTENT_PATTERNS = [
     { intent: 'PROCESS_BILL', keywords: ['process bill', 'pay bill', 'vendor bill', 'bill payment'] },
     { intent: 'DETECT_ANOMALY', keywords: ['anomaly', 'anomalies', 'unusual', 'suspicious', 'spike', 'irregular'] },
     { intent: 'FORECAST_BUDGET', keywords: ['forecast', 'predict budget', 'budget forecast', 'spending forecast'] },
-    { intent: 'QUERY_DATA', keywords: ['show me', 'list all', 'how many', 'what is', 'what are', 'budget status', 'budget summary', 'tell me about', 'give me', 'display', 'summarize', 'overview', 'report'] },
+    { intent: 'LIST_ASSETS', keywords: ['list asset', 'show asset', 'all asset', 'my asset', 'view asset'] },
+    { intent: 'LIST_VENDORS', keywords: ['list vendor', 'show vendor', 'all vendor', 'my vendor', 'view vendor'] },
+    { intent: 'LIST_PURCHASE_ORDERS', keywords: ['list po', 'show po', 'pending po', 'all po', 'purchase order', 'list purchase', 'show purchase', 'pending purchase'] },
+    { intent: 'LIST_TICKETS', keywords: ['list ticket', 'show ticket', 'open ticket', 'all ticket', 'active ticket', 'pending ticket', 'my ticket'] },
+    { intent: 'LIST_INVENTORY', keywords: ['list inventory', 'show inventory', 'stock list', 'all inventory', 'inventory list', 'warehouse stock'] },
+    { intent: 'LIST_TRANSACTIONS', keywords: ['list transaction', 'show transaction', 'recent transaction', 'all transaction', 'expense list', 'income list'] },
+    { intent: 'DASHBOARD_SUMMARY', keywords: ['dashboard', 'system summary', 'erp summary', 'overall status', 'quick summary', 'system status'] },
+    // ── v5: Full system intents ──
+    { intent: 'CREATE_VENDOR', keywords: ['create vendor', 'add vendor', 'new vendor', 'register vendor', 'add supplier', 'new supplier'] },
+    { intent: 'CREATE_PURCHASE_ORDER', keywords: ['create po', 'new po', 'create purchase order', 'new purchase order', 'raise po', 'raise purchase order'] },
+    { intent: 'CREATE_INVENTORY', keywords: ['create inventory', 'add inventory', 'new inventory', 'add stock', 'new stock item', 'add item to inventory'] },
+    { intent: 'VIEW_PROFIT_LOSS', keywords: ['profit and loss', 'profit loss', 'p&l', 'pnl', 'income statement', 'profit report'] },
+    { intent: 'VIEW_CASH_FLOW', keywords: ['cash flow', 'cashflow', 'cash in', 'cash out', 'money flow'] },
+    { intent: 'VIEW_BALANCE_SHEET', keywords: ['balance sheet', 'balancesheet', 'assets liabilities', 'net equity'] },
+    { intent: 'LIST_GL_ACCOUNTS', keywords: ['chart of account', 'gl account', 'general ledger', 'ledger account', 'list gl', 'show gl'] },
+    { intent: 'CREATE_GL_ACCOUNT', keywords: ['create gl', 'new gl account', 'add gl account', 'create ledger', 'add ledger account'] },
+    { intent: 'VIEW_AUDIT_LOGS', keywords: ['audit log', 'audit trail', 'activity log', 'system log', 'recent activity', 'who did'] },
+    { intent: 'LIST_NOTIFICATIONS', keywords: ['my notification', 'show notification', 'list notification', 'unread notification', 'bell', 'alerts'] },
+    { intent: 'SEND_NOTIFICATION', keywords: ['send notification', 'broadcast', 'notify all', 'send alert', 'announce'] },
+    { intent: 'LIST_OFFICES', keywords: ['list office', 'show office', 'all office', 'all branch', 'show branch', 'list branch', 'our offices', 'our branches'] },
+    { intent: 'CREATE_OFFICE', keywords: ['create office', 'add office', 'new office', 'create branch', 'add branch', 'new branch'] },
+    { intent: 'LIST_USERS', keywords: ['list user', 'show user', 'all user', 'team member', 'show team', 'employee list', 'all employee', 'show employee'] },
+    { intent: 'VIEW_ANALYTICS', keywords: ['analytics', 'insight', 'kpi', 'metrics', 'performance', 'stats overview'] },
+    { intent: 'LIST_DOCUMENTS', keywords: ['list document', 'show document', 'all document', 'my document', 'uploaded file', 'my files'] },
+    { intent: 'VIEW_PROFILE', keywords: ['my profile', 'who am i', 'show profile', 'view profile', 'account info', 'my account'] },
+    { intent: 'UPDATE_TICKET', keywords: ['update ticket', 'change ticket', 'edit ticket', 'modify ticket', 'ticket priority', 'ticket status'] },
+    { intent: 'PREDICT_MAINTENANCE', keywords: ['predict maintenance', 'predict failure', 'when will it fail', 'failure prediction', 'predictive maintenance', 'mtbf', 'mean time between', 'asset risk', 'maintenance forecast', 'asset health'] },
+    { intent: 'QUERY_DATA', keywords: ['show me', 'how many', 'what is', 'what are', 'budget status', 'budget summary', 'tell me about', 'give me', 'display', 'summarize', 'overview', 'report'] },
 ];
 
 // ─── ENUM VALIDATION MAPS ───────────────────────────────────────
@@ -59,15 +87,31 @@ const INTENT_SYSTEM_PROMPT = `You are OpsPilot, the AI intent classifier for Cor
 Given a user command, output ONLY valid JSON with this exact schema:
 {"intent":"INTENT_NAME","entities":{...},"confidence":0.0-1.0}
 
-Valid intents: CREATE_ASSET, CREATE_TRANSACTION, REFILL_INVENTORY, APPROVE_PURCHASE, REJECT_PURCHASE, CLOSE_MAINTENANCE, CREATE_TICKET, UPDATE_ASSET, GET_LOW_STOCK, SET_BUDGET, MATCH_INVOICE, PROCESS_BILL, QUERY_DATA, DETECT_ANOMALY, FORECAST_BUDGET, GENERAL
+Valid intents: CREATE_ASSET, CREATE_TRANSACTION, REFILL_INVENTORY, APPROVE_PURCHASE, REJECT_PURCHASE, CLOSE_MAINTENANCE, CREATE_TICKET, UPDATE_ASSET, GET_LOW_STOCK, SET_BUDGET, MATCH_INVOICE, PROCESS_BILL, LIST_ASSETS, LIST_VENDORS, LIST_PURCHASE_ORDERS, LIST_TICKETS, LIST_INVENTORY, LIST_TRANSACTIONS, DASHBOARD_SUMMARY, CREATE_VENDOR, CREATE_PURCHASE_ORDER, CREATE_INVENTORY, VIEW_PROFIT_LOSS, VIEW_CASH_FLOW, VIEW_BALANCE_SHEET, LIST_GL_ACCOUNTS, CREATE_GL_ACCOUNT, VIEW_AUDIT_LOGS, LIST_NOTIFICATIONS, SEND_NOTIFICATION, LIST_OFFICES, CREATE_OFFICE, LIST_USERS, VIEW_ANALYTICS, LIST_DOCUMENTS, VIEW_PROFILE, UPDATE_TICKET, QUERY_DATA, DETECT_ANOMALY, FORECAST_BUDGET, GENERAL
 
 Entity schemas per intent:
-- CREATE_ASSET: { assetName, assetCategory (LAPTOP|COMPUTER|PHONE|PRINTER|SERVER|NETWORK|FURNITURE|VEHICLE|EQUIPMENT|MACHINERY|OTHER), amount }
+- CREATE_ASSET: { assetName, assetCategory (LAPTOP|COMPUTER|PHONE|PRINTER|SERVER|NETWORK|FURNITURE|VEHICLE|EQUIPMENT|MACHINERY|OTHER), amount, manufacturer, model, description, serialNumber, condition (GOOD|FAIR|POOR|NEW), warrantyMonths, vendorName, assignedTo }
+  IMPORTANT: For CREATE_ASSET, you MUST fill as many fields as possible from context. If user says "MacBook Pro M3", set manufacturer="Apple", model="MacBook Pro M3", assetCategory="LAPTOP". If user says "fill by yourself" or "other details fill yourself", infer realistic values.
 - CREATE_TRANSACTION: { type (INCOME|EXPENSE), amount, description, category }
 - REFILL_INVENTORY: { description, amount }
 - APPROVE_PURCHASE / REJECT_PURCHASE: { poNumber }
-- CLOSE_MAINTENANCE: { ticketId }
+- CLOSE_MAINTENANCE: { ticketId, assetId }
 - CREATE_TICKET: { assetId, description, priority (LOW|MEDIUM|HIGH|CRITICAL) }
+- LIST_ASSETS / LIST_VENDORS / LIST_PURCHASE_ORDERS / LIST_TICKETS / LIST_INVENTORY / LIST_TRANSACTIONS: { limit, status }
+- DASHBOARD_SUMMARY: {}
+- CREATE_VENDOR: { vendorName, contactPerson, email, phone, address, gstNumber }
+- CREATE_PURCHASE_ORDER: { vendorName, amount, description }
+- CREATE_INVENTORY: { itemName, inventoryType (PRODUCT|SPARE), quantity, amount, unit }
+- VIEW_PROFIT_LOSS / VIEW_CASH_FLOW / VIEW_BALANCE_SHEET: {}
+- LIST_GL_ACCOUNTS: { limit }
+- CREATE_GL_ACCOUNT: { accountName, accountType (ASSET|LIABILITY|EQUITY|REVENUE|EXPENSE), accountCode }
+- VIEW_AUDIT_LOGS: { limit }
+- LIST_NOTIFICATIONS: { limit }
+- SEND_NOTIFICATION: { title, notifMessage }
+- LIST_OFFICES / LIST_USERS / LIST_DOCUMENTS: { limit }
+- CREATE_OFFICE: { officeName, officeCode, city, state, country }
+- VIEW_ANALYTICS / VIEW_PROFILE: {}
+- UPDATE_TICKET: { ticketId, priority, status, description }
 - QUERY_DATA: { reportType }
 - GENERAL: {}
 
@@ -76,20 +120,52 @@ Output ONLY the JSON object, nothing else.`;
 const QUERY_SYSTEM_PROMPT = `You are OpsPilot Analytics for CoreOps ERP.
 You receive live ERP data and answer questions with precision.
 
-Rules:
+Formatting Rules:
 1. Always cite specific numbers from the data provided
-2. Use ₹ for INR currency formatting
-3. Use markdown tables when comparing items
-4. Flag values >2x the average as unusual
-5. Never fabricate data — if missing, say "data not available"
-6. Keep answers concise and actionable
-7. Format numbers with commas (e.g., ₹1,25,000)`;
+2. Use ₹ for INR currency, format with commas (₹1,25,000)
+3. Use markdown tables with proper | alignment when comparing 3+ items
+4. Use **bold** for key values, names, and important numbers
+5. Use emojis to indicate status: ✅ good, ⚠️ warning, 🔴 critical, 📊 data, 💰 money, 📦 inventory
+6. Flag values >2x the average as unusual with ⚠️
+7. Never fabricate data — if missing, say "data not available"
+8. Keep answers concise and actionable
+9. Do NOT use # or ## or ### headers — use **bold text** instead
+10. Use bullet points (•) for lists, not dashes
+11. Separate sections with a blank line for readability
+12. End with a brief actionable recommendation when relevant`;
 
 const CHAT_SYSTEM_PROMPT = `You are OpsPilot, the AI assistant for CoreOps ERP system.
 You help manage assets, inventory, purchase orders, maintenance tickets, budgets, and transactions.
-Keep responses concise and professional. Use markdown formatting.
-If the user asks about capabilities, list: asset management, inventory control, PO approval/rejection,
-maintenance ticket handling, budget tracking, transaction recording, anomaly detection, and data queries.`;
+
+Formatting Rules:
+1. Keep responses concise, warm, and professional
+2. Use **bold** for emphasis, never use # headers
+3. Use emojis naturally: 🖥️ assets, 📦 inventory, 📋 POs, 🔧 maintenance, 💰 budgets, 📊 analytics, ⚡ actions
+4. Use bullet points (•) for lists
+5. Use markdown tables only when showing structured data with 3+ rows
+6. Format currency as ₹X,XX,XXX
+7. Be action-oriented — tell users what you CAN DO, not just describe
+
+Capabilities you can EXECUTE (not just describe):
+• 🖥️ Create, update, list assets with smart auto-fill
+• 📦 Create inventory items, refill low stock, check stock levels
+• 📋 Create, list, approve, or reject purchase orders
+• 🔧 Create, update, close, list maintenance tickets
+• 💰 Set budgets, record transactions (income/expense)
+• 📊 Analytics, anomaly detection, budget forecasts, KPIs
+• 🔍 Search and query any ERP data
+• 📄 Invoice matching, bill processing
+• 🏢 Create & list vendors/suppliers
+• 💹 Profit & Loss, Cash Flow, Balance Sheet reports
+• 📒 Chart of Accounts — list & create GL accounts
+• 🛡️ View audit logs and system activity
+• 🔔 List & send notifications
+• 🏗️ List & create offices/branches
+• 👥 List users & team members
+• 📄 List uploaded documents
+• 👤 View your profile & account info
+
+When listing capabilities, show them as actionable commands the user can try.`;
 
 // ─── LOCAL INTENT CLASSIFIER ────────────────────────────────────
 function classifyLocally(message) {
@@ -141,16 +217,35 @@ function extractEntities(message, intent) {
             entities.assetCategory = 'OTHER';
         }
 
-        // Extract asset name (heuristic: remove intent keywords and price, keep the rest)
+        // Extract asset name (heuristic: remove intent keywords and price, keep the product name)
         const nameClean = message
             .replace(/create|add|new|register|a\s+new|asset|for|costing|worth|priced?\s*at|at|of|\$|₹|[\d,]+(\.\d+)?/gi, '')
-            .replace(/\b(active|inactive|laptop|computer|phone|printer|server|network|furniture|vehicle|equipment|machinery|other)\b/gi, '')
+            .replace(/\b(active|inactive|today|date|today'?s?|on|and|other|details?|fill|by|yourself|all|the|with|please)\b/gi, '')
             .replace(/in the \w+ category/gi, '')
             .replace(/\s+/g, ' ')
             .trim();
         if (nameClean.length > 1) {
             entities.assetName = nameClean.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
         }
+
+        // Extract condition
+        if (/\bnew\b/i.test(message) && /condition/i.test(message)) entities.condition = 'NEW';
+        else if (/\bfair\b/i.test(message)) entities.condition = 'FAIR';
+        else if (/\bpoor\b|\bdamaged\b/i.test(message)) entities.condition = 'POOR';
+
+        // Extract warranty (e.g. "2 year warranty", "12 month warranty")
+        const warrantyYrMatch = message.match(/(\d+)\s*(?:year|yr)s?\s*warranty/i);
+        if (warrantyYrMatch) entities.warrantyMonths = parseInt(warrantyYrMatch[1]) * 12;
+        const warrantyMoMatch = message.match(/(\d+)\s*months?\s*warranty/i);
+        if (warrantyMoMatch) entities.warrantyMonths = parseInt(warrantyMoMatch[1]);
+
+        // Extract manufacturer
+        const mfgMatch = message.match(/(?:by|from|manufacturer|made by|brand)\s+([A-Z][a-zA-Z]+(?:\s[A-Z][a-zA-Z]+)?)/i);
+        if (mfgMatch) entities.manufacturer = mfgMatch[1].trim();
+
+        // Extract "assign to" / "assigned to"
+        const assignMatch = message.match(/(?:assign(?:ed)?\s+to|for\s+user|for\s+employee)\s+([A-Za-z]+(?:\s[A-Za-z]+)?)/i);
+        if (assignMatch) entities.assignedTo = assignMatch[1].trim();
     }
 
     // Extract transaction type
@@ -172,6 +267,75 @@ function extractEntities(message, intent) {
     if (intent === 'REFILL_INVENTORY') {
         const itemMatch = message.replace(/refill|restock|reorder|replenish|stock|to|units?|pieces?|[\d,]+/gi, '').trim();
         if (itemMatch.length > 1) entities.description = itemMatch;
+    }
+
+    // ── v5: Entity extraction for new intents ──
+
+    // Vendor name extraction
+    if (intent === 'CREATE_VENDOR') {
+        const vendorClean = message.replace(/create|add|new|register|vendor|supplier|named?|called?|please|a\s+new/gi, '').trim();
+        if (vendorClean.length > 1) entities.vendorName = vendorClean.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+    }
+
+    // PO creation — vendor name
+    if (intent === 'CREATE_PURCHASE_ORDER') {
+        const vendorRef = message.match(/(?:from|vendor|supplier|for)\s+([A-Z][a-zA-Z\s]+?)(?:\s+(?:for|worth|costing|amount|$))/i);
+        if (vendorRef) entities.vendorName = vendorRef[1].trim();
+        const descMatch = message.match(/(?:for|of|about)\s+(.+?)(?:\s+(?:from|worth|costing|amount|$))/i);
+        if (descMatch) entities.description = descMatch[1].trim();
+    }
+
+    // Inventory creation
+    if (intent === 'CREATE_INVENTORY') {
+        const itemClean = message.replace(/create|add|new|inventory|stock|item|to|please|a\s+new/gi, '').replace(/[\d,]+/g, '').trim();
+        if (itemClean.length > 1) entities.itemName = itemClean.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+        if (/spare/i.test(message)) entities.inventoryType = 'SPARE';
+        const qtyMatch = message.match(/(\d+)\s*(?:units?|pieces?|pcs|qty|quantity)/i);
+        if (qtyMatch) entities.quantity = qtyMatch[1];
+    }
+
+    // GL Account creation
+    if (intent === 'CREATE_GL_ACCOUNT') {
+        const nameClean = message.replace(/create|add|new|gl|general\s+ledger|ledger|account|please|a\s+new/gi, '').trim();
+        if (nameClean.length > 1) entities.accountName = nameClean;
+        if (/asset/i.test(message)) entities.accountType = 'ASSET';
+        else if (/liabilit/i.test(message)) entities.accountType = 'LIABILITY';
+        else if (/equity/i.test(message)) entities.accountType = 'EQUITY';
+        else if (/revenue|income/i.test(message)) entities.accountType = 'REVENUE';
+        else if (/expense/i.test(message)) entities.accountType = 'EXPENSE';
+    }
+
+    // Office creation
+    if (intent === 'CREATE_OFFICE') {
+        const nameClean = message.replace(/create|add|new|office|branch|please|a\s+new/gi, '').trim();
+        if (nameClean.length > 1) entities.officeName = nameClean;
+        const cityMatch = message.match(/(?:in|at|city)\s+([A-Z][a-zA-Z]+)/i);
+        if (cityMatch) entities.city = cityMatch[1];
+    }
+
+    // Update ticket — priority and status
+    if (intent === 'UPDATE_TICKET') {
+        if (/critical|emergency/i.test(message)) entities.priority = 'CRITICAL';
+        else if (/high/i.test(message)) entities.priority = 'HIGH';
+        else if (/\blow\b/i.test(message)) entities.priority = 'LOW';
+        else if (/medium/i.test(message)) entities.priority = 'MEDIUM';
+
+        if (/complet|done|finish|resolv/i.test(message)) entities.status = 'COMPLETED';
+        else if (/progress|start|working/i.test(message)) entities.status = 'IN_PROGRESS';
+    }
+
+    // Notification sending
+    if (intent === 'SEND_NOTIFICATION') {
+        const titleMatch = message.match(/(?:title|subject)\s*[:=]?\s*(.+?)(?:\s*(?:message|body|$))/i);
+        if (titleMatch) entities.title = titleMatch[1].trim();
+        const msgMatch = message.match(/(?:message|body)\s*[:=]?\s*(.+)/i);
+        if (msgMatch) entities.notifMessage = msgMatch[1].trim();
+    }
+
+    // Generic description extraction for any intent
+    if (!entities.description) {
+        const descMatch = message.match(/(?:description|about|for)\s+(.+?)(?:\s+(?:costing|worth|amount|from|with|$))/i);
+        if (descMatch) entities.description = descMatch[1].trim();
     }
 
     return entities;
@@ -282,6 +446,15 @@ async function processCommand(userMessage, context = {}) {
             'CREATE_ASSET', 'UPDATE_ASSET', 'CREATE_TRANSACTION', 'REFILL_INVENTORY',
             'APPROVE_PURCHASE', 'REJECT_PURCHASE', 'CLOSE_MAINTENANCE', 'CREATE_TICKET',
             'GET_LOW_STOCK', 'GET_ASSET_STATS', 'SET_BUDGET', 'MATCH_INVOICE', 'PROCESS_BILL',
+            'LIST_ASSETS', 'LIST_VENDORS', 'LIST_PURCHASE_ORDERS', 'LIST_TICKETS',
+            'LIST_INVENTORY', 'LIST_TRANSACTIONS', 'DASHBOARD_SUMMARY',
+            // v5: full system coverage
+            'CREATE_VENDOR', 'CREATE_PURCHASE_ORDER', 'CREATE_INVENTORY',
+            'VIEW_PROFIT_LOSS', 'VIEW_CASH_FLOW', 'VIEW_BALANCE_SHEET',
+            'LIST_GL_ACCOUNTS', 'CREATE_GL_ACCOUNT',
+            'VIEW_AUDIT_LOGS', 'LIST_NOTIFICATIONS', 'SEND_NOTIFICATION',
+            'LIST_OFFICES', 'CREATE_OFFICE', 'LIST_USERS',
+            'VIEW_ANALYTICS', 'LIST_DOCUMENTS', 'VIEW_PROFILE', 'UPDATE_TICKET',
         ];
 
         if (actionIntents.includes(classification.intent)) {
@@ -325,11 +498,25 @@ async function processCommand(userMessage, context = {}) {
         // ── Step 5: Log operation (success only for clean memory) ──
         const durationMs = Date.now() - startTime;
 
+        const VALID_AI_INTENTS = [
+            'CLOSE_MAINTENANCE', 'PROCESS_BILL', 'APPROVE_PURCHASE', 'REJECT_PURCHASE', 'GENERATE_REPORT',
+            'QUERY_DATA', 'CREATE_TRANSACTION', 'DETECT_ANOMALY', 'EXTRACT_DOCUMENT', 'PREDICT_MAINTENANCE',
+            'MATCH_INVOICE', 'FORECAST_BUDGET', 'CREATE_ASSET', 'REFILL_INVENTORY', 'GENERAL',
+            'CREATE_TICKET', 'UPDATE_ASSET', 'GET_LOW_STOCK', 'GET_ASSET_STATS', 'SET_BUDGET',
+            'LIST_ASSETS', 'LIST_VENDORS', 'LIST_PURCHASE_ORDERS', 'LIST_TICKETS', 'LIST_INVENTORY',
+            'LIST_TRANSACTIONS', 'DASHBOARD_SUMMARY', 'CREATE_VENDOR', 'CREATE_PURCHASE_ORDER',
+            'CREATE_INVENTORY', 'VIEW_PROFIT_LOSS', 'VIEW_CASH_FLOW', 'VIEW_BALANCE_SHEET',
+            'LIST_GL_ACCOUNTS', 'CREATE_GL_ACCOUNT', 'VIEW_AUDIT_LOGS', 'LIST_NOTIFICATIONS',
+            'SEND_NOTIFICATION', 'LIST_OFFICES', 'CREATE_OFFICE', 'LIST_USERS', 'VIEW_ANALYTICS',
+            'LIST_DOCUMENTS', 'VIEW_PROFILE', 'UPDATE_TICKET', 'UPDATE_ASSET_STATUS',
+        ];
+        const logIntent = VALID_AI_INTENTS.includes(classification.intent) ? classification.intent : 'GENERAL';
+
         await prisma.aiOperation.create({
             data: {
                 userId: context.userId,
                 sessionId: context.sessionId || null,
-                intent: classification.intent || 'GENERAL',
+                intent: logIntent,
                 inputSummary: userMessage.substring(0, 500),
                 agentsUsed: modelsUsed.map(m => m.model),
                 confidenceScore: classification.confidence || 0,

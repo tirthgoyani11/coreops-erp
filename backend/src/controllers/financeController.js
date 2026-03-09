@@ -4,8 +4,11 @@ const prisma = require('../config/prisma');
 // @route   GET /api/finance/transactions
 exports.getTransactions = async (req, res) => {
     try {
-        const { type, category, startDate, endDate } = req.query;
+        const { type, category, startDate, endDate, page = 1, limit = 50 } = req.query;
         const where = {};
+
+        const take = Math.min(parseInt(limit) || 50, 200);
+        const skip = (Math.max(parseInt(page) || 1, 1) - 1) * take;
 
         // Scope to office unless super admin
         if (req.user.role !== 'SUPER_ADMIN') {
@@ -21,15 +24,27 @@ exports.getTransactions = async (req, res) => {
             };
         }
 
-        const transactions = await prisma.transaction.findMany({
-            where,
-            orderBy: { date: 'desc' },
-            include: { recordedBy: { select: { id: true, name: true } } },
-        });
+        const [transactions, total] = await Promise.all([
+            prisma.transaction.findMany({
+                where,
+                orderBy: { date: 'desc' },
+                include: { recordedBy: { select: { id: true, name: true } } },
+                skip,
+                take,
+            }),
+            prisma.transaction.count({ where }),
+        ]);
 
-        res.status(200).json({ success: true, count: transactions.length, data: transactions });
+        res.status(200).json({
+            success: true,
+            count: transactions.length,
+            total,
+            page: Math.max(parseInt(page) || 1, 1),
+            totalPages: Math.ceil(total / take),
+            data: transactions,
+        });
     } catch (error) {
-        res.status(500).json({ success: false, error: error.message });
+        res.status(500).json({ success: false, message: 'Server Error', error: error.message });
     }
 };
 
@@ -38,6 +53,17 @@ exports.getTransactions = async (req, res) => {
 exports.createTransaction = async (req, res) => {
     try {
         const { type, category, amount, description, referenceType, referenceId, date } = req.body;
+
+        // Input validation
+        if (!type || !['INCOME', 'EXPENSE'].includes(type)) {
+            return res.status(400).json({ success: false, message: 'type must be INCOME or EXPENSE' });
+        }
+        if (!category || typeof category !== 'string') {
+            return res.status(400).json({ success: false, message: 'category is required' });
+        }
+        if (amount == null || isNaN(amount) || Number(amount) <= 0) {
+            return res.status(400).json({ success: false, message: 'amount must be a positive number' });
+        }
 
         // Resolve officeId robustly
         let officeId = req.user.office?.id || req.user.officeId;

@@ -10,16 +10,15 @@ const verifyToken = require('../middleware/verifyToken');
 const authorize = require('../middleware/authorize');
 const { officeValidation, paginationValidation } = require('../middleware/validation');
 
-// All office routes are SUPER_ADMIN only
+// Basic authentication
 router.use(verifyToken);
-router.use(authorize('SUPER_ADMIN'));
 
 router.route('/')
-    .post(officeValidation.create, createOffice)
-    .get(paginationValidation, getOffices);
+    .post(authorize('SUPER_ADMIN'), officeValidation.create, createOffice)
+    .get(authorize('SUPER_ADMIN', 'MANAGER'), paginationValidation, getOffices);
 
 router.route('/:id')
-    .get(officeValidation.getById, getOffice)
-    .patch(officeValidation.update, updateOffice);
+    .get(authorize('SUPER_ADMIN', 'MANAGER'), officeValidation.getById, getOffice)
+    .patch(authorize('SUPER_ADMIN'), officeValidation.update, updateOffice);
 
 module.exports = router;

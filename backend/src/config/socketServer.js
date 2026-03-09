@@ -1,5 +1,6 @@
 const { Server } = require('socket.io');
 const jwt = require('jsonwebtoken');
+const prisma = require('./prisma');
 const logger = require('../utils/logger');
 
 /**
@@ -61,11 +62,23 @@ function init(httpServer) {
         // Join personal room for targeted notifications
         socket.join(`user:${userId}`);
 
-        // Join office room when client provides officeId
-        socket.on('join-office', (officeId) => {
-            if (officeId) {
-                socket.join(`office:${officeId}`);
-                logger.info(`User ${userId} joined office room: ${officeId}`);
+        // Join office room — validate user belongs to the office
+        socket.on('join-office', async (officeId) => {
+            if (!officeId || typeof officeId !== 'string') return;
+            try {
+                const user = await prisma.user.findUnique({
+                    where: { id: userId },
+                    select: { officeId: true, role: true },
+                });
+                // Super admins can join any office; others only their own
+                if (user && (user.role === 'SUPER_ADMIN' || user.officeId === officeId)) {
+                    socket.join(`office:${officeId}`);
+                    logger.info(`User ${userId} joined office room: ${officeId}`);
+                } else {
+                    logger.warn(`User ${userId} denied joining office ${officeId} (belongs to ${user?.officeId})`);
+                }
+            } catch (err) {
+                logger.error(`Socket join-office error: ${err.message}`);
             }
         });
 

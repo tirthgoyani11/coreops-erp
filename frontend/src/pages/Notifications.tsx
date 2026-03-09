@@ -8,10 +8,10 @@ import api, { getErrorMessage } from '../lib/api';
 import type { Notification as NotificationType } from '../types';
 
 const PRIORITY_CONFIG: Record<string, { icon: any; color: string; bg: string }> = {
-    'critical': { icon: AlertCircle, color: 'text-red-400', bg: 'bg-red-500/20' },
-    'high': { icon: AlertTriangle, color: 'text-amber-400', bg: 'bg-amber-500/20' },
-    'medium': { icon: Info, color: 'text-blue-400', bg: 'bg-blue-500/20' },
-    'low': { icon: Bell, color: 'text-zinc-400', bg: 'bg-zinc-500/20' },
+    'CRITICAL': { icon: AlertCircle, color: 'text-red-400', bg: 'bg-red-500/20' },
+    'HIGH': { icon: AlertTriangle, color: 'text-amber-400', bg: 'bg-amber-500/20' },
+    'MEDIUM': { icon: Info, color: 'text-blue-400', bg: 'bg-blue-500/20' },
+    'LOW': { icon: Bell, color: 'text-zinc-400', bg: 'bg-zinc-500/20' },
 };
 
 export function Notifications() {
@@ -230,12 +230,12 @@ export function Notifications() {
                                         <p className="text-sm text-[var(--text-secondary)] mt-1 line-clamp-2">
                                             {notification.message}
                                         </p>
-                                        {notification.actionUrl && (
+                                        {notification.actions && Array.isArray(notification.actions) && notification.actions.length > 0 && (
                                             <a
-                                                href={notification.actionUrl}
+                                                href={(notification.actions[0] as any)?.url || '#'}
                                                 className="text-sm text-[var(--primary)] hover:underline mt-2 inline-block"
                                             >
-                                                View details →
+                                                {(notification.actions[0] as any)?.label || 'View details'} →
                                             </a>
                                         )}
                                     </div>

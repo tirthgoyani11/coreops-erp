@@ -7,6 +7,19 @@ exports.createPO = async (req, res) => {
     try {
         const { vendorId, items, expectedDeliveryDate, notes } = req.body;
 
+        // Input validation
+        if (!vendorId || typeof vendorId !== 'string') {
+            return res.status(400).json({ success: false, message: 'vendorId is required' });
+        }
+        if (!Array.isArray(items) || items.length === 0) {
+            return res.status(400).json({ success: false, message: 'items must be a non-empty array' });
+        }
+        for (const item of items) {
+            if (!item.name || !item.quantity || !item.unitPrice || item.quantity <= 0 || item.unitPrice <= 0) {
+                return res.status(400).json({ success: false, message: 'Each item must have name, quantity (>0), and unitPrice (>0)' });
+            }
+        }
+
         const vendor = await prisma.vendor.findUnique({ where: { id: vendorId } });
         if (!vendor) return res.status(404).json({ success: false, message: 'Vendor not found' });
 
@@ -81,17 +94,33 @@ exports.getPOs = async (req, res) => {
         if (status) where.status = status;
         if (vendorId) where.vendorId = vendorId;
 
-        const pos = await prisma.purchaseOrder.findMany({
-            where,
-            include: {
-                vendor: { select: { id: true, name: true, vendorCode: true } },
-                requestedBy: { select: { id: true, name: true } },
-                items: true,
-            },
-            orderBy: { createdAt: 'desc' },
-        });
+        const { page = 1, limit = 50 } = req.query;
+        const take = Math.min(parseInt(limit) || 50, 200);
+        const skip = (Math.max(parseInt(page) || 1, 1) - 1) * take;
 
-        res.status(200).json({ success: true, count: pos.length, data: pos });
+        const [pos, total] = await Promise.all([
+            prisma.purchaseOrder.findMany({
+                where,
+                include: {
+                    vendor: { select: { id: true, name: true, vendorCode: true } },
+                    requestedBy: { select: { id: true, name: true } },
+                    items: true,
+                },
+                orderBy: { createdAt: 'desc' },
+                skip,
+                take,
+            }),
+            prisma.purchaseOrder.count({ where }),
+        ]);
+
+        res.status(200).json({
+            success: true,
+            count: pos.length,
+            total,
+            page: Math.max(parseInt(page) || 1, 1),
+            totalPages: Math.ceil(total / take),
+            data: pos,
+        });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
     }

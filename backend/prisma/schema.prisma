@@ -248,6 +248,40 @@ enum AiIntent {
   CREATE_ASSET
   REFILL_INVENTORY
   GENERAL
+  // v3
+  CREATE_TICKET
+  UPDATE_ASSET
+  GET_LOW_STOCK
+  GET_ASSET_STATS
+  SET_BUDGET
+  // v4
+  LIST_ASSETS
+  LIST_VENDORS
+  LIST_PURCHASE_ORDERS
+  LIST_TICKETS
+  LIST_INVENTORY
+  LIST_TRANSACTIONS
+  DASHBOARD_SUMMARY
+  // v5
+  CREATE_VENDOR
+  CREATE_PURCHASE_ORDER
+  CREATE_INVENTORY
+  VIEW_PROFIT_LOSS
+  VIEW_CASH_FLOW
+  VIEW_BALANCE_SHEET
+  LIST_GL_ACCOUNTS
+  CREATE_GL_ACCOUNT
+  VIEW_AUDIT_LOGS
+  LIST_NOTIFICATIONS
+  SEND_NOTIFICATION
+  LIST_OFFICES
+  CREATE_OFFICE
+  LIST_USERS
+  VIEW_ANALYTICS
+  LIST_DOCUMENTS
+  VIEW_PROFILE
+  UPDATE_TICKET
+  UPDATE_ASSET_STATUS
 }
 
 enum AiOperationStatus {
@@ -264,6 +298,17 @@ enum StockMovementType {
   ADJUSTMENT
   TRANSFER
   RETURN
+}
+
+enum ScheduleFrequency {
+  DAILY
+  WEEKLY
+  BIWEEKLY
+  MONTHLY
+  QUARTERLY
+  SEMI_ANNUAL
+  YEARLY
+  CUSTOM
 }
 
 // ─── MODELS ────────────────────────────────────────────────────
@@ -311,6 +356,9 @@ model Office {
   aiOperations       AiOperation[]
   glAccounts         GLAccount[]
   journalEntries     JournalEntry[]
+  preventiveSchedules PreventiveSchedule[]
+  slaPolices         SLAPolicy[]
+  stocktakes         Stocktake[]
 
   @@index([name, country])
   @@index([parentId])
@@ -371,6 +419,7 @@ model User {
   aiApprovals          AiOperation[]     @relation("AiOperationApprover")
   stockMovements       StockMovement[]
   createdJournalEntries JournalEntry[]    @relation("JournalEntryCreator")
+  expenseClaims         ExpenseClaim[]    @relation("ExpenseEmployee")
 
   @@index([role, officeId])
   @@index([officeId])
@@ -409,6 +458,7 @@ model Vendor {
   // Relations
   purchaseOrders  PurchaseOrder[]
   assets          Asset[]
+  contracts       VendorContract[]
 
   @@index([name])
   @@index([isBlacklisted])
@@ -460,6 +510,7 @@ model Asset {
   // Relations
   maintenanceTickets MaintenanceTicket[]
   maintenanceHistory AssetMaintenanceHistory[]
+  preventiveSchedules PreventiveSchedule[]
 
   @@index([officeId, status])
   @@index([category, status])
@@ -517,11 +568,18 @@ model MaintenanceTicket {
   requestedBy        User           @relation("TicketRequester", fields: [requestedById], references: [id])
   reportedDate       DateTime       @default(now())
   attachments        String[]       @default([])
+  // SLA tracking
+  slaResponseDeadline  DateTime?
+  slaResolutionDeadline DateTime?
+  slaBreached          Boolean   @default(false)
+  firstResponseAt      DateTime?
+  preventiveScheduleId String?
   createdAt          DateTime       @default(now())
   updatedAt          DateTime       @updatedAt
   // Relations (embedded arrays → tables)
   workLogs           WorkLog[]
   sparePartsUsed     SparePartUsage[]
+  preventiveSchedule PreventiveSchedule? @relation(fields: [preventiveScheduleId], references: [id])
 
   @@index([assetId, status])
   @@index([requestedById, reportedDate(sort: Desc)])
@@ -607,6 +665,8 @@ model Inventory {
   stockMovements  StockMovement[]
   sparePartUsages SparePartUsage[]
   poItems         PurchaseOrderItem[]
+  batches         InventoryBatch[]
+  serializedUnits SerializedUnit[]
 
   @@index([officeId, type])
   @@index([category])
@@ -627,6 +687,43 @@ model StockMovement {
 
   @@index([inventoryId, date(sort: Desc)])
   @@index([type])
+}
+
+model InventoryBatch {
+  id                String    @id @default(uuid())
+  inventoryId       String
+  inventory         Inventory @relation(fields: [inventoryId], references: [id], onDelete: Cascade)
+  batchNumber       String
+  lotNumber         String?
+  quantity          Int
+  remainingQuantity Int
+  expiryDate        DateTime?
+  manufacturingDate DateTime?
+  receivedDate      DateTime  @default(now())
+  costPerUnit       Float?
+  status            String    @default("AVAILABLE") // AVAILABLE, EXPIRED, CONSUMED, QUARANTINE
+  notes             String?
+  createdAt         DateTime  @default(now())
+
+  @@unique([inventoryId, batchNumber])
+  @@index([expiryDate])
+  @@index([status])
+}
+
+model SerializedUnit {
+  id            String    @id @default(uuid())
+  inventoryId   String
+  inventory     Inventory @relation(fields: [inventoryId], references: [id], onDelete: Cascade)
+  serialNumber  String    @unique
+  status        String    @default("IN_STOCK") // IN_STOCK, ISSUED, RETURNED, DEFECTIVE
+  batchNumber   String?
+  issuedToId    String?
+  issuedDate    DateTime?
+  returnDate    DateTime?
+  notes         String?
+  createdAt     DateTime  @default(now())
+
+  @@index([inventoryId, status])
 }
 
 model PurchaseOrder {
@@ -660,6 +757,8 @@ model PurchaseOrder {
   updatedAt            DateTime  @updatedAt
   // Relations
   items                PurchaseOrderItem[]
+  goodsReceipts        GoodsReceipt[]
+  amendments           POAmendment[]
 
   @@index([vendorId])
   @@index([officeId, status])
@@ -896,6 +995,7 @@ model GLAccount {
   @@index([type])
   @@index([parentId])
   @@index([officeId])
+  bankStatements  BankStatement[]
 }
 
 model JournalEntry {
@@ -975,4 +1075,312 @@ model AiOperation {
   @@index([officeId, createdAt(sort: Desc)])
   @@index([confidenceScore])
   @@index([status])
+}
+
+// ─── PREVENTIVE MAINTENANCE ─────────────────────────────────────
+
+model PreventiveSchedule {
+  id              String            @id @default(uuid())
+  name            String
+  assetId         String?
+  asset           Asset?            @relation(fields: [assetId], references: [id])
+  assetCategory   AssetCategory?
+  officeId        String
+  office          Office            @relation(fields: [officeId], references: [id])
+  frequency       ScheduleFrequency
+  intervalDays    Int?              // For CUSTOM frequency
+  description     String?
+  checklist       Json?             // [{ item, required }]
+  priority        TicketPriority    @default(MEDIUM)
+  estimatedCost   Float?
+  assignedToId    String?
+  lastExecuted    DateTime?
+  nextDue         DateTime
+  isActive        Boolean           @default(true)
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+  // Relations
+  generatedTickets MaintenanceTicket[]
+
+  @@index([nextDue, isActive])
+  @@index([officeId])
+  @@index([assetId])
+}
+
+// ─── SLA POLICIES ───────────────────────────────────────────────
+
+model SLAPolicy {
+  id                  String         @id @default(uuid())
+  name                String
+  priority            TicketPriority
+  responseTimeHours   Int            // Max hours to first response
+  resolutionTimeHours Int            // Max hours to resolution
+  escalationLevels    Json?          // [{ afterHours, notifyRole, notifyUserId }]
+  officeId            String?
+  office              Office?        @relation(fields: [officeId], references: [id])
+  isDefault           Boolean        @default(false)
+  isActive            Boolean        @default(true)
+  createdAt           DateTime       @default(now())
+
+  @@index([priority, isActive])
+  @@index([officeId])
+}
+
+// ─── STOCKTAKE / CYCLE COUNTING ─────────────────────────────────
+
+model Stocktake {
+  id          String   @id @default(uuid())
+  officeId    String
+  office      Office   @relation(fields: [officeId], references: [id])
+  status      String   @default("DRAFT") // DRAFT, IN_PROGRESS, COMPLETED, CANCELLED
+  startedAt   DateTime?
+  completedAt DateTime?
+  createdById String
+  notes       String?
+  items       StocktakeItem[]
+  createdAt   DateTime @default(now())
+
+  @@index([officeId, status])
+}
+
+model StocktakeItem {
+  id              String    @id @default(uuid())
+  stocktakeId     String
+  stocktake       Stocktake @relation(fields: [stocktakeId], references: [id], onDelete: Cascade)
+  inventoryId     String
+  systemQuantity  Int
+  countedQuantity Int?
+  variance        Int?
+  notes           String?
+  countedAt       DateTime?
+
+  @@index([stocktakeId])
+}
+
+// ─── FINANCE ENHANCEMENTS (Phase 4 & 5) ───────────────────────────
+
+model TaxRate {
+  id        String   @id @default(uuid())
+  name      String   // "GST 18%", "IGST 12%", "VAT 5%"
+  code      String   @unique // "GST18", "IGST12"
+  rate      Float    // 18.0, 12.0
+  type      String   // GST, IGST, SGST, CGST, VAT, CUSTOM
+  isDefault Boolean  @default(false)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+}
+
+model BankStatement {
+  id            String   @id @default(uuid())
+  accountId     String
+  account       GLAccount @relation(fields: [accountId], references: [id])
+  bankName      String
+  accountNumber String
+  statementDate DateTime
+  entries       BankEntry[]
+  uploadedById  String
+  officeId      String
+  status        String   @default("PENDING") // PENDING, RECONCILED
+  createdAt     DateTime @default(now())
+  @@index([officeId, status])
+}
+
+model BankEntry {
+  id                   String   @id @default(uuid())
+  statementId          String
+  statement            BankStatement @relation(fields: [statementId], references: [id], onDelete: Cascade)
+  date                 DateTime
+  description          String
+  amount               Float
+  type                 String   // DEBIT, CREDIT
+  reference            String?
+  matchedTransactionId String?
+  isReconciled         Boolean  @default(false)
+  @@index([statementId])
+}
+
+model ExpenseClaim {
+  id            String   @id @default(uuid())
+  claimNumber   String   @unique
+  employeeId    String
+  employee      User     @relation("ExpenseEmployee", fields: [employeeId], references: [id])
+  officeId      String
+  status        String   @default("DRAFT") // DRAFT, SUBMITTED, APPROVED, REJECTED, PAID
+  totalAmount   Float    @default(0)
+  currency      String   @default("INR")
+  description   String?
+  items         ExpenseItem[]
+  approvedById  String?
+  approvalDate  DateTime?
+  paidDate      DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  @@index([employeeId, status])
+  @@index([officeId])
+}
+
+model ExpenseItem {
+  id          String   @id @default(uuid())
+  claimId     String
+  claim       ExpenseClaim @relation(fields: [claimId], references: [id], onDelete: Cascade)
+  date        DateTime
+  category    String   // TRAVEL, FOOD, ACCOMMODATION, SUPPLIES, OTHER
+  description String
+  amount      Float
+  receipt     String?  // File URL
+  @@index([claimId])
+}
+
+model VendorContract {
+  id             String   @id @default(uuid())
+  contractNumber String   @unique
+  vendorId       String
+  vendor         Vendor   @relation(fields: [vendorId], references: [id])
+  officeId       String
+  type           String   // SERVICE, SUPPLY, MAINTENANCE, LEASE
+  startDate      DateTime
+  endDate        DateTime
+  value          Float?
+  currency       String   @default("INR")
+  renewalType    String   @default("MANUAL") // AUTO, MANUAL, NONE
+  autoRenewDays  Int?
+  terms          String?
+  attachments    String[]
+  status         String   @default("ACTIVE") // DRAFT, ACTIVE, EXPIRED, TERMINATED
+  reminderDays   Int      @default(30)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  @@index([vendorId])
+  @@index([status, endDate])
+}
+
+// ─── PURCHASE REQUISITIONS ──────────────────────────────────────
+
+model PurchaseRequisition {
+  id              String   @id @default(uuid())
+  prNumber        String   @unique
+  requestedById   String
+  officeId        String
+  status          String   @default("DRAFT") // DRAFT, SUBMITTED, APPROVED, REJECTED, CONVERTED
+  priority        String   @default("MEDIUM")
+  justification   String?
+  requiredByDate  DateTime?
+  approvedById    String?
+  approvalDate    DateTime?
+  convertedToPOId String?
+  items           PRItem[]
+  totalEstimate   Float?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([officeId, status])
+  @@index([requestedById])
+}
+
+model PRItem {
+  id              String              @id @default(uuid())
+  requisitionId   String
+  requisition     PurchaseRequisition @relation(fields: [requisitionId], references: [id], onDelete: Cascade)
+  inventoryId     String?
+  description     String
+  quantity        Int
+  estimatedPrice  Float?
+  suggestedVendorId String?
+  notes           String?
+
+  @@index([requisitionId])
+}
+
+// ─── RFQ & VENDOR QUOTATIONS ────────────────────────────────────
+
+model RFQ {
+  id              String   @id @default(uuid())
+  rfqNumber       String   @unique
+  title           String
+  description     String?
+  officeId        String
+  requiredByDate  DateTime?
+  status          String   @default("DRAFT") // DRAFT, SENT, CLOSED, AWARDED
+  items           RFQItem[]
+  quotations      VendorQuotation[]
+  awardedVendorId String?
+  createdById     String
+  createdAt       DateTime @default(now())
+
+  @@index([status])
+}
+
+model RFQItem {
+  id          String @id @default(uuid())
+  rfqId       String
+  rfq         RFQ    @relation(fields: [rfqId], references: [id], onDelete: Cascade)
+  description String
+  quantity    Int
+  unit        String @default("pieces")
+  specs       String?
+
+  @@index([rfqId])
+}
+
+model VendorQuotation {
+  id          String   @id @default(uuid())
+  rfqId       String
+  rfq         RFQ      @relation(fields: [rfqId], references: [id], onDelete: Cascade)
+  vendorId    String
+  totalAmount Float
+  currency    String   @default("INR")
+  validUntil  DateTime?
+  items       Json?    // [{ rfqItemId, unitPrice, totalPrice, notes }]
+  attachments String[]
+  status      String   @default("SUBMITTED") // SUBMITTED, ACCEPTED, REJECTED
+  submittedAt DateTime @default(now())
+
+  @@index([rfqId, vendorId])
+}
+
+// ─── GOODS RECEIPT NOTES ────────────────────────────────────────
+
+model GoodsReceipt {
+  id              String        @id @default(uuid())
+  grnNumber       String        @unique
+  purchaseOrderId String
+  purchaseOrder   PurchaseOrder @relation(fields: [purchaseOrderId], references: [id])
+  receivedById    String
+  officeId        String
+  status          String        @default("DRAFT") // DRAFT, INSPECTING, ACCEPTED, PARTIAL, REJECTED
+  receivedDate    DateTime      @default(now())
+  items           GRNItem[]
+  notes           String?
+  createdAt       DateTime      @default(now())
+
+  @@index([purchaseOrderId])
+}
+
+model GRNItem {
+  id               String       @id @default(uuid())
+  grnId            String
+  grn              GoodsReceipt @relation(fields: [grnId], references: [id], onDelete: Cascade)
+  poItemId         String
+  quantityReceived Int
+  quantityAccepted Int?
+  quantityRejected Int?
+  rejectionReason  String?
+  batchNumber      String?
+
+  @@index([grnId])
+}
+
+// ─── PO AMENDMENTS ──────────────────────────────────────────────
+
+model POAmendment {
+  id              String        @id @default(uuid())
+  purchaseOrderId String
+  purchaseOrder   PurchaseOrder @relation(fields: [purchaseOrderId], references: [id])
+  amendmentNumber Int
+  changes         Json          // { field, oldValue, newValue }
+  reason          String?
+  amendedById     String
+  createdAt       DateTime      @default(now())
+
+  @@index([purchaseOrderId])
 }

@@ -1,5 +1,6 @@
+import { useState, useEffect } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
-import { LogOut, Layers, ChevronLeft, ChevronRight, X } from 'lucide-react';
+import { LogOut, Layers, ChevronLeft, ChevronRight, X, ChevronDown } from 'lucide-react';
 import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
 import { cn } from '../../lib/utils';
@@ -12,11 +13,30 @@ export function Sidebar() {
     const { isSidebarCollapsed, toggleSidebar, isMobileSidebarOpen, setMobileSidebarOpen } = useUIStore();
     const location = useLocation();
 
+    // State for expanded accordion menus
+    const [expandedMenus, setExpandedMenus] = useState<string[]>([]);
+
     // Get navigation items based on user role
     const userRole = (user?.role || 'VIEWER') as UserRole;
     const navItems = getNavItemsForRole(userRole);
     const roleLabel = getRoleLabel(userRole);
     const roleColor = getRoleColor(userRole);
+
+    // Auto-expand menu if a child is active
+    useEffect(() => {
+        const activeItem = navItems.find(item =>
+            item.subItems?.some(subItem => location.pathname === subItem.path)
+        );
+        if (activeItem && activeItem.label && !expandedMenus.includes(activeItem.label)) {
+            setExpandedMenus(prev => [...prev, activeItem.label]);
+        }
+    }, [location.pathname, navItems]);
+
+    const toggleMenu = (label: string) => {
+        setExpandedMenus(prev =>
+            prev.includes(label) ? prev.filter(l => l !== label) : [...prev, label]
+        );
+    };
 
     const SidebarContent = () => (
         <>
@@ -57,13 +77,77 @@ export function Sidebar() {
                 )}
 
                 {navItems.map((item) => {
-                    const isActive = location.pathname === item.path;
+                    const isActive = item.path ? location.pathname === item.path : false;
+                    const isChildActive = item.subItems?.some(sub => location.pathname === sub.path);
+                    const isExpanded = expandedMenus.includes(item.label);
                     const IconComponent = item.icon;
+
+                    if (item.subItems && item.subItems.length > 0) {
+                        return (
+                            <div key={item.label} className="flex flex-col relative">
+                                <button
+                                    onClick={() => toggleMenu(item.label)}
+                                    className={cn(
+                                        "flex items-center rounded-xl transition-all group relative overflow-hidden w-full text-left",
+                                        isSidebarCollapsed && !isMobileSidebarOpen ? "justify-center w-12 h-12 mx-auto" : "px-4 py-3 gap-3",
+                                        isChildActive
+                                            ? "text-[var(--primary)]" // active parent color
+                                            : "text-[var(--sidebar-text-muted)] hover:text-[var(--sidebar-text)] hover:bg-[var(--sidebar-hover)]"
+                                    )}
+                                    title={isSidebarCollapsed && !isMobileSidebarOpen ? item.label : undefined}
+                                >
+                                    <IconComponent className={cn("w-5 h-5 shrink-0", isChildActive ? "text-[var(--primary)]" : "group-hover:text-[var(--sidebar-text)]")} />
+                                    {(!isSidebarCollapsed || isMobileSidebarOpen) && (
+                                        <>
+                                            <span className="font-medium text-sm truncate flex-1">{item.label}</span>
+                                            <ChevronDown className={cn("w-4 h-4 transition-transform", isExpanded ? "rotate-180" : "")} />
+                                        </>
+                                    )}
+                                </button>
+
+                                <AnimatePresence>
+                                    {isExpanded && (!isSidebarCollapsed || isMobileSidebarOpen) && (
+                                        <motion.div
+                                            initial={{ height: 0, opacity: 0 }}
+                                            animate={{ height: "auto", opacity: 1 }}
+                                            exit={{ height: 0, opacity: 0 }}
+                                            className="overflow-hidden"
+                                        >
+                                            <div className="pl-11 pr-4 py-1 space-y-1 relative before:absolute before:left-[22px] before:top-0 before:bottom-3 before:w-px before:bg-[var(--sidebar-border)]">
+                                                {item.subItems.filter(sub => sub.roles.includes(userRole)).map(subItem => {
+                                                    const isSubActive = location.pathname === subItem.path;
+                                                    return (
+                                                        <NavLink
+                                                            key={subItem.path}
+                                                            to={subItem.path!}
+                                                            onClick={() => setMobileSidebarOpen(false)}
+                                                            className={cn(
+                                                                "flex items-center text-sm rounded-lg px-3 py-2 transition-colors relative before:absolute before:-left-5 before:top-1/2 before:w-3 before:h-px before:bg-[var(--sidebar-border)]",
+                                                                isSubActive
+                                                                    ? "text-[var(--primary)] bg-[var(--sidebar-active)]"
+                                                                    : "text-[var(--sidebar-text-muted)] hover:text-[var(--sidebar-text)] hover:bg-[var(--sidebar-hover)]"
+                                                            )}
+                                                        >
+                                                            {subItem.label}
+                                                        </NavLink>
+                                                    );
+                                                })}
+                                            </div>
+                                        </motion.div>
+                                    )}
+                                </AnimatePresence>
+                                {/* Active indicator if sidebar is collapsed and a child is active */}
+                                {isChildActive && isSidebarCollapsed && !isMobileSidebarOpen && (
+                                    <div className="absolute w-1 h-1 bg-[var(--primary)] rounded-full bottom-1 left-1/2 -translate-x-1/2 shadow-[0_0_10px_var(--primary)] pointer-events-none" />
+                                )}
+                            </div>
+                        );
+                    }
 
                     return (
                         <NavLink
-                            key={item.path}
-                            to={item.path}
+                            key={item.path || item.label}
+                            to={item.path!}
                             onClick={() => setMobileSidebarOpen(false)}
                             className={cn(
                                 "flex items-center rounded-xl transition-all group relative overflow-hidden",

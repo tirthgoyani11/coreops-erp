@@ -103,17 +103,18 @@ exports.getUnreadCount = async (req, res) => {
 // POST /api/notifications (admin only)
 exports.createNotification = async (req, res) => {
     try {
-        const { recipient, type, title, message, priority, metadata, actionUrl } = req.body;
+        const { recipient, type, title, message, priority, relatedModel, relatedDocId, actions } = req.body;
 
         const notification = await prisma.notification.create({
             data: {
                 recipientId: recipient,
-                type,
+                type: type || 'SYSTEM_ALERT',
                 title,
                 message,
-                priority: priority || 'LOW',
-                metadata: metadata || undefined,
-                actionUrl,
+                priority: priority || 'MEDIUM',
+                relatedModel: relatedModel || undefined,
+                relatedDocId: relatedDocId || undefined,
+                actions: actions || undefined,
             },
         });
 
@@ -136,7 +137,7 @@ exports.broadcastNotification = async (req, res) => {
         const notifications = [];
         for (const recipientId of recipients) {
             const n = await prisma.notification.create({
-                data: { recipientId, type, title, message, priority: priority || 'LOW' },
+                data: { recipientId, type: type || 'SYSTEM_ALERT', title, message, priority: priority || 'MEDIUM' },
             });
             notifications.push(n);
             notifyUser(recipientId, n);

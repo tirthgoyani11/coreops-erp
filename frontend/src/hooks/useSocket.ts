@@ -16,11 +16,19 @@ export const useSocket = () => {
     // For now, we'll just trigger toasts and re-fetches
 
     useEffect(() => {
-        if (!token || !user) return;
+        // If user logged out, disconnect the socket
+        if (!token || !user) {
+            if (socket) {
+                socket.disconnect();
+                socket = null;
+            }
+            return;
+        }
 
         // Initialize socket only if not already connected
         if (!socket) {
-            socket = io(import.meta.env.VITE_API_URL || 'http://localhost:5000', {
+            const socketUrl = (import.meta.env.VITE_API_URL || 'http://localhost:5000').replace(/\/api\/?$/, '');
+            socket = io(socketUrl, {
                 auth: { token },
                 withCredentials: true,
             });
@@ -28,8 +36,9 @@ export const useSocket = () => {
             socket.on('connect', () => {
                 console.log('Socket connected:', socket?.id);
                 // Join office room if user has one (except Super Admin who might join all)
-                if (user.office) {
-                    socket?.emit('join-office', user.office);
+                const officeId = user.officeId || (user.office && typeof user.office === 'object' ? user.office.id : user.office);
+                if (officeId) {
+                    socket?.emit('join-office', officeId);
                 }
             });
 
@@ -47,11 +56,12 @@ export const useSocket = () => {
                 audio.play().catch(() => { }); // Catch error if user hasn't interacted
 
                 // Show toast
+                const firstAction = Array.isArray(data.actions) && data.actions.length > 0 ? data.actions[0] : null;
                 toast(data.title, {
                     description: data.message,
-                    action: data.actionUrl ? {
-                        label: 'View',
-                        onClick: () => window.location.href = data.actionUrl
+                    action: firstAction?.url ? {
+                        label: firstAction.label || 'View',
+                        onClick: () => window.location.href = firstAction.url
                     } : undefined,
                 });
 
@@ -60,11 +70,10 @@ export const useSocket = () => {
             });
         }
 
+        // Do not return a cleanup function that disconnects the singleton socket,
+        // because navigating/re-rendering might invoke it and cause constant connection churn.
         return () => {
-            if (socket) {
-                socket.disconnect();
-                socket = null;
-            }
+            // Keep socket alive across component re-renders
         };
     }, [token, user]);
 

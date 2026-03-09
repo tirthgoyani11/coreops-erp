@@ -146,9 +146,9 @@ export function MaintenanceAnalytics() {
                                 <tr>
                                     <th className="pb-2">Item Name</th>
                                     <th className="pb-2">SKU</th>
-                                    <th className="pb-2 text-right">Current Qty</th>
-                                    <th className="pb-2 text-right">Reorder Point</th>
-                                    <th className="pb-2">Status</th>
+                                    <th className="pb-2 text-center">Current Qty</th>
+                                    <th className="pb-2 text-center">Reorder Point</th>
+                                    <th className="pb-2 text-right">Status</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
@@ -157,9 +157,9 @@ export function MaintenanceAnalytics() {
                                         <tr key={item.id}>
                                             <td className="py-2 font-medium">{item.name}</td>
                                             <td className="py-2 text-gray-500">{item.sku}</td>
-                                            <td className="py-2 text-right font-bold text-red-600">{item.stock?.currentQuantity ?? item.quantity}</td>
-                                            <td className="py-2 text-right text-gray-500">{item.stock?.reorderPoint ?? 10}</td>
-                                            <td className="py-2"><span className="text-xs bg-red-100 text-red-800 px-2 py-1 rounded">Critical</span></td>
+                                            <td className="py-2 text-center font-bold text-red-600">{item.currentQuantity ?? item.stock?.currentQuantity ?? item.quantity ?? 0}</td>
+                                            <td className="py-2 text-center text-gray-500">{item.reorderPoint ?? item.stock?.reorderPoint ?? 10}</td>
+                                            <td className="py-2 text-right"><span className="text-xs bg-red-100 text-red-800 px-2 py-1 rounded">Critical</span></td>
                                         </tr>
                                     ))
                                 ) : (

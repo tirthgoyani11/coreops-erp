@@ -16,12 +16,13 @@ const {
 
 const protect = require('../middleware/verifyToken');
 const authorize = require('../middleware/authorize');
+const { writeLimiter } = require('../middleware/rateLimiter');
 
 router.use(protect);
 
 router.route('/')
     .get(getInventory)
-    .post(authorize('SUPER_ADMIN', 'ADMIN', 'MANAGER'), createItem);
+    .post(authorize('SUPER_ADMIN', 'ADMIN', 'MANAGER'), writeLimiter, createItem);
 
 router.route('/alerts/low-stock')
     .get(getLowStock);

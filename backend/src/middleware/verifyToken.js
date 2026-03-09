@@ -19,10 +19,23 @@ const verifyToken = async (req, res, next) => {
         const token = authHeader.split(' ')[1];
         const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
-        const user = await prisma.user.findUnique({
-            where: { id: decoded.id },
-            include: { office: true },
-        });
+        // Retry once on transient Neon/PG connection drops
+        let user;
+        try {
+            user = await prisma.user.findUnique({
+                where: { id: decoded.id },
+                include: { office: true },
+            });
+        } catch (dbError) {
+            if (dbError.message && dbError.message.includes('network socket disconnected')) {
+                user = await prisma.user.findUnique({
+                    where: { id: decoded.id },
+                    include: { office: true },
+                });
+            } else {
+                throw dbError;
+            }
+        }
 
         if (!user) {
             return res.status(401).json({

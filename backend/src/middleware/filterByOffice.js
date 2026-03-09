@@ -19,34 +19,20 @@ const filterByOffice = (req, res, next) => {
 
     const { role, officeId, regionId, assignedScope } = req.user;
 
-    // SUPER_ADMIN can access all offices - no filter
-    if (role === 'SUPER_ADMIN') {
+    // SUPER_ADMIN and ADMIN can access all offices - no filter
+    if (role === 'SUPER_ADMIN' || role === 'ADMIN') {
         req.officeFilter = {};
         req.scopeFilter = {};
         req.canViewAll = true;
         return next();
     }
 
-    // REGIONAL_MANAGER can access all offices in their region
-    if (role === 'REGIONAL_MANAGER') {
-        if (!regionId) {
-            return res.status(403).json({
-                success: false,
-                message: 'Regional Manager not assigned to any region.',
-            });
-        }
-        req.officeFilter = { 'officeId.regionId': regionId };
-        req.scopeFilter = { regionId: regionId };
-        req.canViewRegion = true;
-        return next();
-    }
-
-    // BRANCH_MANAGER restricted to their office
-    if (role === 'BRANCH_MANAGER') {
+    // MANAGER and STAFF restricted to their office
+    if (role === 'MANAGER' || role === 'STAFF') {
         if (!officeId) {
             return res.status(403).json({
                 success: false,
-                message: 'Branch Manager not assigned to any office.',
+                message: `${role} not assigned to any office.`,
             });
         }
         const officeIdValue = typeof officeId === 'object' ? officeId.id : officeId;
@@ -125,8 +111,9 @@ const checkApprovalLimit = (req, res, next) => {
     // Role-based approval limits
     const limits = {
         SUPER_ADMIN: Infinity,
-        REGIONAL_MANAGER: 5000,
-        BRANCH_MANAGER: 500,
+        ADMIN: 10000,
+        MANAGER: 5000,
+        STAFF: 500,
         TECHNICIAN: 0,
         VIEWER: 0
     };
@@ -138,7 +125,7 @@ const checkApprovalLimit = (req, res, next) => {
             success: false,
             message: `Amount $${amount} exceeds your approval limit of $${userLimit}. Please escalate.`,
             requiresEscalation: true,
-            escalateTo: role === 'BRANCH_MANAGER' ? 'Regional Manager' : 'Super Admin'
+            escalateTo: role === 'MANAGER' ? 'Admin' : 'Super Admin'
         });
     }
 

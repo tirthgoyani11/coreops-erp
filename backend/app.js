@@ -30,7 +30,12 @@ const financeRoutes = require('./src/routes/financeRoutes');
 const glRoutes = require('./src/routes/glRoutes');
 const aiRoutes = require('./src/routes/aiRoutes');
 const procurementMatchRoutes = require('./src/routes/procurementMatchRoutes');
-// Trigger restart for finance routes - V2
+const preventiveRoutes = require('./src/routes/preventiveRoutes');
+const slaRoutes = require('./src/routes/slaRoutes');
+const inventoryExtRoutes = require('./src/routes/inventoryExtRoutes');
+const procurementExtRoutes = require('./src/routes/procurementExtRoutes');
+const financeExtRoutes = require('./src/routes/financeExtRoutes');
+const userRoutes = require('./src/routes/userRoutes');
 
 // Services
 const currencyService = require('./src/services/currencyService');
@@ -150,6 +155,12 @@ app.use('/api/finance', financeRoutes);
 app.use('/api/gl', glRoutes);
 app.use('/api/ai', aiRoutes);
 app.use('/api/procurement', procurementMatchRoutes);
+app.use('/api/preventive', preventiveRoutes);
+app.use('/api/sla', slaRoutes);
+app.use('/api/inventory-ext', inventoryExtRoutes);
+app.use('/api/procurement-ext', procurementExtRoutes);
+app.use('/api/finance-ext', financeExtRoutes);
+app.use('/api/users', userRoutes);
 
 // Serve uploaded files (local storage — dev mode)
 const path = require('path');

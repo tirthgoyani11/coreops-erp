@@ -1,5 +1,6 @@
 import { useState, useEffect, memo } from 'react';
 import { motion } from 'framer-motion';
+import { Link } from 'react-router-dom';
 import {
     Package,
     Wrench,
@@ -15,13 +16,13 @@ import { DashboardChart } from '../../components/dashboard/DashboardChart';
 import { QuickActions } from '../../components/dashboard/QuickActions';
 import api from '../../lib/api';
 import { formatCurrency } from '../../lib/utils';
+import { useSocket } from '../../hooks/useSocket';
 
-// Types
 interface AuditLogEntry {
     id: string;
     user?: { name: string };
     action: string;
-    createdAt: string;
+    timestamp: string;
 }
 
 interface DashboardStats {
@@ -73,9 +74,9 @@ const AuditLogTable = memo(function AuditLogTable({ logs, loading }: { logs: Aud
         >
             <div className="flex items-center justify-between mb-4">
                 <h3 className="text-[var(--text-primary)] font-medium">Recent Activity</h3>
-                <button className="text-xs text-[var(--primary)] hover:underline flex items-center gap-1">
+                <Link to="/audit-logs" className="text-xs text-[var(--primary)] hover:underline flex items-center gap-1">
                     View All <ChevronRight className="w-3 h-3" />
-                </button>
+                </Link>
             </div>
 
             <div className="space-y-1">
@@ -102,7 +103,7 @@ const AuditLogTable = memo(function AuditLogTable({ logs, loading }: { logs: Aud
                             </div>
                             <div className="flex items-center gap-1 text-xs text-[var(--text-secondary)]">
                                 <Clock className="w-3 h-3" />
-                                {formatTime(log.createdAt)}
+                                {formatTime(log.timestamp)}
                             </div>
                         </motion.div>
                     ))
@@ -133,6 +134,26 @@ export const AdminDashboard = memo(function AdminDashboard() {
     const [assetCategoryData, setAssetCategoryData] = useState<{ name: string; value: number }[]>([]);
     const [maintenanceTrendData, setMaintenanceTrendData] = useState<{ name: string; value: number }[]>([]);
     const [inventoryData, setInventoryData] = useState<{ name: string; value: number }[]>([]);
+
+    const socket = useSocket();
+
+    useEffect(() => {
+        if (!socket) return;
+
+        const handleNewActivity = (newLog: AuditLogEntry) => {
+            setAuditLogs(prev => {
+                // Prepend and keep only the latest 8 logs
+                const updated = [newLog, ...prev];
+                return updated.slice(0, 8);
+            });
+        };
+
+        socket.on('new_activity', handleNewActivity);
+
+        return () => {
+            socket.off('new_activity', handleNewActivity);
+        };
+    }, [socket]);
 
     useEffect(() => {
         const fetchDashboardData = async () => {

@@ -5,6 +5,7 @@ const connectDB = require('./src/config/db');
 const logger = require('./src/utils/logger');
 const socketServer = require('./src/config/socketServer');
 const prisma = require('./src/config/prisma');
+const { startSchedulers, stopSchedulers } = require('./src/services/schedulerService');
 
 const PORT = process.env.PORT || 5000;
 
@@ -47,6 +48,9 @@ const startServer = async () => {
 ║                                                    ║
 ╚════════════════════════════════════════════════════╝
             `);
+
+            // Start automated schedulers (preventive maintenance + SLA)
+            startSchedulers();
         });
 
         // Graceful shutdown handler
@@ -62,6 +66,7 @@ const startServer = async () => {
                 logger.info('HTTP server closed');
 
                 try {
+                    stopSchedulers();
                     await prisma.$disconnect();
                     logger.info('Prisma connection closed');
                     process.exit(0);
@@ -100,3 +105,4 @@ process.on('uncaughtException', (err) => {
     logger.error('UNCAUGHT EXCEPTION!', err);
     process.exit(1);
 });
+

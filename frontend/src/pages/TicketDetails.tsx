@@ -322,9 +322,9 @@ export default function TicketDetails() {
 
                 {/* Right Column (1/3) */}
                 <div className="space-y-6">
-                    <Card className="p-4">
+                    <Card className="p-4 overflow-visible">
                         <h3 className="text-sm font-semibold text-gray-500 uppercase mb-4">Timeline</h3>
-                        <div className="relative pl-4 border-l-2 border-gray-200 dark:border-gray-700 space-y-6">
+                        <div className="relative pl-6 border-l-2 border-gray-200 dark:border-gray-700 space-y-6">
                             {[
                                 { label: 'Created', date: ticket.createdAt, icon: FileText },
                                 ticket.assignedDate ? { label: 'Assigned', date: ticket.assignedDate, icon: User } : null,
@@ -332,7 +332,7 @@ export default function TicketDetails() {
                                 ticket.completedDate ? { label: 'Completed', date: ticket.completedDate, icon: CheckCircle } : null,
                             ].filter(Boolean).map((step: any, i) => (
                                 <div key={i} className="relative">
-                                    <div className="absolute -left-[21px] top-0 bg-white dark:bg-gray-900 p-1">
+                                    <div className="absolute -left-[25px] top-0 bg-white dark:bg-gray-900 p-1 rounded-full">
                                         <step.icon className="w-4 h-4 text-primary-600" />
                                     </div>
                                     <p className="text-sm font-medium">{step.label}</p>

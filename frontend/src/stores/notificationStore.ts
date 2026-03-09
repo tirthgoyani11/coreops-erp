@@ -3,15 +3,17 @@ import api from '../lib/api';
 
 export interface Notification {
     id: string;
-    recipient: string;
-    type: 'system' | 'approval_required' | 'approval_rejected' | 'ticket_assigned' | 'ticket_completed' | 'low_stock' | 'maintenance_due';
+    recipientId: string;
+    type: 'APPROVAL_REQUIRED' | 'LOW_STOCK' | 'TICKET_ASSIGNED' | 'TICKET_COMPLETED' | 'TICKET_APPROVED' | 'TICKET_REJECTED' | 'ASSET_TRANSFERRED' | 'SYSTEM_ALERT' | 'VENDOR_UPDATE';
     title: string;
     message: string;
-    priority: 'low' | 'medium' | 'high' | 'critical';
+    priority: 'LOW' | 'MEDIUM' | 'HIGH';
     isRead: boolean;
     readAt?: string;
-    metadata?: Record<string, any>;
-    actionUrl?: string;
+    relatedModel?: string;
+    relatedDocId?: string;
+    actions?: Array<{ label: string; action: string; url?: string }>;
+    sentAt: string;
     createdAt: string;
 }
 

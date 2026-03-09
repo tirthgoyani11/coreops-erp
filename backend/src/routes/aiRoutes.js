@@ -178,6 +178,7 @@ router.post('/chat', protect, async (req, res) => {
         const result = await orchestrator.processCommand(message, {
             userId: req.user.id,
             officeId: req.user.officeId || req.user.office?.id,
+            role: req.user.role,
             sessionId: req.headers['x-session-id'],
         });
 

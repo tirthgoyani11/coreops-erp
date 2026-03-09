@@ -26,6 +26,21 @@ exports.createTicket = async (req, res) => {
     try {
         const { assetId, issueDescription, priority, issueType, estimatedCost, images } = req.body;
 
+        // Input validation
+        if (!assetId || typeof assetId !== 'string') {
+            return res.status(400).json({ success: false, message: 'assetId is required' });
+        }
+        if (!issueDescription || typeof issueDescription !== 'string' || issueDescription.trim().length < 5) {
+            return res.status(400).json({ success: false, message: 'issueDescription is required (min 5 characters)' });
+        }
+        const VALID_PRIORITIES = ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'];
+        if (priority && !VALID_PRIORITIES.includes(priority.toUpperCase())) {
+            return res.status(400).json({ success: false, message: `priority must be one of: ${VALID_PRIORITIES.join(', ')}` });
+        }
+        if (estimatedCost != null && (isNaN(estimatedCost) || Number(estimatedCost) < 0)) {
+            return res.status(400).json({ success: false, message: 'estimatedCost must be a non-negative number' });
+        }
+
         const asset = await prisma.asset.findUnique({ where: { id: assetId } });
         if (!asset) return res.status(404).json({ success: false, message: 'Asset not found' });
 

@@ -11,16 +11,17 @@ const {
 } = require('../controllers/financeController');
 const verifyToken = require('../middleware/verifyToken');
 const authorize = require('../middleware/authorize');
+const { writeLimiter } = require('../middleware/rateLimiter');
 
 router.use(verifyToken);
 
 router.route('/transactions')
     .get(getTransactions)
-    .post(authorize('SUPER_ADMIN', 'ADMIN', 'MANAGER'), createTransaction);
+    .post(authorize('SUPER_ADMIN', 'ADMIN', 'MANAGER'), writeLimiter, createTransaction);
 
 router.route('/budgets')
     .get(getBudgets)
-    .post(authorize('SUPER_ADMIN', 'ADMIN', 'MANAGER'), setBudget);
+    .post(authorize('SUPER_ADMIN', 'ADMIN', 'MANAGER'), writeLimiter, setBudget);
 
 // Phase 2 — Financial Intelligence
 router.get('/ap-aging', getAPAging);
