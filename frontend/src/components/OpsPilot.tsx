@@ -3,7 +3,7 @@ import api from '../lib/api';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
     MessageSquare, X, Send, Brain, Eye, Search,
-    User, Loader2, Zap, Sparkles
+    User, Loader2, Zap
 } from 'lucide-react';
 
 interface Message {
@@ -415,9 +415,9 @@ export function OpsPilot() {
                                                             const Icon = info.icon;
                                                             const sourceLabel = m.source === 'kimi-k2.5' ? 'Opus 1.0'
                                                                 : m.source === 'kaggle' ? 'Kaggle GPU'
-                                                                : m.source === 'ollama' ? info.label
-                                                                : m.source === 'local' ? 'Local'
-                                                                : info.label;
+                                                                    : m.source === 'ollama' ? info.label
+                                                                        : m.source === 'local' ? 'Local'
+                                                                            : info.label;
                                                             return (
                                                                 <span
                                                                     key={i}

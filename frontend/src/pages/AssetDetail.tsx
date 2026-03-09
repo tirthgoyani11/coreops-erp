@@ -452,7 +452,7 @@ export function AssetDetail() {
                                 <button
                                     onClick={handleCheckout}
                                     disabled={!selectedUserId || actionLoading}
-                                    className="px-6 py-2 bg-blue-500 text-white font-bold rounded-xl hover:bg-blue-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                    className="px-6 py-2 bg-[var(--primary)] text-black font-bold rounded-xl hover:opacity-90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                                 >
                                     {actionLoading ? 'Checking out...' : 'Check Out'}
                                 </button>
