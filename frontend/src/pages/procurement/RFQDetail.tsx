@@ -49,6 +49,8 @@ interface ComparisonData {
     rank: number;
     priceDiffFromLowest: number;
     status: string;
+    baseAmount?: number;
+    baseCurrency?: string;
 }
 
 export function RFQDetail() {
@@ -247,19 +249,37 @@ export function RFQDetail() {
                                 </select>
                             </div>
 
-                            <div>
-                                <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1">Total Amount</label>
-                                <div className="relative">
-                                    <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--text-muted)]" />
-                                    <input
-                                        type="number"
-                                        min="0" step="0.01"
-                                        required
-                                        className="w-full pl-10 pr-4 p-3 bg-[var(--bg-overlay)] border border-[var(--border-color)] rounded-lg text-[var(--text-primary)] focus:outline-none focus:border-[var(--primary)]"
-                                        value={newQuote.totalAmount}
-                                        onChange={e => setNewQuote({ ...newQuote, totalAmount: e.target.value })}
-                                        placeholder="0.00"
-                                    />
+                            <div className="grid grid-cols-3 gap-4">
+                                <div className="col-span-1">
+                                    <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1">Currency</label>
+                                    <select
+                                        className="w-full p-3 bg-[var(--bg-overlay)] border border-[var(--border-color)] rounded-lg text-[var(--text-primary)] focus:outline-none focus:border-[var(--primary)]"
+                                        value={newQuote.currency}
+                                        onChange={e => setNewQuote({ ...newQuote, currency: e.target.value })}
+                                    >
+                                        <option value="INR">INR</option>
+                                        <option value="USD">USD</option>
+                                        <option value="EUR">EUR</option>
+                                        <option value="GBP">GBP</option>
+                                        <option value="CAD">CAD</option>
+                                        <option value="AUD">AUD</option>
+                                        <option value="JPY">JPY</option>
+                                    </select>
+                                </div>
+                                <div className="col-span-2">
+                                    <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1">Total Amount</label>
+                                    <div className="relative">
+                                        <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--text-muted)]" />
+                                        <input
+                                            type="number"
+                                            min="0" step="0.01"
+                                            required
+                                            className="w-full pl-10 pr-4 p-3 bg-[var(--bg-overlay)] border border-[var(--border-color)] rounded-lg text-[var(--text-primary)] focus:outline-none focus:border-[var(--primary)]"
+                                            value={newQuote.totalAmount}
+                                            onChange={e => setNewQuote({ ...newQuote, totalAmount: e.target.value })}
+                                            placeholder="0.00"
+                                        />
+                                    </div>
                                 </div>
                             </div>
 
@@ -347,12 +367,12 @@ export function RFQDetail() {
                         <div className="space-y-4">
                             {comparison?.map((quote) => (
                                 <div key={quote.id} className={`bg-[var(--bg-card)] border rounded-xl p-6 transition-all ${quote.status === 'ACCEPTED' ? 'border-emerald-500/50 shadow-[0_0_15px_rgba(16,185,129,0.1)]' :
-                                        quote.rank === 1 && rfq.status !== 'AWARDED' ? 'border-[var(--primary)]' : 'border-[var(--border-color)]'
+                                    quote.rank === 1 && rfq.status !== 'AWARDED' ? 'border-[var(--primary)]' : 'border-[var(--border-color)]'
                                     }`}>
                                     <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                                         <div className="flex items-start gap-4">
                                             <div className={`w-12 h-12 rounded-full flex items-center justify-center font-bold text-lg ${quote.status === 'ACCEPTED' ? 'bg-emerald-500/20 text-emerald-400' :
-                                                    quote.rank === 1 ? 'bg-[var(--primary)]/20 text-[var(--primary)]' : 'bg-[var(--bg-overlay)] text-[var(--text-muted)]'
+                                                quote.rank === 1 ? 'bg-[var(--primary)]/20 text-[var(--primary)]' : 'bg-[var(--bg-overlay)] text-[var(--text-muted)]'
                                                 }`}>
                                                 #{quote.rank}
                                             </div>
@@ -372,16 +392,21 @@ export function RFQDetail() {
                                         </div>
 
                                         <div className="flex flex-col md:items-end w-full md:w-auto mt-4 md:mt-0 pt-4 md:pt-0 border-t border-[var(--border-color)] md:border-t-0 p-2 md:p-0">
-                                            <div className="text-2xl font-mono font-bold text-[var(--primary)]">
+                                            <div className="text-2xl font-mono font-bold text-[var(--primary)] text-right">
                                                 {quote.currency} {quote.totalAmount.toLocaleString()}
                                             </div>
+                                            {quote.baseCurrency && quote.currency !== quote.baseCurrency && (
+                                                <div className="text-sm text-[var(--text-secondary)] font-mono text-right">
+                                                    ~ {quote.baseCurrency} {quote.baseAmount?.toLocaleString() || 0}
+                                                </div>
+                                            )}
                                             {quote.rank > 1 && (
-                                                <div className="text-xs text-red-400 mt-1">
-                                                    +{quote.currency} {quote.priceDiffFromLowest.toLocaleString()} from lowest
+                                                <div className="text-xs text-red-400 mt-1 text-right">
+                                                    +{quote.baseCurrency || quote.currency} {quote.priceDiffFromLowest.toLocaleString()} from lowest
                                                 </div>
                                             )}
                                             {quote.rank === 1 && rfq.status !== 'AWARDED' && (
-                                                <div className="text-xs text-emerald-400 mt-1">
+                                                <div className="text-xs text-emerald-400 mt-1 text-right font-bold">
                                                     Lowest Bid!
                                                 </div>
                                             )}
@@ -394,8 +419,8 @@ export function RFQDetail() {
                                                 onClick={() => handleAward(quote.id)}
                                                 disabled={isAwarding === quote.id}
                                                 className={`flex items-center gap-2 px-5 py-2 rounded-lg font-medium transition-all text-sm ${quote.rank === 1
-                                                        ? 'bg-[var(--primary)] text-black hover:shadow-[0_0_15px_rgba(185,255,102,0.4)]'
-                                                        : 'bg-[var(--bg-overlay)] text-[var(--text-primary)] hover:border-[var(--primary)] border border-transparent'
+                                                    ? 'bg-[var(--primary)] text-black hover:shadow-[0_0_15px_rgba(185,255,102,0.4)]'
+                                                    : 'bg-[var(--bg-overlay)] text-[var(--text-primary)] hover:border-[var(--primary)] border border-transparent'
                                                     }`}
                                             >
                                                 {isAwarding === quote.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Award className="w-4 h-4" />}

@@ -73,12 +73,16 @@ exports.submitQuotation = asyncHandler(async (req, res, next) => {
 });
 
 // ── Compare Quotations ─────────────────────────────────
+const { convertCurrency } = require('../utils/currencyConverter');
+
 exports.compareQuotations = asyncHandler(async (req, res, next) => {
     const rfq = await prisma.rFQ.findUnique({
         where: { id: req.params.id },
-        include: { items: true, quotations: true },
+        include: { items: true, quotations: true, office: { select: { baseCurrency: true } } },
     });
     if (!rfq) return next(new AppError('RFQ not found', 404));
+
+    const baseCurrency = rfq.office?.baseCurrency || 'INR';
 
     // Get vendor details
     const vendorIds = rfq.quotations.map(q => q.vendorId);
@@ -88,12 +92,19 @@ exports.compareQuotations = asyncHandler(async (req, res, next) => {
     });
     const vendorMap = Object.fromEntries(vendors.map(v => [v.id, v]));
 
-    const comparison = rfq.quotations
-        .sort((a, b) => a.totalAmount - b.totalAmount)
+    // Convert all quotations to the base currency in parallel
+    const quotesWithBaseAmount = await Promise.all(rfq.quotations.map(async (q) => {
+        const quoteCurrency = q.currency || 'INR';
+        const baseAmount = await convertCurrency(q.totalAmount, quoteCurrency, baseCurrency);
+        return { ...q, baseAmount, baseCurrency };
+    }));
+
+    const comparison = quotesWithBaseAmount
+        .sort((a, b) => a.baseAmount - b.baseAmount)
         .map((q, idx) => ({
             rank: idx + 1, ...q,
             vendor: vendorMap[q.vendorId] || { name: 'Unknown' },
-            priceDiffFromLowest: idx > 0 ? q.totalAmount - rfq.quotations[0].totalAmount : 0,
+            priceDiffFromLowest: idx > 0 ? q.baseAmount - quotesWithBaseAmount[0].baseAmount : 0,
         }));
 
     res.status(200).json({ success: true, data: { rfq: { id: rfq.id, title: rfq.title, items: rfq.items }, comparison } });
