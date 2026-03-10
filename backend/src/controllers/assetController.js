@@ -72,6 +72,7 @@ exports.createAsset = asyncHandler(async (req, res, next) => {
             building: locationBuilding,
             floor: locationFloor,
             room: locationRoom,
+            vendorId: vendor || undefined,
             officeId: targetOfficeId,
             status: status || 'ACTIVE',
             currentBookValue: Number(purchaseCost) || 0,

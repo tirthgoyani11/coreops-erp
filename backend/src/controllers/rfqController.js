@@ -134,7 +134,20 @@ exports.awardRFQ = asyncHandler(async (req, res, next) => {
             requestedById: req.user.id, status: 'DRAFT',
             totalAmount: winningQuote.totalAmount, subtotal: winningQuote.totalAmount,
             notes: `From RFQ ${rfq.rfqNumber}`,
-            items: { create: rfq.items.map(i => ({ name: i.description, quantity: i.quantity, unitPrice: 0, totalPrice: 0 })) },
+            items: {
+                create: rfq.items.map((i, index) => {
+                    // Try to map unit price from the JSON items array in winningQuote
+                    const quoteItem = winningQuote.items && Array.isArray(winningQuote.items) ? winningQuote.items[index] : null;
+                    const unitPrice = quoteItem?.unitPrice ? Number(quoteItem.unitPrice) : (winningQuote.totalAmount / rfq.items.length);
+                    const qty = i.quantity || 1;
+                    return {
+                        name: i.description,
+                        quantity: qty,
+                        unitPrice: unitPrice,
+                        totalPrice: unitPrice * qty
+                    };
+                })
+            },
         },
     });
 

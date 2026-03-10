@@ -94,21 +94,42 @@ exports.updateClaimStatus = asyncHandler(async (req, res) => {
 exports.payClaim = asyncHandler(async (req, res) => {
     const { id } = req.params;
 
-    const existing = await prisma.expenseClaim.findUnique({ where: { id } });
+    const existing = await prisma.expenseClaim.findUnique({
+        where: { id },
+        include: { employee: { select: { id: true, name: true } } }
+    });
     if (!existing || existing.status !== 'APPROVED') {
         return res.status(400).json({ success: false, message: 'Claim must be APPROVED to be paid.' });
     }
 
-    const claim = await prisma.expenseClaim.update({
-        where: { id },
-        data: {
-            status: 'PAID',
-            paidDate: new Date()
-        },
-        include: { employee: { select: { id: true, name: true } } }
+    // Use transaction for atomicity: update claim + create finance entry
+    const result = await prisma.$transaction(async (tx) => {
+        const claim = await tx.expenseClaim.update({
+            where: { id },
+            data: {
+                status: 'PAID',
+                paidDate: new Date()
+            },
+            include: { employee: { select: { id: true, name: true } } }
+        });
+
+        // Create finance transaction so payment appears in reports
+        await tx.transaction.create({
+            data: {
+                type: 'EXPENSE',
+                category: 'EMPLOYEE_REIMBURSEMENT',
+                amount: existing.totalAmount,
+                description: `Expense claim ${existing.claimNumber} paid to ${existing.employee?.name || 'employee'}`,
+                referenceType: 'EXPENSE_CLAIM',
+                referenceId: existing.claimNumber,
+                officeId: existing.officeId,
+                recordedById: req.user.id,
+                status: 'CLEARED',
+            }
+        });
+
+        return claim;
     });
 
-    // Optionally create a GL entry for the payment in a real system here
-
-    res.json({ success: true, data: claim });
+    res.json({ success: true, data: result });
 });

@@ -10,6 +10,14 @@ const prisma = require('../config/prisma');
 const { asyncHandler } = require('../utils/errorHandler');
 
 router.use(verifyToken);
+
+// ── Expense Claims (accessible to all authenticated users) ──
+router.get('/expense-claims', expenseController.getExpenseClaims);
+router.post('/expense-claims', expenseController.createExpenseClaim);
+router.put('/expense-claims/:id/status', authorize('SUPER_ADMIN', 'ADMIN', 'MANAGER'), expenseController.updateClaimStatus);
+router.put('/expense-claims/:id/pay', authorize('SUPER_ADMIN', 'ADMIN', 'MANAGER'), expenseController.payClaim);
+
+// All routes below require MANAGER+ role
 router.use(authorize('SUPER_ADMIN', 'ADMIN', 'MANAGER'));
 
 // ── AP & AR Aging Reports ──────────────────────────────
@@ -36,12 +44,5 @@ router.post('/bank-statements/:id/reconcile', bankReconController.reconcileMatch
 // ── Year End Closing ──────────────────────────────────
 router.get('/year-end', authorize('SUPER_ADMIN', 'ADMIN'), yearEndController.getYearEndPreview);
 router.post('/year-end', authorize('SUPER_ADMIN'), yearEndController.closeYear);
-
-// ── Expense Claims ────────────────────────────────────
-// Everybody can get and post (Staff posts their own, Managers see theirs)
-router.get('/expense-claims', expenseController.getExpenseClaims);
-router.post('/expense-claims', expenseController.createExpenseClaim);
-router.put('/expense-claims/:id/status', authorize('SUPER_ADMIN', 'ADMIN', 'MANAGER'), expenseController.updateClaimStatus);
-router.put('/expense-claims/:id/pay', authorize('SUPER_ADMIN', 'ADMIN', 'MANAGER'), expenseController.payClaim);
 
 module.exports = router;

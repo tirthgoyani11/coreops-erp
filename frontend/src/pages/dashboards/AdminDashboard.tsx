@@ -10,6 +10,10 @@ import {
     ChevronRight,
     DollarSign,
     AlertTriangle,
+    CheckCircle2,
+    XCircle,
+    FileText,
+    Receipt,
 } from 'lucide-react';
 import { StatCard } from '../../components/dashboard/StatCard';
 import { DashboardChart } from '../../components/dashboard/DashboardChart';
@@ -24,6 +28,24 @@ interface AuditLogEntry {
     action: string;
     timestamp: string;
 }
+
+interface ApprovalItem {
+    id: string;
+    type: 'MAINTENANCE' | 'PURCHASE_ORDER' | 'EXPENSE_CLAIM';
+    number: string;
+    title: string;
+    amount: number;
+    office?: { name: string } | null;
+    requestedBy?: { id: string; name: string } | null;
+    priority: string;
+    createdAt: string;
+}
+
+const typeConfig: Record<string, { label: string; color: string; icon: any }> = {
+    MAINTENANCE: { label: 'Maintenance', color: 'bg-orange-500/10 text-orange-400 border-orange-500/20', icon: Wrench },
+    PURCHASE_ORDER: { label: 'Purchase Order', color: 'bg-blue-500/10 text-blue-400 border-blue-500/20', icon: FileText },
+    EXPENSE_CLAIM: { label: 'Expense', color: 'bg-purple-500/10 text-purple-400 border-purple-500/20', icon: Receipt },
+};
 
 interface DashboardStats {
     totalAssets: number;
@@ -128,6 +150,7 @@ export const AdminDashboard = memo(function AdminDashboard() {
         monthlyExpense: 0,
     });
     const [auditLogs, setAuditLogs] = useState<AuditLogEntry[]>([]);
+    const [approvals, setApprovals] = useState<ApprovalItem[]>([]);
     const [loading, setLoading] = useState(true);
 
     // Chart data from API
@@ -161,12 +184,13 @@ export const AdminDashboard = memo(function AdminDashboard() {
                 setLoading(true);
 
                 // Fetch all data in parallel
-                const [dashboardRes, logsRes, categoryRes, trendsRes, inventoryRes] = await Promise.allSettled([
+                const [dashboardRes, logsRes, categoryRes, trendsRes, inventoryRes, approvalsRes] = await Promise.allSettled([
                     api.get('/analytics/dashboard'),
                     api.get('/audit-logs?limit=8'),
                     api.get('/analytics/assets/by-category'),
                     api.get('/analytics/maintenance/trends?months=6'),
                     api.get('/analytics/inventory/status'),
+                    api.get('/analytics/pending-approvals?limit=8'),
                 ]);
 
                 // Dashboard stats
@@ -214,6 +238,11 @@ export const AdminDashboard = memo(function AdminDashboard() {
                     setInventoryData(
                         inv.byType?.map((t: any) => ({ name: t.id, value: t.totalQuantity })) || []
                     );
+                }
+
+                // Pending approvals
+                if (approvalsRes.status === 'fulfilled' && approvalsRes.value.data?.data) {
+                    setApprovals(approvalsRes.value.data.data);
                 }
             } catch (error) {
                 console.error('Failed to fetch dashboard data:', error);
@@ -325,7 +354,94 @@ export const AdminDashboard = memo(function AdminDashboard() {
                 <div className="lg:col-span-2">
                     <AuditLogTable logs={auditLogs} loading={loading} />
                 </div>
-                <QuickActions />
+                <div className="space-y-6">
+                    {/* Approval Queue */}
+                    <motion.div
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className="bg-[var(--bg-card)] border border-[var(--border-color)] rounded-2xl p-6"
+                    >
+                        <div className="flex items-center justify-between mb-4">
+                            <h3 className="text-[var(--text-primary)] font-medium">Approval Queue</h3>
+                            <span className="text-xs text-[var(--text-secondary)]">
+                                {approvals.length} pending
+                            </span>
+                        </div>
+                        <div className="space-y-3">
+                            {approvals.length === 0 ? (
+                                <div className="text-center py-6 text-[var(--text-secondary)]">
+                                    <CheckCircle2 className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                                    <p className="text-sm">No pending approvals</p>
+                                </div>
+                            ) : (
+                                approvals.slice(0, 5).map((item, index) => {
+                                    const cfg = typeConfig[item.type] || typeConfig.MAINTENANCE;
+                                    const TypeIcon = cfg.icon;
+                                    return (
+                                        <motion.div
+                                            key={item.id}
+                                            initial={{ opacity: 0, x: -10 }}
+                                            animate={{ opacity: 1, x: 0 }}
+                                            transition={{ delay: index * 0.05 }}
+                                            className="p-3 rounded-xl bg-[var(--bg-overlay)] border border-[var(--border-color)] hover:border-[var(--primary)]/30 transition-colors"
+                                        >
+                                            <div className="flex items-center gap-2 mb-1 flex-wrap">
+                                                <span className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border ${cfg.color}`}>
+                                                    <TypeIcon className="w-3 h-3" />
+                                                    {cfg.label}
+                                                </span>
+                                                <span className="text-xs font-mono text-[var(--primary)]">#{item.number}</span>
+                                            </div>
+                                            <p className="text-sm text-[var(--text-primary)] font-medium truncate">{item.title}</p>
+                                            <div className="flex items-center justify-between mt-1">
+                                                <span className="text-xs text-[var(--text-secondary)]">₹{(item.amount || 0).toLocaleString()}</span>
+                                                <div className="flex items-center gap-1">
+                                                    <button
+                                                        onClick={async () => {
+                                                            try {
+                                                                if (item.type === 'EXPENSE_CLAIM') {
+                                                                    await api.put(`/finance-ext/expense-claims/${item.id}/status`, { status: 'APPROVED' });
+                                                                } else if (item.type === 'PURCHASE_ORDER') {
+                                                                    await api.patch(`/purchase-orders/${item.id}/approve`);
+                                                                } else {
+                                                                    await api.patch(`/maintenance/${item.id}/approve`);
+                                                                }
+                                                                setApprovals(prev => prev.filter(a => a.id !== item.id));
+                                                            } catch (err) { console.error('Approval failed:', err); }
+                                                        }}
+                                                        className="p-1.5 rounded-lg bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 transition-colors"
+                                                        title="Approve"
+                                                    >
+                                                        <CheckCircle2 className="w-3.5 h-3.5" />
+                                                    </button>
+                                                    <button
+                                                        onClick={async () => {
+                                                            try {
+                                                                if (item.type === 'EXPENSE_CLAIM') {
+                                                                    await api.put(`/finance-ext/expense-claims/${item.id}/status`, { status: 'REJECTED' });
+                                                                } else if (item.type === 'PURCHASE_ORDER') {
+                                                                    await api.patch(`/purchase-orders/${item.id}/reject`);
+                                                                } else {
+                                                                    await api.patch(`/maintenance/${item.id}/reject`);
+                                                                }
+                                                                setApprovals(prev => prev.filter(a => a.id !== item.id));
+                                                            } catch (err) { console.error('Rejection failed:', err); }
+                                                        }}
+                                                        className="p-1.5 rounded-lg bg-red-500/10 text-red-400 hover:bg-red-500/20 transition-colors"
+                                                        title="Reject"
+                                                    >
+                                                        <XCircle className="w-3.5 h-3.5" />
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </motion.div>
+                                    );
+                                })
+                            )}
+                        </div>
+                    </motion.div>
+                    <QuickActions />
+                </div>
             </div>
         </div>
     );

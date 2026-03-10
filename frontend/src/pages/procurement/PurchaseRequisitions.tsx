@@ -139,7 +139,7 @@ export function PurchaseRequisitions() {
 
     const filteredPRs = requisitions.filter(pr =>
         pr.prNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        pr.requestedBy.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        pr.requestedBy?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         pr.justification?.toLowerCase().includes(searchTerm.toLowerCase())
     );
 
@@ -320,7 +320,7 @@ export function PurchaseRequisitions() {
                                     </div>
                                     <div className="text-sm text-[var(--text-secondary)] line-clamp-1 mb-2">{pr.justification}</div>
                                     <div className="flex justify-between items-center text-xs">
-                                        <span className="text-[var(--text-muted)]">By: {pr.requestedBy.name}</span>
+                                        <span className="text-[var(--text-muted)]">By: {pr.requestedBy?.name || 'System'}</span>
                                         <span className="text-[var(--primary)] font-mono">${pr.totalEstimate?.toLocaleString() || '0'}</span>
                                     </div>
                                 </button>
@@ -340,7 +340,7 @@ export function PurchaseRequisitions() {
                                         {selectedPR.status}
                                     </span>
                                 </div>
-                                <p className="text-sm text-[var(--text-secondary)]">Requested by {selectedPR.requestedBy.name} on {new Date(selectedPR.createdAt).toLocaleDateString()}</p>
+                                <p className="text-sm text-[var(--text-secondary)]">Requested by {selectedPR.requestedBy?.name || 'System'} on {new Date(selectedPR.createdAt).toLocaleDateString()}</p>
                             </div>
                             <button onClick={() => setSelectedPR(null)} className="lg:hidden p-2 text-[var(--text-muted)] hover:text-white rounded-lg bg-[var(--bg-card)]">
                                 <AlertCircle className="w-5 h-5" />

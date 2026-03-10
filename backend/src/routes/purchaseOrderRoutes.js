@@ -5,6 +5,8 @@ const {
     getPOs,
     getPO,
     updatePO,
+    approvePO,
+    rejectPO,
     receiveGoods,
     approvePayment
 } = require('../controllers/purchaseOrderController');
@@ -22,6 +24,9 @@ router.route('/')
 router.route('/:id')
     .get(getPO)
     .put(updatePO);
+
+router.patch('/:id/approve', authorize('SUPER_ADMIN', 'ADMIN', 'MANAGER'), approvePO);
+router.patch('/:id/reject', authorize('SUPER_ADMIN', 'ADMIN', 'MANAGER'), rejectPO);
 
 router.post('/:id/receive', authorize('SUPER_ADMIN', 'MANAGER'), auditMiddleware('RECEIVE_PURCHASE_ORDER', 'PURCHASE_ORDER_RESOURCE'), receiveGoods);
 router.post('/:id/approve-payment', authorize('SUPER_ADMIN', 'MANAGER'), auditMiddleware('APPROVE_PURCHASE_ORDER', 'PURCHASE_ORDER_RESOURCE'), approvePayment);

@@ -9,6 +9,9 @@ import {
     XCircle,
     Users,
     TrendingUp,
+    Wrench,
+    FileText,
+    Receipt,
 } from 'lucide-react';
 import { StatCard } from '../../components/dashboard/StatCard';
 import { DashboardChart } from '../../components/dashboard/DashboardChart';
@@ -17,13 +20,21 @@ import { formatCurrency } from '../../lib/utils';
 
 interface ApprovalItem {
     id: string;
-    ticketNumber: string;
+    type: 'MAINTENANCE' | 'PURCHASE_ORDER' | 'EXPENSE_CLAIM';
+    number: string;
     title: string;
-    issueDescription?: string;
-    estimatedCost: number;
-    office?: { name: string };
-    priority: 'low' | 'medium' | 'high' | 'critical' | 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
+    amount: number;
+    office?: { name: string } | null;
+    requestedBy?: { id: string; name: string } | null;
+    priority: string;
+    createdAt: string;
 }
+
+const typeConfig: Record<string, { label: string; color: string; icon: any }> = {
+    MAINTENANCE: { label: 'Maintenance', color: 'bg-orange-500/10 text-orange-400 border-orange-500/20', icon: Wrench },
+    PURCHASE_ORDER: { label: 'Purchase Order', color: 'bg-blue-500/10 text-blue-400 border-blue-500/20', icon: FileText },
+    EXPENSE_CLAIM: { label: 'Expense', color: 'bg-purple-500/10 text-purple-400 border-purple-500/20', icon: Receipt },
+};
 
 interface ManagerStats {
     branchAssets: number;
@@ -92,49 +103,60 @@ const ApprovalQueue = memo(function ApprovalQueue({
                         <p className="text-sm">No pending approvals</p>
                     </div>
                 ) : (
-                    items.map((item, index) => (
-                        <motion.div
-                            key={item.id}
-                            initial={{ opacity: 0, x: -10 }}
-                            animate={{ opacity: 1, x: 0 }}
-                            transition={{ delay: index * 0.05 }}
-                            className="p-4 rounded-xl bg-[var(--bg-overlay)] border border-[var(--border-color)] hover:border-[var(--primary)]/30 transition-colors"
-                        >
-                            <div className="flex items-start justify-between gap-4">
-                                <div className="flex-1 min-w-0">
-                                    <div className="flex items-center gap-2 mb-1">
-                                        <span className="text-xs font-mono text-[var(--primary)]">
-                                            #{item.ticketNumber}
-                                        </span>
-                                        <span className={`text-xs px-2 py-0.5 rounded-full border ${priorityColors[item.priority] || priorityColors.medium}`}>
-                                            {item.priority}
-                                        </span>
+                    items.map((item, index) => {
+                        const cfg = typeConfig[item.type] || typeConfig.MAINTENANCE;
+                        const TypeIcon = cfg.icon;
+                        return (
+                            <motion.div
+                                key={item.id}
+                                initial={{ opacity: 0, x: -10 }}
+                                animate={{ opacity: 1, x: 0 }}
+                                transition={{ delay: index * 0.05 }}
+                                className="p-4 rounded-xl bg-[var(--bg-overlay)] border border-[var(--border-color)] hover:border-[var(--primary)]/30 transition-colors"
+                            >
+                                <div className="flex items-start justify-between gap-4">
+                                    <div className="flex-1 min-w-0">
+                                        <div className="flex items-center gap-2 mb-1 flex-wrap">
+                                            <span className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border ${cfg.color}`}>
+                                                <TypeIcon className="w-3 h-3" />
+                                                {cfg.label}
+                                            </span>
+                                            <span className="text-xs font-mono text-[var(--primary)]">
+                                                #{item.number}
+                                            </span>
+                                            <span className={`text-xs px-2 py-0.5 rounded-full border ${priorityColors[item.priority] || priorityColors.medium}`}>
+                                                {item.priority}
+                                            </span>
+                                        </div>
+                                        <p className="text-sm text-[var(--text-primary)] font-medium truncate">
+                                            {item.title}
+                                        </p>
+                                        <div className="flex items-center gap-3 mt-1 text-xs text-[var(--text-secondary)]">
+                                            <span>₹{(item.amount || 0).toLocaleString()}</span>
+                                            {item.requestedBy && <span>• {item.requestedBy.name}</span>}
+                                            {item.office && <span>• {item.office.name}</span>}
+                                        </div>
                                     </div>
-                                    <p className="text-sm text-[var(--text-primary)] font-medium truncate">
-                                        {item.title || item.issueDescription || 'Maintenance Request'}
-                                    </p>
-                                    <div className="flex items-center gap-3 mt-1 text-xs text-[var(--text-secondary)]">
-                                        <span>₹{(item.estimatedCost || 0).toLocaleString()}</span>
-                                        {item.office && <span>• {item.office.name}</span>}
+                                    <div className="flex items-center gap-2">
+                                        <button
+                                            onClick={() => onApprove(item.id)}
+                                            className="p-2 rounded-lg bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 transition-colors"
+                                            title="Approve"
+                                        >
+                                            <CheckCircle2 className="w-4 h-4" />
+                                        </button>
+                                        <button
+                                            onClick={() => onReject(item.id)}
+                                            className="p-2 rounded-lg bg-red-500/10 text-red-400 hover:bg-red-500/20 transition-colors"
+                                            title="Reject"
+                                        >
+                                            <XCircle className="w-4 h-4" />
+                                        </button>
                                     </div>
                                 </div>
-                                <div className="flex items-center gap-2">
-                                    <button
-                                        onClick={() => onApprove(item.id)}
-                                        className="p-2 rounded-lg bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 transition-colors"
-                                    >
-                                        <CheckCircle2 className="w-4 h-4" />
-                                    </button>
-                                    <button
-                                        onClick={() => onReject(item.id)}
-                                        className="p-2 rounded-lg bg-red-500/10 text-red-400 hover:bg-red-500/20 transition-colors"
-                                    >
-                                        <XCircle className="w-4 h-4" />
-                                    </button>
-                                </div>
-                            </div>
-                        </motion.div>
-                    ))
+                            </motion.div>
+                        );
+                    })
                 )}
             </div>
         </motion.div>
@@ -165,7 +187,7 @@ export const ManagerDashboard = memo(function ManagerDashboard() {
 
                 const [dashRes, approvalsRes, inventoryRes, trendsRes, usersRes] = await Promise.allSettled([
                     api.get('/analytics/dashboard'),
-                    api.get('/maintenance?approvalStatus=PENDING&limit=5'),
+                    api.get('/analytics/pending-approvals?limit=8'),
                     api.get('/analytics/inventory/status'),
                     api.get('/analytics/maintenance/trends?months=6'),
                     api.get('/users?role=TECHNICIAN&limit=1'),
@@ -226,9 +248,24 @@ export const ManagerDashboard = memo(function ManagerDashboard() {
         fetchData();
     }, []);
 
+    const getApprovalEndpoint = (item: ApprovalItem, action: 'approve' | 'reject') => {
+        switch (item.type) {
+            case 'MAINTENANCE': return `/maintenance/${item.id}/${action}`;
+            case 'PURCHASE_ORDER': return `/purchase-orders/${item.id}/${action}`;
+            case 'EXPENSE_CLAIM': return `/finance-ext/expense-claims/${item.id}/status`;
+            default: return `/maintenance/${item.id}/${action}`;
+        }
+    };
+
     const handleApprove = async (id: string) => {
+        const item = approvals.find(a => a.id === id);
+        if (!item) return;
         try {
-            await api.patch(`/maintenance/${id}/approve`);
+            if (item.type === 'EXPENSE_CLAIM') {
+                await api.put(getApprovalEndpoint(item, 'approve'), { status: 'APPROVED' });
+            } else {
+                await api.patch(getApprovalEndpoint(item, 'approve'));
+            }
             setApprovals(prev => prev.filter(a => a.id !== id));
         } catch (error) {
             console.error('Approval failed:', error);
@@ -236,8 +273,14 @@ export const ManagerDashboard = memo(function ManagerDashboard() {
     };
 
     const handleReject = async (id: string) => {
+        const item = approvals.find(a => a.id === id);
+        if (!item) return;
         try {
-            await api.patch(`/maintenance/${id}/reject`);
+            if (item.type === 'EXPENSE_CLAIM') {
+                await api.put(getApprovalEndpoint(item, 'reject'), { status: 'REJECTED' });
+            } else {
+                await api.patch(getApprovalEndpoint(item, 'reject'));
+            }
             setApprovals(prev => prev.filter(a => a.id !== id));
         } catch (error) {
             console.error('Rejection failed:', error);

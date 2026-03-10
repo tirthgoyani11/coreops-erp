@@ -191,6 +191,50 @@ exports.updatePO = async (req, res) => {
     }
 };
 
+// @desc    Approve a PO
+// @route   PATCH /api/purchase-orders/:id/approve
+exports.approvePO = async (req, res) => {
+    try {
+        const po = await prisma.purchaseOrder.findUnique({ where: { id: req.params.id } });
+        if (!po) return res.status(404).json({ success: false, message: 'PO not found' });
+        if (po.status === 'RECEIVED' || po.status === 'CANCELLED') {
+            return res.status(400).json({ success: false, message: 'Cannot update finalized PO' });
+        }
+
+        const updated = await prisma.purchaseOrder.update({
+            where: { id: req.params.id },
+            data: { status: 'APPROVED', approvedById: req.user.id, approvalDate: new Date() },
+            include: { items: true },
+        });
+
+        res.status(200).json({ success: true, data: updated });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+};
+
+// @desc    Reject a PO
+// @route   PATCH /api/purchase-orders/:id/reject
+exports.rejectPO = async (req, res) => {
+    try {
+        const po = await prisma.purchaseOrder.findUnique({ where: { id: req.params.id } });
+        if (!po) return res.status(404).json({ success: false, message: 'PO not found' });
+        if (po.status === 'RECEIVED' || po.status === 'CANCELLED') {
+            return res.status(400).json({ success: false, message: 'Cannot update finalized PO' });
+        }
+
+        const updated = await prisma.purchaseOrder.update({
+            where: { id: req.params.id },
+            data: { status: 'REJECTED' },
+            include: { items: true },
+        });
+
+        res.status(200).json({ success: true, data: updated });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+};
+
 // @desc    Receive Goods (Update Inventory)
 // @route   POST /api/purchase-orders/:id/receive
 // @access  Private
@@ -206,8 +250,8 @@ exports.receiveGoods = async (req, res) => {
             });
 
             if (!po) throw new Error('PO not found');
-            if (po.status !== 'ORDERED' && po.status !== 'PARTIALLY_RECEIVED') {
-                throw new Error('PO is not in order status');
+            if (!['APPROVED', 'ORDERED', 'PARTIALLY_RECEIVED'].includes(po.status)) {
+                throw new Error('PO must be APPROVED, ORDERED, or PARTIALLY_RECEIVED to receive goods');
             }
 
             let allReceived = true;

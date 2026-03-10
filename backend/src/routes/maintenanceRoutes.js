@@ -5,6 +5,8 @@ const {
     getTickets,
     getTicket,
     updateTicket,
+    approveTicket,
+    rejectTicket,
     addWorkLog,
     consumePart,
     getStats,
@@ -28,6 +30,9 @@ router.route('/stats')
 router.route('/:id')
     .get(getTicket)
     .put(authorize('SUPER_ADMIN', 'ADMIN', 'MANAGER'), updateTicket);
+
+router.patch('/:id/approve', authorize('SUPER_ADMIN', 'ADMIN', 'MANAGER'), approveTicket);
+router.patch('/:id/reject', authorize('SUPER_ADMIN', 'ADMIN', 'MANAGER'), rejectTicket);
 
 router.route('/:id/worklog')
     .post(addWorkLog);

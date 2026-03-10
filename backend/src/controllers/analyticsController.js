@@ -18,8 +18,8 @@ exports.getDashboardStats = async (req, res) => {
 
         const [
             totalAssets, activeAssets, maintenanceAssets, retiredAssets,
-            totalInventory, openTickets, pendingApprovals, vendorCount,
-            assetValueAgg,
+            totalInventory, openTickets, pendingMaintenanceApprovals, vendorCount,
+            assetValueAgg, pendingPOs, pendingExpenseClaims,
         ] = await Promise.all([
             prisma.asset.count({ where }),
             prisma.asset.count({ where: { ...where, status: 'ACTIVE' } }),
@@ -30,6 +30,8 @@ exports.getDashboardStats = async (req, res) => {
             prisma.maintenanceTicket.count({ where: { ...where, approvalStatus: 'PENDING' } }),
             prisma.vendor.count({ where: { isBlacklisted: false } }),
             prisma.asset.aggregate({ where: { ...where, status: 'ACTIVE' }, _sum: { currentBookValue: true } }),
+            prisma.purchaseOrder.count({ where: { ...(where.officeId ? { officeId: where.officeId } : {}), status: 'PENDING_APPROVAL' } }),
+            prisma.expenseClaim.count({ where: { ...(where.officeId ? { officeId: where.officeId } : {}), status: 'SUBMITTED' } }),
         ]);
 
         // Low stock items
@@ -65,7 +67,7 @@ exports.getDashboardStats = async (req, res) => {
                     totalValue: assetValueAgg._sum.currentBookValue || 0,
                 },
                 inventory: { total: totalInventory, lowStock: lowStockCount },
-                maintenance: { openTickets, pendingApprovals },
+                maintenance: { openTickets, pendingApprovals: pendingMaintenanceApprovals + pendingPOs + pendingExpenseClaims },
                 vendors: { total: vendorCount },
                 finance: {
                     monthlyTransactions: [
@@ -297,5 +299,106 @@ exports.getVendorPerformance = async (req, res) => {
         });
     } catch (error) {
         res.status(500).json({ success: false, message: 'Failed to fetch vendor performance', error: error.message });
+    }
+};
+
+/**
+ * @desc    Get Unified Pending Approvals (Maintenance, PO, Expense Claims)
+ * @route   GET /api/analytics/pending-approvals
+ * @access  MANAGER+
+ */
+exports.getPendingApprovals = async (req, res) => {
+    try {
+        const where = getOfficeWhere(req.user);
+        const limit = parseInt(req.query.limit) || 10;
+
+        // Fetch all pending items in parallel
+        const [tickets, pos, expenses] = await Promise.all([
+            prisma.maintenanceTicket.findMany({
+                where: { ...where, approvalStatus: 'PENDING' },
+                take: limit,
+                orderBy: { createdAt: 'desc' },
+                include: {
+                    asset: { select: { name: true } },
+                    requestedBy: { select: { id: true, name: true } },
+                    office: { select: { id: true, name: true } },
+                },
+            }),
+            prisma.purchaseOrder.findMany({
+                where: { ...(where.officeId ? { officeId: where.officeId } : {}), status: 'PENDING_APPROVAL' },
+                take: limit,
+                orderBy: { createdAt: 'desc' },
+                include: {
+                    vendor: { select: { name: true } },
+                    requestedBy: { select: { id: true, name: true } },
+                    office: { select: { id: true, name: true } },
+                },
+            }),
+            prisma.expenseClaim.findMany({
+                where: {
+                    ...(where.officeId ? { officeId: where.officeId } : {}),
+                    status: 'SUBMITTED',
+                },
+                take: limit,
+                orderBy: { createdAt: 'desc' },
+                include: {
+                    employee: { select: { id: true, name: true } },
+                },
+            }),
+        ]);
+
+        // Normalize into unified shape
+        const items = [
+            ...tickets.map(t => ({
+                id: t.id,
+                type: 'MAINTENANCE',
+                number: t.ticketNumber,
+                title: t.issueDescription || 'Maintenance Request',
+                amount: t.estimatedCost || 0,
+                priority: t.priority || 'MEDIUM',
+                office: t.office,
+                requestedBy: t.requestedBy,
+                createdAt: t.createdAt,
+            })),
+            ...pos.map(p => ({
+                id: p.id,
+                type: 'PURCHASE_ORDER',
+                number: p.poNumber,
+                title: `PO to ${p.vendor?.name || 'Vendor'}`,
+                amount: p.totalAmount || 0,
+                priority: 'HIGH',
+                office: p.office,
+                requestedBy: p.requestedBy,
+                createdAt: p.createdAt,
+            })),
+            ...expenses.map(e => ({
+                id: e.id,
+                type: 'EXPENSE_CLAIM',
+                number: e.claimNumber,
+                title: e.description || 'Expense Claim',
+                amount: e.totalAmount || 0,
+                priority: 'MEDIUM',
+                office: null,
+                requestedBy: e.employee,
+                createdAt: e.createdAt,
+            })),
+        ];
+
+        items.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+        const trimmed = items.slice(0, limit);
+
+        res.status(200).json({
+            success: true,
+            count: trimmed.length,
+            totals: {
+                maintenance: tickets.length,
+                purchaseOrders: pos.length,
+                expenseClaims: expenses.length,
+                total: tickets.length + pos.length + expenses.length,
+            },
+            data: trimmed,
+        });
+    } catch (error) {
+        res.status(500).json({ success: false, message: 'Server Error', error: error.message });
     }
 };

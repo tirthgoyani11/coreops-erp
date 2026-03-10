@@ -90,7 +90,7 @@ exports.createTicket = async (req, res) => {
 // @route   GET /api/maintenance
 exports.getTickets = async (req, res) => {
     try {
-        const { status, priority, technician, assetId, view, start, end } = req.query;
+        const { status, priority, technician, assetId, view, start, end, approvalStatus, limit } = req.query;
         const where = {};
 
         if (req.user.role !== 'SUPER_ADMIN') {
@@ -102,6 +102,7 @@ exports.getTickets = async (req, res) => {
         if (priority) where.priority = priority;
         if (technician) where.assignedToId = technician;
         if (assetId) where.assetId = assetId;
+        if (approvalStatus) where.approvalStatus = approvalStatus;
 
         if (view === 'calendar' && start && end) {
             where.reportedDate = { gte: new Date(start), lte: new Date(end) };
@@ -109,10 +110,12 @@ exports.getTickets = async (req, res) => {
 
         const tickets = await prisma.maintenanceTicket.findMany({
             where,
+            ...(limit ? { take: parseInt(limit, 10) } : {}),
             include: {
                 asset: { select: { id: true, name: true, serialNumber: true, category: true, building: true, floor: true, room: true } },
                 assignedTo: { select: { id: true, name: true } },
                 requestedBy: { select: { id: true, name: true } },
+                office: { select: { id: true, name: true } },
             },
             orderBy: { createdAt: 'desc' },
         });
@@ -182,16 +185,36 @@ exports.updateTicket = async (req, res) => {
             if (status === 'COMPLETED' || status === 'CLOSED') {
                 updateData.completedDate = new Date();
                 // Restore asset to ACTIVE
-                await prisma.asset.update({ where: { id: ticket.assetId }, data: { status: 'ACTIVE' } });
-                // Log maintenance cost to asset history
-                await prisma.assetMaintenanceHistory.create({
-                    data: {
-                        assetId: ticket.assetId,
-                        type: ticket.issueType || 'OTHER',
-                        cost: ticket.actualCost || ticket.estimatedCost || 0,
-                        notes: resolution || ticket.resolution || 'Ticket closed',
-                    },
-                });
+                if (ticket.assetId) {
+                    await prisma.asset.update({ where: { id: ticket.assetId }, data: { status: 'ACTIVE' } });
+                    // Log maintenance cost to asset history
+                    await prisma.assetMaintenanceHistory.create({
+                        data: {
+                            assetId: ticket.assetId,
+                            type: ticket.issueType || 'OTHER',
+                            cost: ticket.actualCost || ticket.estimatedCost || 0,
+                            notes: resolution || ticket.resolution || 'Ticket closed',
+                        },
+                    });
+                }
+
+                // Create finance transaction for maintenance cost
+                const maintenanceCost = ticket.actualCost || ticket.estimatedCost || 0;
+                if (maintenanceCost > 0) {
+                    await prisma.transaction.create({
+                        data: {
+                            type: 'EXPENSE',
+                            category: 'MAINTENANCE',
+                            amount: maintenanceCost,
+                            description: `Maintenance ticket ${ticket.ticketNumber} completed`,
+                            referenceType: 'MAINTENANCE_TICKET',
+                            referenceId: ticket.ticketNumber,
+                            officeId: ticket.officeId,
+                            recordedById: req.user.id,
+                            status: 'CLEARED',
+                        },
+                    });
+                }
             }
         }
 
@@ -204,6 +227,56 @@ exports.updateTicket = async (req, res) => {
                 asset: { select: { id: true, name: true } },
                 assignedTo: { select: { id: true, name: true } },
             },
+        });
+
+        res.status(200).json({ success: true, data: updated });
+    } catch (error) {
+        res.status(500).json({ success: false, message: 'Server Error', error: error.message });
+    }
+};
+
+// @desc    Approve a ticket
+// @route   PATCH /api/maintenance/:id/approve
+exports.approveTicket = async (req, res) => {
+    try {
+        const ticket = await prisma.maintenanceTicket.findUnique({ where: { id: req.params.id } });
+        if (!ticket) return res.status(404).json({ success: false, message: 'Ticket not found' });
+
+        const updated = await prisma.maintenanceTicket.update({
+            where: { id: req.params.id },
+            data: {
+                approvalStatus: 'APPROVED',
+                status: 'APPROVED',
+                approvedById: req.user.id,
+                approvalDate: new Date(),
+                approvalNotes: req.body.notes || null,
+            },
+            include: { asset: { select: { id: true, name: true } } },
+        });
+
+        res.status(200).json({ success: true, data: updated });
+    } catch (error) {
+        res.status(500).json({ success: false, message: 'Server Error', error: error.message });
+    }
+};
+
+// @desc    Reject a ticket
+// @route   PATCH /api/maintenance/:id/reject
+exports.rejectTicket = async (req, res) => {
+    try {
+        const ticket = await prisma.maintenanceTicket.findUnique({ where: { id: req.params.id } });
+        if (!ticket) return res.status(404).json({ success: false, message: 'Ticket not found' });
+
+        const updated = await prisma.maintenanceTicket.update({
+            where: { id: req.params.id },
+            data: {
+                approvalStatus: 'REJECTED',
+                status: 'REJECTED',
+                approvedById: req.user.id,
+                approvalDate: new Date(),
+                approvalNotes: req.body.notes || req.body.reason || null,
+            },
+            include: { asset: { select: { id: true, name: true } } },
         });
 
         res.status(200).json({ success: true, data: updated });

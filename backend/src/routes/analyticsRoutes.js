@@ -31,4 +31,7 @@ router.get('/finance/summary', verifyToken, authorize('SUPER_ADMIN', 'MANAGER'),
 // Vendor analytics
 router.get('/vendors/performance', verifyToken, cacheMiddleware(3600), analyticsController.getVendorPerformance); // Cache for 1 hour
 
+// Unified Pending Approvals (Maintenance + PO + Expense Claims)
+router.get('/pending-approvals', verifyToken, authorize('SUPER_ADMIN', 'ADMIN', 'MANAGER'), analyticsController.getPendingApprovals);
+
 module.exports = router;

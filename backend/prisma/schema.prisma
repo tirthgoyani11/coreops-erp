@@ -139,6 +139,8 @@ enum ReferenceType {
   WORK_ORDER
   INVOICE
   MANUAL
+  EXPENSE_CLAIM
+  MAINTENANCE_TICKET
 }
 
 enum OfficeType {

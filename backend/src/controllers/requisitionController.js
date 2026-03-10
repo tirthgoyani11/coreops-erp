@@ -41,7 +41,7 @@ exports.getRequisitions = asyncHandler(async (req, res) => {
     if (req.query.status) where.status = req.query.status;
 
     const prs = await prisma.purchaseRequisition.findMany({
-        where, include: { items: true, _count: { select: { items: true } } },
+        where, include: { items: true, requestedBy: { select: { name: true } }, _count: { select: { items: true } } },
         orderBy: { createdAt: 'desc' },
     });
     res.status(200).json({ success: true, count: prs.length, data: prs });
