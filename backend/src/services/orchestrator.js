@@ -532,6 +532,38 @@ async function processCommand(userMessage, context = {}) {
             },
         }).catch(e => logger.error('AiOperation log fail: ' + e.message));
 
+        // ── Step 6: Smart follow-up suggestions ──
+        const SUGGESTIONS_MAP = {
+            DASHBOARD_SUMMARY:      ['📦 Low stock items?', '📋 List pending POs', '🔧 Open tickets'],
+            LIST_ASSETS:            ['➕ Create new asset', '🔮 Predict maintenance', '📊 Asset stats'],
+            CREATE_ASSET:           ['📋 Create PO for it', '🔧 Create maintenance ticket', '🖥️ List all assets'],
+            LIST_INVENTORY:         ['⚠️ Show low stock only', '📦 Refill critical stock', '➕ Add inventory item'],
+            GET_LOW_STOCK:          ['📦 Refill lowest stock', '📋 Create purchase order', '📊 Show all inventory'],
+            REFILL_INVENTORY:       ['📋 View new PO', '📦 Check stock levels', '✅ Approve pending POs'],
+            LIST_PURCHASE_ORDERS:   ['✅ Approve a PO', '➕ Create new PO', '📦 Check inventory'],
+            APPROVE_PURCHASE:       ['📦 Check inventory levels', '📋 List all POs', '💰 View cash flow'],
+            CREATE_PURCHASE_ORDER:  ['✅ Approve this PO', '🏢 List vendors', '📦 Check inventory'],
+            LIST_TICKETS:           ['🔧 Create new ticket', '✅ Close a ticket', '🔮 Predict maintenance'],
+            CREATE_TICKET:          ['📋 List all tickets', '✅ Mark ticket complete', '🖥️ View asset'],
+            CLOSE_MAINTENANCE:      ['📋 View open tickets', '🖥️ List assets', '🔮 Run maintenance forecast'],
+            PREDICT_MAINTENANCE:    ['🔧 Create preventive ticket', '🖥️ List high-risk assets', '📊 Analytics'],
+            VIEW_PROFIT_LOSS:       ['💸 View cash flow', '📊 Balance sheet', '💰 List transactions'],
+            VIEW_CASH_FLOW:         ['📈 Profit & loss', '📊 Analytics overview', '💰 Set budget'],
+            VIEW_BALANCE_SHEET:     ['📈 Profit & loss', '📒 Chart of accounts', '💰 Budget status'],
+            CREATE_TRANSACTION:     ['📈 Profit & loss', '💰 List transactions', '📊 Budget summary'],
+            LIST_TRANSACTIONS:      ['📈 P&L report', '💰 Set budget', '📊 Analytics'],
+            LIST_VENDORS:           ['➕ Create new vendor', '📋 Create PO from vendor', '🖥️ All assets'],
+            CREATE_VENDOR:          ['📋 Create PO for vendor', '🏢 List all vendors', '📦 Check inventory'],
+            VIEW_PROFILE:           ['⚡ Dashboard summary', '🔔 My notifications', '📊 Analytics'],
+            LIST_NOTIFICATIONS:     ['⚡ Dashboard', '📋 Pending POs', '🔧 Open tickets'],
+            VIEW_ANALYTICS:         ['📈 Profit & loss', '🔮 Predict maintenance', '📊 Budget status'],
+            SET_BUDGET:             ['📊 Budget status', '💰 List transactions', '📈 P&L report'],
+            QUERY_DATA:             ['📊 Dashboard summary', '📈 Profit & loss', '📦 Inventory levels'],
+            DETECT_ANOMALY:         ['📈 P&L report', '💰 List transactions', '📊 Analytics'],
+            GENERAL:                ['⚡ Dashboard', '📦 Inventory', '🔧 Open tickets'],
+        };
+        const suggestions = SUGGESTIONS_MAP[classification.intent] || SUGGESTIONS_MAP.GENERAL;
+
         return {
             response: finalResponse,
             intent: classification.intent || 'GENERAL',
@@ -539,6 +571,7 @@ async function processCommand(userMessage, context = {}) {
             modelsUsed,
             actions,
             durationMs,
+            suggestions,
         };
 
     } catch (error) {
