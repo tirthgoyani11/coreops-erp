@@ -18,16 +18,10 @@ import {
 import { StatCard } from '../../components/dashboard/StatCard';
 import { DashboardChart } from '../../components/dashboard/DashboardChart';
 import { QuickActions } from '../../components/dashboard/QuickActions';
+import { RecentActivity } from '../../components/dashboard/RecentActivity';
 import api from '../../lib/api';
 import { formatCurrency } from '../../lib/utils';
 import { useSocket } from '../../hooks/useSocket';
-
-interface AuditLogEntry {
-    id: string;
-    user?: { name: string };
-    action: string;
-    timestamp: string;
-}
 
 interface ApprovalItem {
     id: string;
@@ -60,81 +54,6 @@ interface DashboardStats {
     monthlyExpense: number;
 }
 
-// Audit Log Table Component
-const AuditLogTable = memo(function AuditLogTable({ logs, loading }: { logs: AuditLogEntry[]; loading: boolean }) {
-    const formatTime = (dateString: string) => {
-        const date = new Date(dateString);
-        const now = new Date();
-        const diff = Math.floor((now.getTime() - date.getTime()) / 1000);
-
-        if (diff < 60) return `${diff}s ago`;
-        if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
-        if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
-        return date.toLocaleDateString();
-    };
-
-    if (loading) {
-        return (
-            <div className="bg-[var(--bg-card)] border border-[var(--border-color)] rounded-2xl p-6">
-                <div className="w-32 h-5 rounded bg-[var(--bg-card-hover)] mb-4 animate-pulse" />
-                {[1, 2, 3, 4].map(i => (
-                    <div key={i} className="flex items-center gap-4 py-3 animate-pulse">
-                        <div className="w-8 h-8 rounded-full bg-[var(--bg-card-hover)]" />
-                        <div className="flex-1 h-4 rounded bg-[var(--bg-card-hover)]" />
-                        <div className="w-16 h-4 rounded bg-[var(--bg-card-hover)]" />
-                    </div>
-                ))}
-            </div>
-        );
-    }
-
-    return (
-        <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="bg-[var(--bg-card)] border border-[var(--border-color)] rounded-2xl p-6"
-        >
-            <div className="flex items-center justify-between mb-4">
-                <h3 className="text-[var(--text-primary)] font-medium">Recent Activity</h3>
-                <Link to="/audit-logs" className="text-xs text-[var(--primary)] hover:underline flex items-center gap-1">
-                    View All <ChevronRight className="w-3 h-3" />
-                </Link>
-            </div>
-
-            <div className="space-y-1">
-                {logs.length === 0 ? (
-                    <p className="text-[var(--text-secondary)] text-sm py-4 text-center">No recent activity</p>
-                ) : (
-                    logs.map((log, index) => (
-                        <motion.div
-                            key={log.id}
-                            initial={{ opacity: 0, x: -10 }}
-                            animate={{ opacity: 1, x: 0 }}
-                            transition={{ delay: index * 0.05 }}
-                            className="flex items-center gap-3 py-3 border-b border-[var(--border-color)] last:border-0"
-                        >
-                            <div className="w-8 h-8 rounded-full bg-[var(--primary)]/10 flex items-center justify-center">
-                                <User className="w-4 h-4 text-[var(--primary)]" />
-                            </div>
-                            <div className="flex-1 min-w-0">
-                                <p className="text-sm text-[var(--text-primary)] truncate">
-                                    <span className="font-medium">{log.user?.name || 'System'}</span>
-                                    {' '}
-                                    <span className="text-[var(--text-secondary)]">{log.action}</span>
-                                </p>
-                            </div>
-                            <div className="flex items-center gap-1 text-xs text-[var(--text-secondary)]">
-                                <Clock className="w-3 h-3" />
-                                {formatTime(log.timestamp)}
-                            </div>
-                        </motion.div>
-                    ))
-                )}
-            </div>
-        </motion.div>
-    );
-});
-
 // Main Dashboard Component
 export const AdminDashboard = memo(function AdminDashboard() {
     const [stats, setStats] = useState<DashboardStats>({
@@ -149,7 +68,6 @@ export const AdminDashboard = memo(function AdminDashboard() {
         monthlyIncome: 0,
         monthlyExpense: 0,
     });
-    const [auditLogs, setAuditLogs] = useState<AuditLogEntry[]>([]);
     const [approvals, setApprovals] = useState<ApprovalItem[]>([]);
     const [loading, setLoading] = useState(true);
 
@@ -161,32 +79,13 @@ export const AdminDashboard = memo(function AdminDashboard() {
     const socket = useSocket();
 
     useEffect(() => {
-        if (!socket) return;
-
-        const handleNewActivity = (newLog: AuditLogEntry) => {
-            setAuditLogs(prev => {
-                // Prepend and keep only the latest 8 logs
-                const updated = [newLog, ...prev];
-                return updated.slice(0, 8);
-            });
-        };
-
-        socket.on('new_activity', handleNewActivity);
-
-        return () => {
-            socket.off('new_activity', handleNewActivity);
-        };
-    }, [socket]);
-
-    useEffect(() => {
         const fetchDashboardData = async () => {
             try {
                 setLoading(true);
 
                 // Fetch all data in parallel
-                const [dashboardRes, logsRes, categoryRes, trendsRes, inventoryRes, approvalsRes] = await Promise.allSettled([
+                const [dashboardRes, categoryRes, trendsRes, inventoryRes, approvalsRes] = await Promise.allSettled([
                     api.get('/analytics/dashboard'),
-                    api.get('/audit-logs?limit=8'),
                     api.get('/analytics/assets/by-category'),
                     api.get('/analytics/maintenance/trends?months=6'),
                     api.get('/analytics/inventory/status'),
@@ -351,8 +250,8 @@ export const AdminDashboard = memo(function AdminDashboard() {
 
             {/* Bottom Row */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                <div className="lg:col-span-2">
-                    <AuditLogTable logs={auditLogs} loading={loading} />
+                <div className="lg:col-span-2 text-white">
+                    <RecentActivity />
                 </div>
                 <div className="space-y-6">
                     {/* Approval Queue */}
