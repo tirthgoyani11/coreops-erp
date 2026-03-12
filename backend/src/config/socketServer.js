@@ -24,11 +24,18 @@ let io = null;
 function init(httpServer) {
     const allowedOrigins = process.env.ALLOWED_ORIGINS
         ? process.env.ALLOWED_ORIGINS.split(',')
-        : ['http://localhost:5173'];
+        : ['http://localhost:5173', 'https://coreops.tirthgoyani.in'];
 
     io = new Server(httpServer, {
         cors: {
-            origin: allowedOrigins,
+            origin: (origin, callback) => {
+                if (!origin) return callback(null, true);
+                if (allowedOrigins.includes(origin) || origin.endsWith('.tirthgoyani.in')) {
+                    callback(null, true);
+                } else {
+                    callback(new Error('Not allowed by CORS'));
+                }
+            },
             credentials: true,
             methods: ['GET', 'POST'],
         },
