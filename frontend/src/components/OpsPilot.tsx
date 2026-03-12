@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import api from '../lib/api';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Send, User, Loader2, ChevronDown, Mic, MicOff, Command } from 'lucide-react';
+import { X, Send, User, Loader2, ChevronDown, Mic, MicOff, Command, Paperclip } from 'lucide-react';
 
 // ─── Types ───────────────────────────────────────────────────────
 interface Message {
@@ -11,6 +11,7 @@ interface Message {
     timestamp: Date;
     suggestions?: string[];
     actions?: { success: boolean; message: string }[];
+    imageUrl?: string; // for invoice preview in chat
 }
 
 // ─── Markdown renderer ───────────────────────────────────────────
@@ -113,10 +114,12 @@ export function OpsPilot() {
     const [slashOpen, setSlashOpen] = useState(false);
     const [slashFilter, setSlashFilter] = useState('');
     const [briefingDone, setBriefingDone] = useState(false);
+    const [scanningImage, setScanningImage] = useState(false);
 
     const endRef = useRef<HTMLDivElement>(null);
     const inputRef = useRef<HTMLInputElement>(null);
     const recognitionRef = useRef<any>(null);
+    const imageInputRef = useRef<HTMLInputElement>(null);
 
     // ── Persist chat in localStorage ──────────────────────────────
     useEffect(() => {
@@ -201,6 +204,66 @@ export function OpsPilot() {
         recognitionRef.current = rec;
         rec.start();
     }, [isListening]);
+
+    // ── Invoice image scan in chat ────────────────────────────────
+    const scanImageInChat = async (file: File) => {
+        if (!file) return;
+        const previewUrl = file.type.startsWith('image/') ? URL.createObjectURL(file) : null;
+
+        // Show user message with image
+        const userMsg: Message = {
+            id: Date.now().toString(),
+            role: 'user',
+            content: `📎 Scanning invoice: **${file.name}**`,
+            timestamp: new Date(),
+            imageUrl: previewUrl ?? undefined,
+        };
+        setMessages(prev => [...prev, userMsg]);
+        setScanningImage(true);
+        setIsLoading(true);
+
+        const form = new FormData();
+        form.append('invoice', file);
+        try {
+            const res = await api.post('/ocr/upload', form, {
+                headers: { 'Content-Type': 'multipart/form-data' },
+            });
+            const d = res.data.data;
+            const ext = d.extractedData;
+            let msg = `🧾 **Invoice Scanned!**\n\n`;
+            if (ext.vendorName) msg += `| Field | Value |\n|-------|-------|\n`;
+            if (ext.vendorName) msg += `| **Vendor** | ${ext.vendorName} |\n`;
+            if (ext.invoiceNumber) msg += `| **Invoice #** | ${ext.invoiceNumber} |\n`;
+            if (ext.date) msg += `| **Date** | ${ext.date} |\n`;
+            if (ext.totalAmount) msg += `| **Total** | ₹${Number(ext.totalAmount).toLocaleString('en-IN')} |\n`;
+            if (ext.taxAmount) msg += `| **Tax** | ₹${Number(ext.taxAmount).toLocaleString('en-IN')} |\n`;
+            if (ext.vendorGST) msg += `| **GST** | ${ext.vendorGST} |\n`;
+            if (d.matchedVendor) msg += `\n✅ **Vendor matched:** ${d.matchedVendor.name}`;
+            if (d.documentId) msg += `\n📁 **Saved to Documents** (ID: ${d.documentId.slice(0,8)}...)`;
+            msg += `\n\n💡 Go to **Finance → Invoice Upload** to create a transaction from this invoice.`;
+
+            const aiMsg: Message = {
+                id: (Date.now() + 1).toString(),
+                role: 'assistant',
+                content: msg,
+                timestamp: new Date(),
+                suggestions: ['💰 Create expense transaction', '📄 View documents', '📊 Show P&L'],
+            };
+            setTypingId(aiMsg.id);
+            setMessages(prev => [...prev, aiMsg]);
+        } catch (err: any) {
+            setMessages(prev => [...prev, {
+                id: (Date.now() + 1).toString(),
+                role: 'assistant',
+                content: `❌ Invoice scan failed: ${err.response?.data?.message || 'Try again'}`,
+                timestamp: new Date(),
+            }]);
+        } finally {
+            setScanningImage(false);
+            setIsLoading(false);
+            if (imageInputRef.current) imageInputRef.current.value = '';
+        }
+    };
 
     // ── Send message ─────────────────────────────────────────────
     const sendMessage = async (text?: string) => {
@@ -386,6 +449,10 @@ export function OpsPilot() {
                                                 </div>
                                             )}
                                             <div style={{ maxWidth: '84%', display: 'flex', flexDirection: 'column', gap: '5px', alignItems: msg.role === 'user' ? 'flex-end' : 'flex-start' }}>
+                                                {/* Image thumbnail in user bubble */}
+                                                {msg.imageUrl && (
+                                                    <img src={msg.imageUrl} alt="Invoice" style={{ maxWidth: '160px', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.1)', objectFit: 'cover', maxHeight: '100px' }} />
+                                                )}
                                                 <div style={{
                                                     padding: '10px 13px',
                                                     borderRadius: msg.role === 'user' ? '18px 18px 4px 18px' : '4px 18px 18px 18px',
@@ -486,6 +553,13 @@ export function OpsPilot() {
                                         id="opspilot-input"
                                         style={{ flex: 1, background: 'transparent', border: 'none', outline: 'none', color: 'var(--text-primary)', fontSize: '14px', lineHeight: 1.4, minWidth: 0 }}
                                     />
+                                    {/* Image scan button */}
+                                    <input ref={imageInputRef} type="file" accept="image/*,application/pdf" style={{ display: 'none' }}
+                                        onChange={e => e.target.files?.[0] && scanImageInChat(e.target.files[0])} />
+                                    <button onClick={() => imageInputRef.current?.click()} title="Scan invoice image"
+                                        style={{ width: '34px', height: '34px', borderRadius: '9px', border: 'none', background: scanningImage ? 'rgba(245,158,11,0.15)' : 'rgba(255,255,255,0.05)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, transition: 'all 0.2s' }}>
+                                        <Paperclip style={{ width: '14px', height: '14px', color: scanningImage ? '#f59e0b' : 'rgba(255,255,255,0.35)', animation: scanningImage ? 'opsPulse 1s infinite' : 'none' }} />
+                                    </button>
                                     {/* Voice button */}
                                     <button onClick={toggleVoice} title={isListening ? 'Stop listening' : 'Voice input'}
                                         style={{ width: '34px', height: '34px', borderRadius: '9px', border: 'none', background: isListening ? 'rgba(239,68,68,0.15)' : 'rgba(255,255,255,0.05)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, transition: 'all 0.2s' }}>
@@ -505,7 +579,7 @@ export function OpsPilot() {
                                     </button>
                                 </div>
                                 <div style={{ textAlign: 'center', marginTop: '7px', fontSize: '10px', color: 'rgba(255,255,255,0.18)' }}>
-                                    OpsPilot 1.0 • Local AI &nbsp;|&nbsp; 🎤 Voice &nbsp;|&nbsp; / Commands
+                                    OpsPilot 1.0 &nbsp;|&nbsp; 🎤 Voice &nbsp;|&nbsp; / Commands &nbsp;|&nbsp; 📎 Invoice Scan
                                 </div>
                             </div>
                         </motion.div>
