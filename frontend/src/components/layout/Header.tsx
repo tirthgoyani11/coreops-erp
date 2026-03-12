@@ -1,13 +1,15 @@
 import { useState, useEffect, useMemo, useCallback, memo } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Search, Bell, Plus, Menu, Sun, Moon, Globe, Building2, MapPin, User, X } from 'lucide-react';
+import { Search, Bell, Menu, Sun, Moon, Globe, Building2, MapPin, User, X } from 'lucide-react';
 import { useUIStore } from '../../stores/uiStore';
 import { useThemeStore } from '../../stores/themeStore';
 import { useAuthStore } from '../../stores/authStore';
-import { getRoleLabel, getRoleColor, getRoleConfig, hasPermission } from '../../config/roleConfig';
+import { getRoleLabel, getRoleColor, getRoleConfig } from '../../config/roleConfig';
 import type { UserRole } from '../../types';
 import { useSocket } from '../../hooks/useSocket';
 import { useNotificationStore } from '../../stores/notificationStore';
+import { QuickActionsDropdown } from '../ui/QuickActionsDropdown';
+import { useShortcut } from '../../hooks/useShortcuts';
 
 // Scope icons mapping
 const SCOPE_ICONS = {
@@ -97,12 +99,6 @@ export const Header = memo(function Header() {
             // TODO: Implement global search
         }
     }, [searchQuery]);
-
-    // Check if user can create (for the New Action button)
-    const canCreate = useMemo(() => {
-        return hasPermission(roleInfo.role, 'assets.create') ||
-            hasPermission(roleInfo.role, 'tickets.create');
-    }, [roleInfo.role]);
 
     return (
         <header
@@ -223,19 +219,28 @@ export const Header = memo(function Header() {
                     {isDarkMode ? <Sun className="w-4 h-4" aria-hidden="true" /> : <Moon className="w-4 h-4" aria-hidden="true" />}
                 </button>
 
-                {/* Quick Action Button - Only if user can create */}
-                {canCreate && (
-                    <button
-                        className="h-10 px-3 md:px-5 bg-[var(--primary)] text-[var(--primary-fg)] rounded-full text-sm font-bold flex items-center gap-2 hover:shadow-[0_0_20px_rgba(185,255,102,0.4)] transition-all active:scale-95 focus:outline-none focus:ring-2 focus:ring-[var(--primary)] focus:ring-offset-2 focus:ring-offset-[var(--bg-background)]"
-                        aria-label="Create new item"
-                    >
-                        <Plus className="w-4 h-4" aria-hidden="true" />
-                        <span className="hidden md:inline">New</span>
-                    </button>
-                )}
+                {/* Quick Actions Dropdown (replaces + New button) */}
+                <QuickActionsDropdown />
             </div>
+            
+            {/* Hidden global OpsPilot shortcut listener attached here to avoid mounting twice */}
+            <OpsPilotShortcutListener />
         </header >
     );
 });
+
+// Helper component to bind Cmd+/ to OpsPilot without causing prop drilling into MainLayout
+const OpsPilotShortcutListener = () => {
+    useShortcut(['ctrl', '/'], () => {
+        // Find the OpsPilot button by label and click it
+        const btn = document.querySelector('[aria-label="Toggle OpsPilot"]');
+        if (btn) (btn as HTMLElement).click();
+    });
+    useShortcut(['cmd', '/'], () => {
+        const btn = document.querySelector('[aria-label="Toggle OpsPilot"]');
+        if (btn) (btn as HTMLElement).click();
+    });
+    return null;
+};
 
 export default Header;

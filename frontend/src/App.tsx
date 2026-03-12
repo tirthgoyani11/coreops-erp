@@ -1,9 +1,11 @@
-import { useEffect, Suspense, lazy } from 'react';
+import { useEffect, Suspense, lazy, useState } from 'react';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { MainLayout } from './components/layout/MainLayout';
 import { RoleGuard } from './components/layout/RoleGuard';
 import { ErrorBoundary } from './components/ErrorBoundary';
+import { CommandPalette } from './components/ui/CommandPalette';
 import { Toaster } from './components/ui/Toaster';
+import { useShortcut } from './hooks/useShortcuts';
 import { useAuthStore } from './stores/authStore';
 
 const PageLoader = () => (
@@ -99,15 +101,21 @@ import './index.css';
 
 function App() {
   const { checkAuth } = useAuthStore();
+  const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
 
   useEffect(() => {
     checkAuth();
   }, []);
 
+  // Global command palette shortcut
+  useShortcut(['ctrl', 'k'], () => setIsCommandPaletteOpen(true));
+  useShortcut(['cmd', 'k'], () => setIsCommandPaletteOpen(true));
+
   return (
     <ErrorBoundary>
       <BrowserRouter>
         <Toaster />
+        <CommandPalette isOpen={isCommandPaletteOpen} onClose={() => setIsCommandPaletteOpen(false)} />
         <Suspense fallback={<PageLoader />}>
           <Routes>
             {/* Public Auth Routes (Phase 4) */}
