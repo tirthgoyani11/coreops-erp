@@ -61,21 +61,26 @@ function applyGuards(client) {
     // ─── Safety Guard: Block mass deletes without a WHERE clause ───
     // OpsPilot can read, update, and create anything.
     // It CANNOT wipe entire tables (deleteMany with no filter).
-    client.$use(async (params, next) => {
-        const BLOCKED_OPS = ['deleteMany', 'delete'];
-        if (BLOCKED_OPS.includes(params.action)) {
-            const where = params.args?.where;
-            const isEmpty = !where || Object.keys(where).length === 0;
-            if (isEmpty) {
-                throw new Error(
-                    `[Safety Guard] Blocked ${params.action} on "${params.model}" with no WHERE clause. ` +
-                    `Full-table deletes are not allowed via OpsPilot.`
-                );
+    return client.$extends({
+        query: {
+            $allModels: {
+                async $allOperations({ model, operation, args, query }) {
+                    const BLOCKED_OPS = ['deleteMany', 'delete'];
+                    if (BLOCKED_OPS.includes(operation)) {
+                        const where = args?.where;
+                        const isEmpty = !where || Object.keys(where).length === 0;
+                        if (isEmpty) {
+                            throw new Error(
+                                `[Safety Guard] Blocked ${operation} on "${model}" with no WHERE clause. ` +
+                                `Full-table deletes are not allowed via OpsPilot.`
+                            );
+                        }
+                    }
+                    return query(args);
+                }
             }
         }
-        return next(params);
     });
-    return client;
 }
 
 module.exports = prisma;
