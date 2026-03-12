@@ -316,51 +316,52 @@ enum ScheduleFrequency {
 // ─── MODELS ────────────────────────────────────────────────────
 
 model Office {
-  id                 String     @id @default(uuid())
-  name               String
-  code               String     @unique
-  type               OfficeType @default(BRANCH)
-  parentId           String?
-  parent             Office?    @relation("OfficeHierarchy", fields: [parentId], references: [id])
-  children           Office[]   @relation("OfficeHierarchy")
+  id                           String               @id @default(uuid())
+  name                         String
+  code                         String               @unique
+  type                         OfficeType           @default(BRANCH)
+  parentId                     String?
+  parent                       Office?              @relation("OfficeHierarchy", fields: [parentId], references: [id])
+  children                     Office[]             @relation("OfficeHierarchy")
   // Address
-  street             String?
-  city               String?
-  state              String?
-  country            String?
-  postalCode         String?
-  latitude           Float?
-  longitude          Float?
+  street                       String?
+  city                         String?
+  state                        String?
+  country                      String?
+  postalCode                   String?
+  latitude                     Float?
+  longitude                    Float?
   // Contact
-  phone              String?
-  email              String?
-  website            String?
+  phone                        String?
+  email                        String?
+  website                      String?
   // Currency / locale
-  baseCurrency       String     @default("INR")
-  countryCode        String?
-  locationCode       String?
+  baseCurrency                 String               @default("INR")
+  countryCode                  String?
+  locationCode                 String?
   // Settings (flattened from embedded)
-  maintenanceApprovalThreshold Float @default(5000)
-  autoApproveUnder   Float      @default(1000)
-  lowStockThreshold  Int        @default(10)
-  defaultDepreciationMethod DepreciationMethod @default(STRAIGHT_LINE)
-  isActive           Boolean    @default(true)
-  createdAt          DateTime   @default(now())
-  updatedAt          DateTime   @updatedAt
+  maintenanceApprovalThreshold Float                @default(5000)
+  autoApproveUnder             Float                @default(1000)
+  lowStockThreshold            Int                  @default(10)
+  defaultDepreciationMethod    DepreciationMethod   @default(STRAIGHT_LINE)
+  isActive                     Boolean              @default(true)
+  createdAt                    DateTime             @default(now())
+  updatedAt                    DateTime             @updatedAt
   // Relations
-  users              User[]
-  assets             Asset[]
-  inventory          Inventory[]
-  maintenanceTickets MaintenanceTicket[]
-  purchaseOrders     PurchaseOrder[]
-  transactions       Transaction[]
-  budgets            Budget[]
-  aiOperations       AiOperation[]
-  glAccounts         GLAccount[]
-  journalEntries     JournalEntry[]
-  preventiveSchedules PreventiveSchedule[]
-  slaPolices         SLAPolicy[]
-  stocktakes         Stocktake[]
+  users                        User[]
+  assets                       Asset[]
+  inventory                    Inventory[]
+  maintenanceTickets           MaintenanceTicket[]
+  purchaseOrders               PurchaseOrder[]
+  transactions                 Transaction[]
+  budgets                      Budget[]
+  aiOperations                 AiOperation[]
+  glAccounts                   GLAccount[]
+  journalEntries               JournalEntry[]
+  preventiveSchedules          PreventiveSchedule[]
+  documents                    Document[]
+  slaPolices                   SLAPolicy[]
+  stocktakes                   Stocktake[]
 
   @@index([name, country])
   @@index([parentId])
@@ -368,60 +369,61 @@ model Office {
 }
 
 model User {
-  id                   String    @id @default(uuid())
-  name                 String
-  firstName            String?
-  lastName             String?
-  email                String    @unique
-  password             String
-  role                 UserRole  @default(STAFF)
-  officeId             String?
-  office               Office?   @relation(fields: [officeId], references: [id])
+  id                    String              @id @default(uuid())
+  name                  String
+  firstName             String?
+  lastName              String?
+  email                 String              @unique
+  password              String
+  role                  UserRole            @default(STAFF)
+  officeId              String?
+  office                Office?             @relation(fields: [officeId], references: [id])
   // Permissions (flattened)
-  canApproveTickets    Boolean   @default(false)
-  canManageAssets       Boolean   @default(false)
-  canManageInventory   Boolean   @default(false)
-  canViewFinancials    Boolean   @default(false)
-  canManageUsers       Boolean   @default(false)
-  canManageVendors     Boolean   @default(false)
-  approvalLimit        Float     @default(0) // -1 = unlimited
+  canApproveTickets     Boolean             @default(false)
+  canManageAssets       Boolean             @default(false)
+  canManageInventory    Boolean             @default(false)
+  canViewFinancials     Boolean             @default(false)
+  canManageUsers        Boolean             @default(false)
+  canManageVendors      Boolean             @default(false)
+  approvalLimit         Float               @default(0) // -1 = unlimited
   // Account status
-  isActive             Boolean   @default(true)
-  lastLogin            DateTime?
-  failedLoginAttempts  Int       @default(0)
-  lockUntil            DateTime?
-  passwordChangedAt    DateTime?
-  passwordResetToken   String?
-  passwordResetExpires DateTime?
-  inviteToken          String?
-  inviteTokenExpires   DateTime?
+  isActive              Boolean             @default(true)
+  lastLogin             DateTime?
+  failedLoginAttempts   Int                 @default(0)
+  lockUntil             DateTime?
+  passwordChangedAt     DateTime?
+  passwordResetToken    String?
+  passwordResetExpires  DateTime?
+  inviteToken           String?
+  inviteTokenExpires    DateTime?
   // Profile
-  phone                String?
-  avatar               String?
-  language             String    @default("en")
-  timezone             String    @default("Asia/Kolkata")
-  emailNotifications   Boolean   @default(true)
-  inAppNotifications   Boolean   @default(true)
-  createdAt            DateTime  @default(now())
-  updatedAt            DateTime  @updatedAt
+  phone                 String?
+  avatar                String?
+  language              String              @default("en")
+  timezone              String              @default("Asia/Kolkata")
+  emailNotifications    Boolean             @default(true)
+  inAppNotifications    Boolean             @default(true)
+  createdAt             DateTime            @default(now())
+  updatedAt             DateTime            @updatedAt
   // Relations
-  refreshTokens        RefreshToken[]
-  createdAssets        Asset[]           @relation("AssetCreator")
-  assignedAssets       Asset[]           @relation("AssetAssignee")
-  requestedTickets     MaintenanceTicket[] @relation("TicketRequester")
-  assignedTickets      MaintenanceTicket[] @relation("TicketAssignee")
-  approvedTickets      MaintenanceTicket[] @relation("TicketApprover")
-  workLogs             WorkLog[]
-  notifications        Notification[]
-  auditLogs            AuditLog[]
-  requestedPOs         PurchaseOrder[]   @relation("PORequester")
-  approvedPOs          PurchaseOrder[]   @relation("POApprover")
-  recordedTransactions Transaction[]
-  aiOperations         AiOperation[]     @relation("AiOperationUser")
-  aiApprovals          AiOperation[]     @relation("AiOperationApprover")
-  stockMovements       StockMovement[]
-  createdJournalEntries JournalEntry[]    @relation("JournalEntryCreator")
-  expenseClaims         ExpenseClaim[]    @relation("ExpenseEmployee")
+  refreshTokens         RefreshToken[]
+  createdAssets         Asset[]             @relation("AssetCreator")
+  assignedAssets        Asset[]             @relation("AssetAssignee")
+  requestedTickets      MaintenanceTicket[] @relation("TicketRequester")
+  assignedTickets       MaintenanceTicket[] @relation("TicketAssignee")
+  approvedTickets       MaintenanceTicket[] @relation("TicketApprover")
+  workLogs              WorkLog[]
+  notifications         Notification[]
+  auditLogs             AuditLog[]
+  requestedPOs          PurchaseOrder[]     @relation("PORequester")
+  approvedPOs           PurchaseOrder[]     @relation("POApprover")
+  recordedTransactions  Transaction[]
+  aiOperations          AiOperation[]       @relation("AiOperationUser")
+  aiApprovals           AiOperation[]       @relation("AiOperationApprover")
+  stockMovements        StockMovement[]
+  createdJournalEntries JournalEntry[]      @relation("JournalEntryCreator")
+  expenseClaims         ExpenseClaim[]      @relation("ExpenseEmployee")
+  uploadedDocuments     Document[]
 
   @@index([role, officeId])
   @@index([officeId])
@@ -441,78 +443,79 @@ model RefreshToken {
 }
 
 model Vendor {
-  id              String   @id @default(uuid())
-  name            String
-  vendorCode      String   @unique
-  contactPerson   String?
-  email           String?
-  phone           String?
-  address         String?
-  gstNumber       String?
-  panNumber       String?
-  bankDetails     Json?    // { bankName, accountNumber, ifscCode }
-  rating          Float?   @default(0)
-  isBlacklisted   Boolean  @default(false)
-  notes           String?
-  officeId        String?
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  id             String           @id @default(uuid())
+  name           String
+  vendorCode     String           @unique
+  contactPerson  String?
+  email          String?
+  phone          String?
+  address        String?
+  gstNumber      String?
+  panNumber      String?
+  bankDetails    Json? // { bankName, accountNumber, ifscCode }
+  rating         Float?           @default(0)
+  isBlacklisted  Boolean          @default(false)
+  notes          String?
+  officeId       String?
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
   // Relations
-  purchaseOrders  PurchaseOrder[]
-  assets          Asset[]
-  contracts       VendorContract[]
+  purchaseOrders PurchaseOrder[]
+  assets         Asset[]
+  contracts      VendorContract[]
 
   @@index([name])
   @@index([isBlacklisted])
 }
 
 model Asset {
-  id               String          @id @default(uuid())
-  guai             String          @unique
-  name             String
-  category         AssetCategory
-  manufacturer     String?
-  model            String?
-  serialNumber     String?
+  id                  String                    @id @default(uuid())
+  guai                String                    @unique
+  name                String
+  category            AssetCategory
+  manufacturer        String?
+  model               String?
+  serialNumber        String?
   // Purchase info (flattened)
-  vendorId         String?
-  vendor           Vendor?         @relation(fields: [vendorId], references: [id])
-  purchaseDate     DateTime        @default(now())
-  purchasePrice    Float
-  currency         String          @default("INR")
+  vendorId            String?
+  vendor              Vendor?                   @relation(fields: [vendorId], references: [id])
+  purchaseDate        DateTime                  @default(now())
+  purchasePrice       Float
+  currency            String                    @default("INR")
   purchaseOrderNumber String?
-  invoiceNumber    String?
-  warrantyStart    DateTime?
-  warrantyEnd      DateTime?
-  warrantyTerms    String?
+  invoiceNumber       String?
+  warrantyStart       DateTime?
+  warrantyEnd         DateTime?
+  warrantyTerms       String?
   // Depreciation
-  depreciationMethod DepreciationMethod @default(STRAIGHT_LINE)
-  usefulLife       Int             @default(5)
-  salvageValue     Float           @default(0)
-  currentBookValue Float?
-  depreciationRate Float?
-  lastDepCalculated DateTime?
+  depreciationMethod  DepreciationMethod        @default(STRAIGHT_LINE)
+  usefulLife          Int                       @default(5)
+  salvageValue        Float                     @default(0)
+  currentBookValue    Float?
+  depreciationRate    Float?
+  lastDepCalculated   DateTime?
   // Location
-  building         String?
-  floor            String?
-  room             String?
-  assignedToId     String?
-  assignedTo       User?           @relation("AssetAssignee", fields: [assignedToId], references: [id])
-  officeId         String
-  office           Office          @relation(fields: [officeId], references: [id])
-  status           AssetStatus     @default(ACTIVE)
-  condition        AssetCondition  @default(GOOD)
-  qrCode           String?
-  images           Json?           // [{ url, caption, uploadedAt }]
-  notes            String?
-  createdById      String?
-  createdBy        User?           @relation("AssetCreator", fields: [createdById], references: [id])
-  createdAt        DateTime        @default(now())
-  updatedAt        DateTime        @updatedAt
+  building            String?
+  floor               String?
+  room                String?
+  assignedToId        String?
+  assignedTo          User?                     @relation("AssetAssignee", fields: [assignedToId], references: [id])
+  officeId            String
+  office              Office                    @relation(fields: [officeId], references: [id])
+  status              AssetStatus               @default(ACTIVE)
+  condition           AssetCondition            @default(GOOD)
+  qrCode              String?
+  images              Json? // [{ url, caption, uploadedAt }]
+  notes               String?
+  createdById         String?
+  createdBy           User?                     @relation("AssetCreator", fields: [createdById], references: [id])
+  createdAt           DateTime                  @default(now())
+  updatedAt           DateTime                  @updatedAt
   // Relations
-  maintenanceTickets MaintenanceTicket[]
-  maintenanceHistory AssetMaintenanceHistory[]
+  maintenanceTickets  MaintenanceTicket[]
+  maintenanceHistory  AssetMaintenanceHistory[]
   preventiveSchedules PreventiveSchedule[]
+  documents           Document[]
 
   @@index([officeId, status])
   @@index([category, status])
@@ -535,53 +538,53 @@ model AssetMaintenanceHistory {
 }
 
 model MaintenanceTicket {
-  id                 String         @id @default(uuid())
-  ticketNumber       String         @unique
-  assetId            String
-  asset              Asset          @relation(fields: [assetId], references: [id])
-  officeId           String
-  office             Office         @relation(fields: [officeId], references: [id])
-  issueDescription   String
-  issueType          IssueType      @default(OTHER)
-  priority           TicketPriority @default(MEDIUM)
+  id                    String              @id @default(uuid())
+  ticketNumber          String              @unique
+  assetId               String
+  asset                 Asset               @relation(fields: [assetId], references: [id])
+  officeId              String
+  office                Office              @relation(fields: [officeId], references: [id])
+  issueDescription      String
+  issueType             IssueType           @default(OTHER)
+  priority              TicketPriority      @default(MEDIUM)
   // Costs
-  estimatedCost      Float?
-  actualCost         Float?
-  currency           String         @default("INR")
+  estimatedCost         Float?
+  actualCost            Float?
+  currency              String              @default("INR")
   // Algorithm decision (stored as JSON for flexibility)
-  algorithmDecision  Json?
+  algorithmDecision     Json?
   // Approval
-  approvalStatus     ApprovalStatus @default(PENDING)
-  approvedById       String?
-  approvedBy         User?          @relation("TicketApprover", fields: [approvedById], references: [id])
-  approvalDate       DateTime?
-  approvalNotes      String?
+  approvalStatus        ApprovalStatus      @default(PENDING)
+  approvedById          String?
+  approvedBy            User?               @relation("TicketApprover", fields: [approvedById], references: [id])
+  approvalDate          DateTime?
+  approvalNotes         String?
   // Assignment
-  assignedToId       String?
-  assignedTo         User?          @relation("TicketAssignee", fields: [assignedToId], references: [id])
-  assignedDate       DateTime?
+  assignedToId          String?
+  assignedTo            User?               @relation("TicketAssignee", fields: [assignedToId], references: [id])
+  assignedDate          DateTime?
   // Status
-  status             TicketStatus   @default(REQUESTED)
-  decision           String?        // REPAIR or REPLACE
-  resolution         String?
-  completedDate      DateTime?
+  status                TicketStatus        @default(REQUESTED)
+  decision              String? // REPAIR or REPLACE
+  resolution            String?
+  completedDate         DateTime?
   // Requester
-  requestedById      String
-  requestedBy        User           @relation("TicketRequester", fields: [requestedById], references: [id])
-  reportedDate       DateTime       @default(now())
-  attachments        String[]       @default([])
+  requestedById         String
+  requestedBy           User                @relation("TicketRequester", fields: [requestedById], references: [id])
+  reportedDate          DateTime            @default(now())
+  attachments           String[]            @default([])
   // SLA tracking
-  slaResponseDeadline  DateTime?
+  slaResponseDeadline   DateTime?
   slaResolutionDeadline DateTime?
-  slaBreached          Boolean   @default(false)
-  firstResponseAt      DateTime?
-  preventiveScheduleId String?
-  createdAt          DateTime       @default(now())
-  updatedAt          DateTime       @updatedAt
+  slaBreached           Boolean             @default(false)
+  firstResponseAt       DateTime?
+  preventiveScheduleId  String?
+  createdAt             DateTime            @default(now())
+  updatedAt             DateTime            @updatedAt
   // Relations (embedded arrays → tables)
-  workLogs           WorkLog[]
-  sparePartsUsed     SparePartUsage[]
-  preventiveSchedule PreventiveSchedule? @relation(fields: [preventiveScheduleId], references: [id])
+  workLogs              WorkLog[]
+  sparePartsUsed        SparePartUsage[]
+  preventiveSchedule    PreventiveSchedule? @relation(fields: [preventiveScheduleId], references: [id])
 
   @@index([assetId, status])
   @@index([requestedById, reportedDate(sort: Desc)])
@@ -624,51 +627,51 @@ model SparePartUsage {
 }
 
 model Inventory {
-  id              String          @id @default(uuid())
-  type            InventoryType
-  name            String
-  description     String?
-  sku             String?         @unique
-  partNumber      String?
-  category        String?
-  subcategory     String?
-  officeId        String
-  office          Office          @relation(fields: [officeId], references: [id])
+  id                String              @id @default(uuid())
+  type              InventoryType
+  name              String
+  description       String?
+  sku               String?             @unique
+  partNumber        String?
+  category          String?
+  subcategory       String?
+  officeId          String
+  office            Office              @relation(fields: [officeId], references: [id])
   // Storage
-  storageLocation String?
-  storageBin      String?
-  storageShelf    String?
+  storageLocation   String?
+  storageBin        String?
+  storageShelf      String?
   // Tracking
-  trackingType    TrackingType    @default(QUANTITY)
+  trackingType      TrackingType        @default(QUANTITY)
   // Stock levels
-  currentQuantity Int             @default(0)
-  reorderPoint    Int             @default(10)
-  reorderQuantity Int             @default(50)
-  maxQuantity     Int?
-  minimumQuantity Int             @default(5)
-  unit            String          @default("pieces")
+  currentQuantity   Int                 @default(0)
+  reorderPoint      Int                 @default(10)
+  reorderQuantity   Int                 @default(50)
+  maxQuantity       Int?
+  minimumQuantity   Int                 @default(5)
+  unit              String              @default("pieces")
   // Pricing (products)
-  costPrice       Float?
-  sellingPrice    Float?
-  marginPercentage Float?
+  costPrice         Float?
+  sellingPrice      Float?
+  marginPercentage  Float?
   // Cost info (spares)
-  unitCost        Float?
-  pricingCurrency String          @default("INR")
+  unitCost          Float?
+  pricingCurrency   String              @default("INR")
   lastPurchasePrice Float?
-  lastPurchaseDate DateTime?
-  lastRestockDate DateTime?
+  lastPurchaseDate  DateTime?
+  lastRestockDate   DateTime?
   // Vendor
-  primaryVendorId String?
-  isActive        Boolean         @default(true)
-  notes           String?
-  createdAt       DateTime        @default(now())
-  updatedAt       DateTime        @updatedAt
+  primaryVendorId   String?
+  isActive          Boolean             @default(true)
+  notes             String?
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
   // Relations
-  stockMovements  StockMovement[]
-  sparePartUsages SparePartUsage[]
-  poItems         PurchaseOrderItem[]
-  batches         InventoryBatch[]
-  serializedUnits SerializedUnit[]
+  stockMovements    StockMovement[]
+  sparePartUsages   SparePartUsage[]
+  poItems           PurchaseOrderItem[]
+  batches           InventoryBatch[]
+  serializedUnits   SerializedUnit[]
 
   @@index([officeId, type])
   @@index([category])
@@ -682,7 +685,7 @@ model StockMovement {
   type          StockMovementType
   quantity      Int
   reason        String?
-  reference     String?           // PO number, ticket number, etc.
+  reference     String? // PO number, ticket number, etc.
   performedById String?
   performedBy   User?             @relation(fields: [performedById], references: [id])
   date          DateTime          @default(now())
@@ -713,50 +716,50 @@ model InventoryBatch {
 }
 
 model SerializedUnit {
-  id            String    @id @default(uuid())
-  inventoryId   String
-  inventory     Inventory @relation(fields: [inventoryId], references: [id], onDelete: Cascade)
-  serialNumber  String    @unique
-  status        String    @default("IN_STOCK") // IN_STOCK, ISSUED, RETURNED, DEFECTIVE
-  batchNumber   String?
-  issuedToId    String?
-  issuedDate    DateTime?
-  returnDate    DateTime?
-  notes         String?
-  createdAt     DateTime  @default(now())
+  id           String    @id @default(uuid())
+  inventoryId  String
+  inventory    Inventory @relation(fields: [inventoryId], references: [id], onDelete: Cascade)
+  serialNumber String    @unique
+  status       String    @default("IN_STOCK") // IN_STOCK, ISSUED, RETURNED, DEFECTIVE
+  batchNumber  String?
+  issuedToId   String?
+  issuedDate   DateTime?
+  returnDate   DateTime?
+  notes        String?
+  createdAt    DateTime  @default(now())
 
   @@index([inventoryId, status])
 }
 
 model PurchaseOrder {
-  id                   String    @id @default(uuid())
-  poNumber             String    @unique
+  id                   String              @id @default(uuid())
+  poNumber             String              @unique
   vendorId             String
-  vendor               Vendor    @relation(fields: [vendorId], references: [id])
+  vendor               Vendor              @relation(fields: [vendorId], references: [id])
   officeId             String
-  office               Office    @relation(fields: [officeId], references: [id])
+  office               Office              @relation(fields: [officeId], references: [id])
   requestedById        String
-  requestedBy          User      @relation("PORequester", fields: [requestedById], references: [id])
-  status               POStatus  @default(DRAFT)
+  requestedBy          User                @relation("PORequester", fields: [requestedById], references: [id])
+  status               POStatus            @default(DRAFT)
   // Financials
   subtotal             Float?
   taxAmount            Float?
   totalAmount          Float?
-  currency             String    @default("INR")
+  currency             String              @default("INR")
   // Dates
   orderDate            DateTime?
   expectedDeliveryDate DateTime?
   deliveryDate         DateTime?
   // Approval
   approvedById         String?
-  approvedBy           User?     @relation("POApprover", fields: [approvedById], references: [id])
+  approvedBy           User?               @relation("POApprover", fields: [approvedById], references: [id])
   approvalDate         DateTime?
   // 3-way matching
   grnReference         String?
   invoiceReference     String?
   notes                String?
-  createdAt            DateTime  @default(now())
-  updatedAt            DateTime  @updatedAt
+  createdAt            DateTime            @default(now())
+  updatedAt            DateTime            @updatedAt
   // Relations
   items                PurchaseOrderItem[]
   goodsReceipts        GoodsReceipt[]
@@ -786,24 +789,24 @@ model PurchaseOrderItem {
 }
 
 model Transaction {
-  id            String            @id @default(uuid())
+  id            String             @id @default(uuid())
   type          TransactionType
   category      String
   amount        Float
-  currency      String            @default("INR")
-  date          DateTime          @default(now())
+  currency      String             @default("INR")
+  date          DateTime           @default(now())
   description   String?
-  referenceType ReferenceType     @default(MANUAL)
+  referenceType ReferenceType      @default(MANUAL)
   referenceId   String?
   officeId      String?
-  office        Office?           @relation(fields: [officeId], references: [id])
+  office        Office?            @relation(fields: [officeId], references: [id])
   recordedById  String?
-  recordedBy    User?             @relation(fields: [recordedById], references: [id])
-  status        TransactionStatus @default(CLEARED)
+  recordedBy    User?              @relation(fields: [recordedById], references: [id])
+  status        TransactionStatus  @default(CLEARED)
   glAccountId   String?
-  glAccount     GLAccount?        @relation(fields: [glAccountId], references: [id])
+  glAccount     GLAccount?         @relation(fields: [glAccountId], references: [id])
   journalLines  JournalEntryLine[]
-  createdAt     DateTime          @default(now())
+  createdAt     DateTime           @default(now())
 
   @@index([officeId, date(sort: Desc)])
   @@index([type, category])
@@ -812,14 +815,14 @@ model Transaction {
 }
 
 model Budget {
-  id       String   @id @default(uuid())
-  officeId String
-  office   Office   @relation(fields: [officeId], references: [id])
-  category String
-  month    Int
-  year     Int
-  limit    Float    @default(0)
-  spent    Float    @default(0)
+  id        String   @id @default(uuid())
+  officeId  String
+  office    Office   @relation(fields: [officeId], references: [id])
+  category  String
+  month     Int
+  year      Int
+  limit     Float    @default(0)
+  spent     Float    @default(0)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -828,63 +831,68 @@ model Budget {
 }
 
 model Document {
-  id          String   @id @default(uuid())
-  name        String
+  id           String   @id @default(uuid())
+  name         String
   originalName String?
-  mimeType    String?
-  size        Int?
-  path        String
-  category    String?
-  tags        String[] @default([])
-  officeId    String?
+  mimeType     String?
+  size         Int?
+  path         String
+  category     String?
+  tags         String[] @default([])
+  officeId     String?
   uploadedById String?
-  description String?
-  ocrText     String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  description  String?
+  ocrText      String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  office       Office?  @relation(fields: [officeId], references: [id])
+  user         User?    @relation(fields: [userId], references: [id])
+  userId       String?
+  asset        Asset?   @relation(fields: [assetId], references: [id])
+  assetId      String?
 
   @@index([officeId, category])
   @@index([createdAt(sort: Desc)])
 }
 
 model Notification {
-  id             String               @id @default(uuid())
-  recipientId    String
-  recipient      User                 @relation(fields: [recipientId], references: [id], onDelete: Cascade)
-  type           NotificationType
-  title          String
-  message        String
-  priority       NotificationPriority @default(MEDIUM)
+  id           String               @id @default(uuid())
+  recipientId  String
+  recipient    User                 @relation(fields: [recipientId], references: [id], onDelete: Cascade)
+  type         NotificationType
+  title        String
+  message      String
+  priority     NotificationPriority @default(MEDIUM)
   // Related document
-  relatedModel   String?
-  relatedDocId   String?
-  actions        Json?                // [{ label, action, url }]
-  isRead         Boolean              @default(false)
-  readAt         DateTime?
-  sentAt         DateTime             @default(now())
-  expiresAt      DateTime?
-  createdAt      DateTime             @default(now())
-  updatedAt      DateTime             @updatedAt
+  relatedModel String?
+  relatedDocId String?
+  actions      Json? // [{ label, action, url }]
+  isRead       Boolean              @default(false)
+  readAt       DateTime?
+  sentAt       DateTime             @default(now())
+  expiresAt    DateTime?
+  createdAt    DateTime             @default(now())
+  updatedAt    DateTime             @updatedAt
 
   @@index([recipientId, isRead, sentAt(sort: Desc)])
   @@index([type])
 }
 
 model AuditLog {
-  id           String            @id @default(uuid())
+  id           String             @id @default(uuid())
   userId       String?
-  user         User?             @relation(fields: [userId], references: [id])
+  user         User?              @relation(fields: [userId], references: [id])
   action       AuditAction
   resourceType AuditResourceType?
   resourceId   String?
-  changes      Json?             // { before, after, fields }
+  changes      Json? // { before, after, fields }
   ipAddress    String?
   userAgent    String?
-  status       AuditStatus       @default(SUCCESS)
+  status       AuditStatus        @default(SUCCESS)
   errorMessage String?
   description  String?
   sessionId    String?
-  timestamp    DateTime          @default(now())
+  timestamp    DateTime           @default(now())
 
   @@index([userId, timestamp(sort: Desc)])
   @@index([action, timestamp(sort: Desc)])
@@ -893,37 +901,37 @@ model AuditLog {
 }
 
 model CurrencyRate {
-  id           String   @id @default(uuid())
-  baseCurrency String
+  id             String    @id @default(uuid())
+  baseCurrency   String
   targetCurrency String
-  rate         Float
-  source       String?
-  fetchedAt    DateTime @default(now())
-  expiresAt    DateTime?
-  createdAt    DateTime @default(now())
+  rate           Float
+  source         String?
+  fetchedAt      DateTime  @default(now())
+  expiresAt      DateTime?
+  createdAt      DateTime  @default(now())
 
   @@unique([baseCurrency, targetCurrency])
   @@index([baseCurrency])
 }
 
 model Settings {
-  id    String @id @default(uuid())
-  key   String @unique
-  value Json
+  id        String   @id @default(uuid())
+  key       String   @unique
+  value     Json
   updatedAt DateTime @updatedAt
 }
 
 model Counter {
-  id        String @id @default(uuid())
-  name      String @unique
+  id        String   @id @default(uuid())
+  name      String   @unique
   prefix    String?
-  sequence  Int    @default(0)
+  sequence  Int      @default(0)
   updatedAt DateTime @updatedAt
 }
 
 model FinanceLog {
   id            String   @id @default(uuid())
-  type          String   // AP_INVOICE, AR_INVOICE, PAYMENT, etc.
+  type          String // AP_INVOICE, AR_INVOICE, PAYMENT, etc.
   amount        Float
   currency      String   @default("INR")
   description   String?
@@ -939,21 +947,21 @@ model FinanceLog {
 }
 
 model Invoice {
-  id            String   @id @default(uuid())
-  invoiceNumber String   @unique
+  id            String    @id @default(uuid())
+  invoiceNumber String    @unique
   vendorId      String?
   customerId    String?
-  type          String   @default("PURCHASE") // PURCHASE or SALES
+  type          String    @default("PURCHASE") // PURCHASE or SALES
   amount        Float
-  taxAmount     Float    @default(0)
+  taxAmount     Float     @default(0)
   totalAmount   Float
-  currency      String   @default("INR")
+  currency      String    @default("INR")
   dueDate       DateTime?
-  status        String   @default("PENDING") // PENDING, PAID, OVERDUE, CANCELLED
+  status        String    @default("PENDING") // PENDING, PAID, OVERDUE, CANCELLED
   ocrData       Json?
   officeId      String?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 
   @@index([officeId, status])
   @@index([dueDate])
@@ -976,46 +984,46 @@ enum JournalStatus {
 }
 
 model GLAccount {
-  id            String         @id @default(uuid())
-  code          String         @unique  // "1000", "2100", "4000"
-  name          String                  // "Cash", "Accounts Receivable"
-  type          GLAccountType
-  parentId      String?
-  parent        GLAccount?     @relation("GLHierarchy", fields: [parentId], references: [id])
-  children      GLAccount[]    @relation("GLHierarchy")
-  description   String?
-  isActive      Boolean        @default(true)
-  balance       Float          @default(0) // running balance
-  normalSide    String         @default("DEBIT") // DEBIT or CREDIT
-  officeId      String?
-  office        Office?        @relation(fields: [officeId], references: [id])
-  journalLines  JournalEntryLine[]
-  transactions  Transaction[]
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @updatedAt
+  id             String             @id @default(uuid())
+  code           String             @unique // "1000", "2100", "4000"
+  name           String // "Cash", "Accounts Receivable"
+  type           GLAccountType
+  parentId       String?
+  parent         GLAccount?         @relation("GLHierarchy", fields: [parentId], references: [id])
+  children       GLAccount[]        @relation("GLHierarchy")
+  description    String?
+  isActive       Boolean            @default(true)
+  balance        Float              @default(0) // running balance
+  normalSide     String             @default("DEBIT") // DEBIT or CREDIT
+  officeId       String?
+  office         Office?            @relation(fields: [officeId], references: [id])
+  journalLines   JournalEntryLine[]
+  transactions   Transaction[]
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+  bankStatements BankStatement[]
 
   @@index([type])
   @@index([parentId])
   @@index([officeId])
-  bankStatements  BankStatement[]
 }
 
 model JournalEntry {
-  id            String         @id @default(uuid())
-  entryNumber   String         @unique  // "JE-2026-0001"
-  date          DateTime       @default(now())
+  id            String             @id @default(uuid())
+  entryNumber   String             @unique // "JE-2026-0001"
+  date          DateTime           @default(now())
   description   String?
-  reference     String?        // PO number, invoice ID, etc.
-  referenceType String?        // "PURCHASE_ORDER", "INVOICE", "MANUAL"
-  status        JournalStatus  @default(DRAFT)
-  totalAmount   Float          @default(0) // total of one side
+  reference     String? // PO number, invoice ID, etc.
+  referenceType String? // "PURCHASE_ORDER", "INVOICE", "MANUAL"
+  status        JournalStatus      @default(DRAFT)
+  totalAmount   Float              @default(0) // total of one side
   officeId      String?
-  office        Office?        @relation(fields: [officeId], references: [id])
+  office        Office?            @relation(fields: [officeId], references: [id])
   createdById   String?
-  createdBy     User?          @relation("JournalEntryCreator", fields: [createdById], references: [id])
+  createdBy     User?              @relation("JournalEntryCreator", fields: [createdById], references: [id])
   lines         JournalEntryLine[]
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @updatedAt
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
 
   @@index([date(sort: Desc)])
   @@index([status])
@@ -1024,17 +1032,17 @@ model JournalEntry {
 }
 
 model JournalEntryLine {
-  id              String        @id @default(uuid())
-  journalEntryId  String
-  journalEntry    JournalEntry  @relation(fields: [journalEntryId], references: [id], onDelete: Cascade)
-  accountId       String
-  account         GLAccount     @relation(fields: [accountId], references: [id])
-  debit           Float         @default(0)
-  credit          Float         @default(0)
-  description     String?
-  transactionId   String?       // link back to source transaction
-  transaction     Transaction?  @relation(fields: [transactionId], references: [id])
-  createdAt       DateTime      @default(now())
+  id             String       @id @default(uuid())
+  journalEntryId String
+  journalEntry   JournalEntry @relation(fields: [journalEntryId], references: [id], onDelete: Cascade)
+  accountId      String
+  account        GLAccount    @relation(fields: [accountId], references: [id])
+  debit          Float        @default(0)
+  credit         Float        @default(0)
+  description    String?
+  transactionId  String? // link back to source transaction
+  transaction    Transaction? @relation(fields: [transactionId], references: [id])
+  createdAt      DateTime     @default(now())
 
   @@index([journalEntryId])
   @@index([accountId])
@@ -1044,33 +1052,33 @@ model JournalEntryLine {
 // ─── AI OPERATION (Explainability Audit Trail) ──────────────────
 
 model AiOperation {
-  id                     String            @id @default(uuid())
-  userId                 String
-  user                   User              @relation("AiOperationUser", fields: [userId], references: [id])
-  sessionId              String?
-  intent                 AiIntent
-  inputSummary           String?
-  agentsUsed             String[]          @default([])
-  planSteps              Json?             // [{ step, action, status, durationMs }]
-  anomaliesDetected      Json?             // [{ field, zScore, value, threshold, message }]
-  confidenceScore        Float?
-  selfConsistencyVotes   Json?             // [{ voteIndex, decision, confidence }]
-  rollbackEvents         Json?             // [{ step, reason, rolledBackAt }]
-  humanApprovalRequired  Boolean           @default(false)
-  humanApprovalById      String?
-  humanApprovalBy        User?             @relation("AiOperationApprover", fields: [humanApprovalById], references: [id])
-  humanApprovalAt        DateTime?
-  humanApprovalDecision  String?           // approved, rejected, modified
-  totalDurationMs        Int?
-  relatedEntityType      String?
-  relatedEntityId        String?
-  explanation            Json?
-  digitalTwinPreview     Json?
-  status                 AiOperationStatus @default(AI_PENDING)
-  officeId               String?
-  office                 Office?           @relation(fields: [officeId], references: [id])
-  createdAt              DateTime          @default(now())
-  updatedAt              DateTime          @updatedAt
+  id                    String            @id @default(uuid())
+  userId                String
+  user                  User              @relation("AiOperationUser", fields: [userId], references: [id])
+  sessionId             String?
+  intent                AiIntent
+  inputSummary          String?
+  agentsUsed            String[]          @default([])
+  planSteps             Json? // [{ step, action, status, durationMs }]
+  anomaliesDetected     Json? // [{ field, zScore, value, threshold, message }]
+  confidenceScore       Float?
+  selfConsistencyVotes  Json? // [{ voteIndex, decision, confidence }]
+  rollbackEvents        Json? // [{ step, reason, rolledBackAt }]
+  humanApprovalRequired Boolean           @default(false)
+  humanApprovalById     String?
+  humanApprovalBy       User?             @relation("AiOperationApprover", fields: [humanApprovalById], references: [id])
+  humanApprovalAt       DateTime?
+  humanApprovalDecision String? // approved, rejected, modified
+  totalDurationMs       Int?
+  relatedEntityType     String?
+  relatedEntityId       String?
+  explanation           Json?
+  digitalTwinPreview    Json?
+  status                AiOperationStatus @default(AI_PENDING)
+  officeId              String?
+  office                Office?           @relation(fields: [officeId], references: [id])
+  createdAt             DateTime          @default(now())
+  updatedAt             DateTime          @updatedAt
 
   @@index([intent, createdAt(sort: Desc)])
   @@index([relatedEntityType, relatedEntityId])
@@ -1082,25 +1090,25 @@ model AiOperation {
 // ─── PREVENTIVE MAINTENANCE ─────────────────────────────────────
 
 model PreventiveSchedule {
-  id              String            @id @default(uuid())
-  name            String
-  assetId         String?
-  asset           Asset?            @relation(fields: [assetId], references: [id])
-  assetCategory   AssetCategory?
-  officeId        String
-  office          Office            @relation(fields: [officeId], references: [id])
-  frequency       ScheduleFrequency
-  intervalDays    Int?              // For CUSTOM frequency
-  description     String?
-  checklist       Json?             // [{ item, required }]
-  priority        TicketPriority    @default(MEDIUM)
-  estimatedCost   Float?
-  assignedToId    String?
-  lastExecuted    DateTime?
-  nextDue         DateTime
-  isActive        Boolean           @default(true)
-  createdAt       DateTime          @default(now())
-  updatedAt       DateTime          @updatedAt
+  id               String              @id @default(uuid())
+  name             String
+  assetId          String?
+  asset            Asset?              @relation(fields: [assetId], references: [id])
+  assetCategory    AssetCategory?
+  officeId         String
+  office           Office              @relation(fields: [officeId], references: [id])
+  frequency        ScheduleFrequency
+  intervalDays     Int? // For CUSTOM frequency
+  description      String?
+  checklist        Json? // [{ item, required }]
+  priority         TicketPriority      @default(MEDIUM)
+  estimatedCost    Float?
+  assignedToId     String?
+  lastExecuted     DateTime?
+  nextDue          DateTime
+  isActive         Boolean             @default(true)
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
   // Relations
   generatedTickets MaintenanceTicket[]
 
@@ -1115,9 +1123,9 @@ model SLAPolicy {
   id                  String         @id @default(uuid())
   name                String
   priority            TicketPriority
-  responseTimeHours   Int            // Max hours to first response
-  resolutionTimeHours Int            // Max hours to resolution
-  escalationLevels    Json?          // [{ afterHours, notifyRole, notifyUserId }]
+  responseTimeHours   Int // Max hours to first response
+  resolutionTimeHours Int // Max hours to resolution
+  escalationLevels    Json? // [{ afterHours, notifyRole, notifyUserId }]
   officeId            String?
   office              Office?        @relation(fields: [officeId], references: [id])
   isDefault           Boolean        @default(false)
@@ -1131,16 +1139,16 @@ model SLAPolicy {
 // ─── STOCKTAKE / CYCLE COUNTING ─────────────────────────────────
 
 model Stocktake {
-  id          String   @id @default(uuid())
+  id          String          @id @default(uuid())
   officeId    String
-  office      Office   @relation(fields: [officeId], references: [id])
-  status      String   @default("DRAFT") // DRAFT, IN_PROGRESS, COMPLETED, CANCELLED
+  office      Office          @relation(fields: [officeId], references: [id])
+  status      String          @default("DRAFT") // DRAFT, IN_PROGRESS, COMPLETED, CANCELLED
   startedAt   DateTime?
   completedAt DateTime?
   createdById String
   notes       String?
   items       StocktakeItem[]
-  createdAt   DateTime @default(now())
+  createdAt   DateTime        @default(now())
 
   @@index([officeId, status])
 }
@@ -1163,73 +1171,77 @@ model StocktakeItem {
 
 model TaxRate {
   id        String   @id @default(uuid())
-  name      String   // "GST 18%", "IGST 12%", "VAT 5%"
+  name      String // "GST 18%", "IGST 12%", "VAT 5%"
   code      String   @unique // "GST18", "IGST12"
-  rate      Float    // 18.0, 12.0
-  type      String   // GST, IGST, SGST, CGST, VAT, CUSTOM
+  rate      Float // 18.0, 12.0
+  type      String // GST, IGST, SGST, CGST, VAT, CUSTOM
   isDefault Boolean  @default(false)
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
 }
 
 model BankStatement {
-  id            String   @id @default(uuid())
+  id            String      @id @default(uuid())
   accountId     String
-  account       GLAccount @relation(fields: [accountId], references: [id])
+  account       GLAccount   @relation(fields: [accountId], references: [id])
   bankName      String
   accountNumber String
   statementDate DateTime
   entries       BankEntry[]
   uploadedById  String
   officeId      String
-  status        String   @default("PENDING") // PENDING, RECONCILED
-  createdAt     DateTime @default(now())
+  status        String      @default("PENDING") // PENDING, RECONCILED
+  createdAt     DateTime    @default(now())
+
   @@index([officeId, status])
 }
 
 model BankEntry {
-  id                   String   @id @default(uuid())
+  id                   String        @id @default(uuid())
   statementId          String
   statement            BankStatement @relation(fields: [statementId], references: [id], onDelete: Cascade)
   date                 DateTime
   description          String
   amount               Float
-  type                 String   // DEBIT, CREDIT
+  type                 String // DEBIT, CREDIT
   reference            String?
   matchedTransactionId String?
-  isReconciled         Boolean  @default(false)
+  isReconciled         Boolean       @default(false)
+
   @@index([statementId])
 }
 
 model ExpenseClaim {
-  id            String   @id @default(uuid())
-  claimNumber   String   @unique
-  employeeId    String
-  employee      User     @relation("ExpenseEmployee", fields: [employeeId], references: [id])
-  officeId      String
-  status        String   @default("DRAFT") // DRAFT, SUBMITTED, APPROVED, REJECTED, PAID
-  totalAmount   Float    @default(0)
-  currency      String   @default("INR")
-  description   String?
-  items         ExpenseItem[]
-  approvedById  String?
-  approvalDate  DateTime?
-  paidDate      DateTime?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  id           String        @id @default(uuid())
+  claimNumber  String        @unique
+  employeeId   String
+  employee     User          @relation("ExpenseEmployee", fields: [employeeId], references: [id])
+  officeId     String
+  status       String        @default("DRAFT") // DRAFT, SUBMITTED, APPROVED, REJECTED, PAID
+  totalAmount  Float         @default(0)
+  currency     String        @default("INR")
+  description  String?
+  items        ExpenseItem[]
+  approvedById String?
+  approvalDate DateTime?
+  paidDate     DateTime?
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
   @@index([employeeId, status])
   @@index([officeId])
 }
 
 model ExpenseItem {
-  id          String   @id @default(uuid())
+  id          String       @id @default(uuid())
   claimId     String
   claim       ExpenseClaim @relation(fields: [claimId], references: [id], onDelete: Cascade)
   date        DateTime
-  category    String   // TRAVEL, FOOD, ACCOMMODATION, SUPPLIES, OTHER
+  category    String // TRAVEL, FOOD, ACCOMMODATION, SUPPLIES, OTHER
   description String
   amount      Float
-  receipt     String?  // File URL
+  receipt     String? // File URL
+
   @@index([claimId])
 }
 
@@ -1239,7 +1251,7 @@ model VendorContract {
   vendorId       String
   vendor         Vendor   @relation(fields: [vendorId], references: [id])
   officeId       String
-  type           String   // SERVICE, SUPPLY, MAINTENANCE, LEASE
+  type           String // SERVICE, SUPPLY, MAINTENANCE, LEASE
   startDate      DateTime
   endDate        DateTime
   value          Float?
@@ -1252,6 +1264,7 @@ model VendorContract {
   reminderDays   Int      @default(30)
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
+
   @@index([vendorId])
   @@index([status, endDate])
 }
@@ -1259,12 +1272,12 @@ model VendorContract {
 // ─── PURCHASE REQUISITIONS ──────────────────────────────────────
 
 model PurchaseRequisition {
-  id              String   @id @default(uuid())
-  prNumber        String   @unique
+  id              String    @id @default(uuid())
+  prNumber        String    @unique
   requestedById   String
   officeId        String
-  status          String   @default("DRAFT") // DRAFT, SUBMITTED, APPROVED, REJECTED, CONVERTED
-  priority        String   @default("MEDIUM")
+  status          String    @default("DRAFT") // DRAFT, SUBMITTED, APPROVED, REJECTED, CONVERTED
+  priority        String    @default("MEDIUM")
   justification   String?
   requiredByDate  DateTime?
   approvedById    String?
@@ -1272,23 +1285,23 @@ model PurchaseRequisition {
   convertedToPOId String?
   items           PRItem[]
   totalEstimate   Float?
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
 
   @@index([officeId, status])
   @@index([requestedById])
 }
 
 model PRItem {
-  id              String              @id @default(uuid())
-  requisitionId   String
-  requisition     PurchaseRequisition @relation(fields: [requisitionId], references: [id], onDelete: Cascade)
-  inventoryId     String?
-  description     String
-  quantity        Int
-  estimatedPrice  Float?
+  id                String              @id @default(uuid())
+  requisitionId     String
+  requisition       PurchaseRequisition @relation(fields: [requisitionId], references: [id], onDelete: Cascade)
+  inventoryId       String?
+  description       String
+  quantity          Int
+  estimatedPrice    Float?
   suggestedVendorId String?
-  notes           String?
+  notes             String?
 
   @@index([requisitionId])
 }
@@ -1296,46 +1309,46 @@ model PRItem {
 // ─── RFQ & VENDOR QUOTATIONS ────────────────────────────────────
 
 model RFQ {
-  id              String   @id @default(uuid())
-  rfqNumber       String   @unique
+  id              String            @id @default(uuid())
+  rfqNumber       String            @unique
   title           String
   description     String?
   officeId        String
   requiredByDate  DateTime?
-  status          String   @default("DRAFT") // DRAFT, SENT, CLOSED, AWARDED
+  status          String            @default("DRAFT") // DRAFT, SENT, CLOSED, AWARDED
   items           RFQItem[]
   quotations      VendorQuotation[]
   awardedVendorId String?
   createdById     String
-  createdAt       DateTime @default(now())
+  createdAt       DateTime          @default(now())
 
   @@index([status])
 }
 
 model RFQItem {
-  id          String @id @default(uuid())
+  id          String  @id @default(uuid())
   rfqId       String
-  rfq         RFQ    @relation(fields: [rfqId], references: [id], onDelete: Cascade)
+  rfq         RFQ     @relation(fields: [rfqId], references: [id], onDelete: Cascade)
   description String
   quantity    Int
-  unit        String @default("pieces")
+  unit        String  @default("pieces")
   specs       String?
 
   @@index([rfqId])
 }
 
 model VendorQuotation {
-  id          String   @id @default(uuid())
+  id          String    @id @default(uuid())
   rfqId       String
-  rfq         RFQ      @relation(fields: [rfqId], references: [id], onDelete: Cascade)
+  rfq         RFQ       @relation(fields: [rfqId], references: [id], onDelete: Cascade)
   vendorId    String
   totalAmount Float
-  currency    String   @default("INR")
+  currency    String    @default("INR")
   validUntil  DateTime?
-  items       Json?    // [{ rfqItemId, unitPrice, totalPrice, notes }]
+  items       Json? // [{ rfqItemId, unitPrice, totalPrice, notes }]
   attachments String[]
-  status      String   @default("SUBMITTED") // SUBMITTED, ACCEPTED, REJECTED
-  submittedAt DateTime @default(now())
+  status      String    @default("SUBMITTED") // SUBMITTED, ACCEPTED, REJECTED
+  submittedAt DateTime  @default(now())
 
   @@index([rfqId, vendorId])
 }
@@ -1379,7 +1392,7 @@ model POAmendment {
   purchaseOrderId String
   purchaseOrder   PurchaseOrder @relation(fields: [purchaseOrderId], references: [id])
   amendmentNumber Int
-  changes         Json          // { field, oldValue, newValue }
+  changes         Json // { field, oldValue, newValue }
   reason          String?
   amendedById     String
   createdAt       DateTime      @default(now())
