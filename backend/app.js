@@ -161,6 +161,7 @@ app.use('/api/inventory-ext', inventoryExtRoutes);
 app.use('/api/procurement-ext', procurementExtRoutes);
 app.use('/api/finance-ext', financeExtRoutes);
 app.use('/api/users', userRoutes);
+app.use('/api/search', require('./src/routes/searchRoutes'));
 
 // Serve uploaded files (local storage — dev mode)
 const path = require('path');
