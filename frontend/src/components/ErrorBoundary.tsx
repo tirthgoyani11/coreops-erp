@@ -30,16 +30,32 @@ export class ErrorBoundary extends Component<Props, State> {
 
     public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
         this.setState({ errorInfo });
+        
+        // Auto-fix ChunkLoadError from Vite deployments
+        if (
+            error.message.includes('Failed to fetch dynamically imported module') ||
+            error.message.includes('Importing a module script failed')
+        ) {
+            const RELOAD_KEY = 'vite_chunk_retry';
+            if (!sessionStorage.getItem(RELOAD_KEY)) {
+                sessionStorage.setItem(RELOAD_KEY, 'true');
+                console.warn('[ErrorBoundary] Detected stale chunk. Auto-reloading to fetch new index.html...');
+                window.location.reload();
+                return;
+            }
+        }
+
         // Log to console (future: send to monitoring service)
         console.error('[ErrorBoundary] Caught error:', error, errorInfo);
     }
 
-
     private handleReload = () => {
+        sessionStorage.removeItem('vite_chunk_retry');
         window.location.reload();
     };
 
     private handleGoHome = () => {
+        sessionStorage.removeItem('vite_chunk_retry');
         window.location.href = '/';
     };
 
