@@ -123,20 +123,17 @@ api.interceptors.response.use(
                             refreshSubscribers = [];
                             setAccessToken(null);
 
-                            // Refresh failed — redirect to login
-                            if (!window.location.pathname.includes('/login')) {
-                                window.location.href = '/login';
-                            }
+                            // Refresh failed — clear auth and reject
                             return Promise.reject(refreshError);
                         }
                     }
 
-                    // Non-expired 401 or refresh failed — redirect to login
-                    if (!isLoginUrl && !isRefreshUrl) {
-                        setAccessToken(null);
-                        if (!window.location.pathname.includes('/login')) {
-                            window.location.href = '/login';
-                        }
+                    // Non-expired 401 or refresh failed
+                    setAccessToken(null);
+                    // Only forcefully redirect if it's a normal API call failing with 401
+                    // Do NOT redirect if it was checkAuth (/auth/refresh) or login
+                    if (!isLoginUrl && !isRefreshUrl && !window.location.pathname.includes('/login')) {
+                        window.location.href = '/login';
                     }
                     break;
                 }

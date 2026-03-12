@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { StatCard } from '../../components/dashboard/StatCard';
 import { DashboardChart } from '../../components/dashboard/DashboardChart';
+import { RecentActivity } from '../../components/dashboard/RecentActivity';
 import api from '../../lib/api';
 import { formatCurrency } from '../../lib/utils';
 
