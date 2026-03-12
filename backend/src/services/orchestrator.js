@@ -404,6 +404,45 @@ async function processCommand(userMessage, context = {}) {
     const actions = [];
 
     try {
+        // ── Step 0: Greeting short-circuit (NO LLM) ──────────────
+        // Short, friendly replies for pure greetings/small-talk.
+        // Never generates huge capability lists for simple hi/hello.
+        const GREETINGS = /^\s*(hi+|hello+|hey+|howdy|sup|yo|namaste|good\s*(morning|afternoon|evening|night)|how are you|how r u|how's it going|what's up|wassup|greetings|good day|hiya)\s*[!?.]?\s*$/i;
+        const SMALL_TALK = /^\s*(what can you do|what do you do|help|i need help|tell me more|okay|ok|sure|yes|no|thanks|thank you|great|cool|nice|awesome|got it|understood)\s*[!?.]?\s*$/i;
+
+        const trimmed = userMessage.trim();
+        if (GREETINGS.test(trimmed)) {
+            const hour = new Date().getHours();
+            const timeGreet = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
+            const replies = [
+                `${timeGreet}! 👋 I'm OpsPilot. What would you like to do today? Try **"show me the dashboard"** or type \`/\` for quick commands.`,
+                `Hey there! 😊 Ready to help with your ERP. What do you need — assets, POs, inventory, or something else?`,
+                `Hi! 🚀 Ask me anything about your ERP data, or type \`/briefing\` for today's urgent items.`,
+            ];
+            const response = replies[Math.floor(Math.random() * replies.length)];
+            return {
+                response,
+                intent: 'GENERAL',
+                confidence: 1,
+                modelsUsed: [{ model: 'local-greeting', source: 'local' }],
+                actions: [],
+                durationMs: Date.now() - startTime,
+                suggestions: ['⚡ Give me a briefing', '📊 Dashboard', '🔧 Open tickets'],
+            };
+        }
+
+        if (SMALL_TALK.test(trimmed)) {
+            return {
+                response: `Got it! 😊 What would you like to do? Type \`/\` to see all commands, or just tell me what you need.`,
+                intent: 'GENERAL',
+                confidence: 1,
+                modelsUsed: [{ model: 'local-chat', source: 'local' }],
+                actions: [],
+                durationMs: Date.now() - startTime,
+                suggestions: ['⚡ Dashboard', '📦 Check inventory', '📋 Pending POs'],
+            };
+        }
+
         // ── Step 1: Local keyword classification (sub-1ms) ──
         let classification = classifyLocally(userMessage);
         let entities = {};

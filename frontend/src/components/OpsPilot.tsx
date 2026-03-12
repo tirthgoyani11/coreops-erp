@@ -113,7 +113,6 @@ export function OpsPilot() {
     const [isListening, setIsListening] = useState(false);
     const [slashOpen, setSlashOpen] = useState(false);
     const [slashFilter, setSlashFilter] = useState('');
-    const [briefingDone, setBriefingDone] = useState(false);
     const [scanningImage, setScanningImage] = useState(false);
 
     const endRef = useRef<HTMLDivElement>(null);
@@ -165,10 +164,11 @@ export function OpsPilot() {
         return () => { document.body.style.overflow = ''; };
     }, [isOpen]);
 
-    // Auto-briefing on first open
+    // Auto-briefing — fires ONCE per browser session (sessionStorage)
     useEffect(() => {
-        if (isOpen && !briefingDone && messages.length <= 1) {
-            setBriefingDone(true);
+        const alreadyBriefed = sessionStorage.getItem('opspilot_briefed');
+        if (isOpen && !alreadyBriefed && messages.length <= 1) {
+            sessionStorage.setItem('opspilot_briefed', '1');
             setTimeout(() => sendMessage('Give me a smart ERP briefing — list all urgent items including critical tickets, pending POs, and low stock'), 800);
         }
     }, [isOpen]);
