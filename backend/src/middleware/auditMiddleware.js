@@ -29,7 +29,7 @@ const audit = (action, resourceType) => {
                             resourceType,
                             resourceId,
                             status: 'SUCCESS',
-                            ipAddress: req.ip || req.connection?.remoteAddress,
+                            ipAddress: (req.headers['x-forwarded-for'] || '').split(',')[0].trim() || req.ip || req.connection?.remoteAddress,
                             userAgent: req.headers['user-agent'],
                         },
                         include: {
