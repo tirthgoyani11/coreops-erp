@@ -48,9 +48,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({ isOpen, onClose 
         
         // AI Shortcut
         { id: 'action-ai', type: 'Action', name: 'Ask OpsPilot', icon: Sparkles, color: 'text-[var(--primary)]', action: () => {
-            // Find the OpsPilot button and click it to toggle
-            const btn = document.querySelector('[aria-label="Toggle OpsPilot"]');
-            if (btn) (btn as HTMLElement).click();
+            window.dispatchEvent(new CustomEvent('toggle-opspilot'));
         }}
     ];
 

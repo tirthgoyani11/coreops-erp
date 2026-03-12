@@ -232,13 +232,10 @@ export const Header = memo(function Header() {
 // Helper component to bind Cmd+/ to OpsPilot without causing prop drilling into MainLayout
 const OpsPilotShortcutListener = () => {
     useShortcut(['ctrl', '/'], () => {
-        // Find the OpsPilot button by label and click it
-        const btn = document.querySelector('[aria-label="Toggle OpsPilot"]');
-        if (btn) (btn as HTMLElement).click();
+        window.dispatchEvent(new CustomEvent('toggle-opspilot'));
     });
     useShortcut(['cmd', '/'], () => {
-        const btn = document.querySelector('[aria-label="Toggle OpsPilot"]');
-        if (btn) (btn as HTMLElement).click();
+        window.dispatchEvent(new CustomEvent('toggle-opspilot'));
     });
     return null;
 };

@@ -4,6 +4,7 @@ import { MainLayout } from './components/layout/MainLayout';
 import { RoleGuard } from './components/layout/RoleGuard';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { CommandPalette } from './components/ui/CommandPalette';
+import { GlobalShortcutsModal } from './components/ui/GlobalShortcutsModal';
 import { Toaster } from './components/ui/Toaster';
 import { useShortcut } from './hooks/useShortcuts';
 import { useAuthStore } from './stores/authStore';
@@ -115,6 +116,7 @@ function App() {
     <ErrorBoundary>
       <BrowserRouter>
         <Toaster />
+        <GlobalShortcutsModal />
         <CommandPalette isOpen={isCommandPaletteOpen} onClose={() => setIsCommandPaletteOpen(false)} />
         <Suspense fallback={<PageLoader />}>
           <Routes>

@@ -120,6 +120,13 @@ export function OpsPilot() {
     const recognitionRef = useRef<any>(null);
     const imageInputRef = useRef<HTMLInputElement>(null);
 
+    // Global toggle event listener
+    useEffect(() => {
+        const handleToggle = () => setIsOpen(prev => !prev);
+        window.addEventListener('toggle-opspilot', handleToggle);
+        return () => window.removeEventListener('toggle-opspilot', handleToggle);
+    }, []);
+
     // ── Persist chat in localStorage ──────────────────────────────
     useEffect(() => {
         try {
