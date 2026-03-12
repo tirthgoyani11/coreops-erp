@@ -109,9 +109,14 @@ api.interceptors.response.use(
                         isRefreshing = true;
 
                         try {
-                            const { data } = await api.post('/auth/refresh');
+                            const savedToken = localStorage.getItem('refreshToken');
+                            const payload = savedToken ? { refreshToken: savedToken } : {};
+                            const { data } = await api.post('/auth/refresh', payload);
                             const newToken = data.token;
                             setAccessToken(newToken);
+                            if (data.refreshToken) {
+                                localStorage.setItem('refreshToken', data.refreshToken);
+                            }
                             isRefreshing = false;
                             onTokenRefreshed(newToken);
 

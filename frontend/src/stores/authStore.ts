@@ -47,6 +47,9 @@ export const useAuthStore = create<AuthState>()(
 
                 if (data.success) {
                     setAccessToken(data.token);
+                    if (data.refreshToken) {
+                        localStorage.setItem('refreshToken', data.refreshToken);
+                    }
                     set({
                         user: data.user,
                         token: data.token,
@@ -71,6 +74,7 @@ export const useAuthStore = create<AuthState>()(
             } catch {
                 // Logout should succeed even if API fails
             }
+            localStorage.removeItem('refreshToken');
             setAccessToken(null);
             set({
                 user: null,
@@ -86,9 +90,14 @@ export const useAuthStore = create<AuthState>()(
 
             authRefreshPromise = (async () => {
                 try {
-                    const { data } = await api.post('/auth/refresh');
+                    const savedToken = localStorage.getItem('refreshToken');
+                    const payload = savedToken ? { refreshToken: savedToken } : {};
+                    const { data } = await api.post('/auth/refresh', payload);
                     if (data.success && data.token) {
                         setAccessToken(data.token);
+                        if (data.refreshToken) {
+                            localStorage.setItem('refreshToken', data.refreshToken);
+                        }
                         set({
                             user: data.user,
                             token: data.token,

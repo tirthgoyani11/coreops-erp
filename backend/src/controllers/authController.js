@@ -171,6 +171,7 @@ exports.login = asyncHandler(async (req, res, next) => {
         success: true,
         message: 'Login successful',
         token: accessToken,
+        refreshToken: refreshTokenValue,
         user: {
             id: user.id,
             name: user.name,
@@ -188,7 +189,8 @@ exports.login = asyncHandler(async (req, res, next) => {
  * @access  Public (cookie required)
  */
 exports.refreshToken = asyncHandler(async (req, res, next) => {
-    const incomingToken = req.cookies?.refreshToken;
+    // Check body first (fallback for strict cross-origin cookie blockers), then cookies
+    const incomingToken = req.body?.refreshToken || req.cookies?.refreshToken;
 
     if (!incomingToken) {
         return next(new AppError('Refresh token required', 401));
@@ -241,6 +243,7 @@ exports.refreshToken = asyncHandler(async (req, res, next) => {
     res.status(200).json({
         success: true,
         token: accessToken,
+        refreshToken: newTokenValue,
         user: {
             id: user.id,
             name: user.name,
