@@ -7,7 +7,7 @@ const rateLimit = require('express-rate-limit');
 // General API rate limiter
 const generalLimiter = rateLimit({
     windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 100, // 100 requests per windowMs
+    max: 500, // Increased to 500 for SPA data fetching and AI
     message: {
         success: false,
         message: 'Too many requests, please try again later.',
@@ -42,7 +42,7 @@ const seedLimiter = rateLimit({
 // Write operation limiter — prevents bulk abuse on POST/PUT/DELETE
 const writeLimiter = rateLimit({
     windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 60, // 60 write operations per 15 minutes
+    max: 300, // Increased to 300 write operations per 15 minutes
     message: {
         success: false,
         message: 'Too many write operations. Please slow down.',
