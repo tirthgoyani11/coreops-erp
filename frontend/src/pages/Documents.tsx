@@ -119,16 +119,17 @@ export default function Documents() {
                                 </div>
                                 <div className="opacity-0 group-hover:opacity-100 transition-opacity flex gap-2">
                                     <a
-                                        href={`/api/documents/${doc.id}/download`}
+                                        href={doc.url}
                                         target="_blank"
                                         rel="noopener noreferrer"
                                         className="p-1.5 hover:bg-[var(--muted)] rounded-md text-blue-500"
-                                        title="Download"
+                                        title="Preview / Download"
+                                        onClick={(e) => e.stopPropagation()}
                                     >
                                         <Download size={16} />
                                     </a>
                                     <button
-                                        onClick={() => handleDelete(doc.id)}
+                                        onClick={(e) => { e.stopPropagation(); handleDelete(doc.id); }}
                                         className="p-1.5 hover:bg-[var(--muted)] rounded-md text-red-500"
                                         title="Delete"
                                     >
