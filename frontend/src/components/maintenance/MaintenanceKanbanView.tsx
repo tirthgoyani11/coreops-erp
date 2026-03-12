@@ -20,9 +20,12 @@ interface MaintenanceKanbanViewProps {
 
 const COLUMNS = [
     { id: 'REQUESTED', title: 'Requested', color: 'border-blue-500' },
+    { id: 'APPROVED', title: 'Approved', color: 'border-teal-500' },
     { id: 'IN_PROGRESS', title: 'In Progress', color: 'border-yellow-500' },
     { id: 'PENDING_PARTS', title: 'Pending Parts', color: 'border-orange-500' },
     { id: 'COMPLETED', title: 'Completed', color: 'border-green-500' },
+    { id: 'REJECTED', title: 'Rejected', color: 'border-red-500' },
+    { id: 'CLOSED', title: 'Closed', color: 'border-gray-500' },
 ];
 
 export function MaintenanceKanbanView({ tickets, onRefresh }: MaintenanceKanbanViewProps) {

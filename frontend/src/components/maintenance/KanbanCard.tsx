@@ -54,8 +54,21 @@ export function KanbanCard({ ticket, isOverlay }: KanbanCardProps) {
 
                 <div className="flex items-center justify-between text-xs text-gray-400 mt-2 border-t pt-2 dark:border-gray-800">
                     <div className="flex items-center">
-                        <User className="w-3 h-3 mr-1" />
-                        {ticket.assignedTo ? ticket.assignedTo.name : 'Unassigned'}
+                        {ticket.assignedTo ? (
+                            <>
+                                <div className="w-5 h-5 rounded-full bg-blue-100 dark:bg-blue-900/40 flex items-center justify-center text-[9px] font-bold text-blue-600 dark:text-blue-400 mr-1.5 shadow-sm">
+                                    {ticket.assignedTo.name.split(' ').map((n: string) => n[0]).join('').substring(0, 2).toUpperCase()}
+                                </div>
+                                <span className="truncate max-w-[120px]">{ticket.assignedTo.name}</span>
+                            </>
+                        ) : (
+                            <>
+                                <div className="w-5 h-5 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center border border-dashed border-gray-300 dark:border-gray-600 mr-1.5">
+                                    <User className="w-3 h-3 text-gray-400" />
+                                </div>
+                                <span>Unassigned</span>
+                            </>
+                        )}
                     </div>
                 </div>
             </Card>
