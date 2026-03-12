@@ -831,25 +831,27 @@ model Budget {
 }
 
 model Document {
-  id           String   @id @default(uuid())
-  name         String
-  originalName String?
-  mimeType     String?
-  size         Int?
-  path         String
-  category     String?
-  tags         String[] @default([])
-  officeId     String?
-  uploadedById String?
-  description  String?
-  ocrText      String?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-  office       Office?  @relation(fields: [officeId], references: [id])
-  user         User?    @relation(fields: [userId], references: [id])
-  userId       String?
-  asset        Asset?   @relation(fields: [assetId], references: [id])
-  assetId      String?
+  id             String   @id @default(uuid())
+  name           String
+  originalName   String?
+  mimeType       String?
+  size           Int?
+  url            String   @map("path")
+  publicId       String?
+  category       String?  @default("GENERAL")
+  tags           String[] @default([])
+  description    String?
+  isArchived     Boolean  @default(false)
+  officeId       String?
+  office         Office?  @relation(fields: [officeId], references: [id])
+  uploadedById   String?
+  uploadedBy     User?    @relation(fields: [uploadedById], references: [id])
+  linkedAssetId  String?
+  linkedAsset    Asset?   @relation(fields: [linkedAssetId], references: [id])
+  linkedTicketId String?
+  ocrText        String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
   @@index([officeId, category])
   @@index([createdAt(sort: Desc)])
