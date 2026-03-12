@@ -1509,6 +1509,7 @@ async function viewProfile(entities, context) {
     msg += `| **Office** | ${user.office?.name || '—'} (${user.office?.code || '—'}) |\n`;
     msg += `| **Joined** | ${new Date(user.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })} |\n`;
 
+    return { success: true, message: msg };
 }
 
 // ── Close Maintenance Ticket ──────────────────────────────────────
