@@ -196,9 +196,27 @@ export function OpsPilot() {
         rec.onend = () => setIsListening(false);
         rec.onerror = () => setIsListening(false);
         rec.onresult = (e: any) => {
-            const transcript = e.results[0][0].transcript;
-            setInput(transcript);
-            setTimeout(() => sendMessage(transcript), 300);
+            let finalTranscript = '';
+            let interimTranscript = '';
+            
+            for (let i = e.resultIndex; i < e.results.length; ++i) {
+                if (e.results[i].isFinal) {
+                    finalTranscript += e.results[i][0].transcript;
+                } else {
+                    interimTranscript += e.results[i][0].transcript;
+                }
+            }
+            
+            // Show what they are saying in the input box live
+            if (interimTranscript) {
+                setInput(interimTranscript);
+            }
+            
+            // Only SEND to AI when they are completely finished speaking that sentence
+            if (finalTranscript) {
+                setInput(finalTranscript);
+                sendMessage(finalTranscript);
+            }
         };
 
         recognitionRef.current = rec;
