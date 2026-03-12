@@ -29,7 +29,7 @@ export default function DocumentViewer() {
     if (isLoading) return <div className="h-screen flex items-center justify-center"><Loader2 className="animate-spin" /></div>;
     if (!doc) return null;
 
-    const downloadUrl = `${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/documents/${id}/download`;
+    const downloadUrl = doc.url;
 
     return (
         <div className="h-[calc(100vh-64px)] flex flex-col md:flex-row">
@@ -100,7 +100,7 @@ export default function DocumentViewer() {
             <div className="flex-1 bg-[var(--muted)]/30 flex items-center justify-center p-4">
                 {doc.mimeType === 'application/pdf' ? (
                     <iframe src={downloadUrl} className="w-full h-full rounded-lg shadow-sm border border-[var(--border)]" title="PDF Preview" />
-                ) : doc.mimeType.startsWith('image/') ? (
+                ) : doc.mimeType?.startsWith('image/') ? (
                     <img src={downloadUrl} alt={doc.name} className="max-w-full max-h-full rounded-lg shadow-sm object-contain" />
                 ) : (
                     <div className="text-center p-12 bg-[var(--card)] rounded-xl border border-[var(--border)] shadow-sm">
