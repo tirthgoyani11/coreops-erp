@@ -337,7 +337,7 @@ export function OpsPilot() {
             suggestions: ['⚡ Dashboard', '📦 Inventory', '🔧 Open tickets'],
         }]);
         localStorage.removeItem('opspilot_chat');
-        setBriefingDone(true);
+        sessionStorage.removeItem('opspilot_briefed'); // allow re-briefing after clear
     };
 
     const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
