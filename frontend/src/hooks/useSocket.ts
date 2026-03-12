@@ -55,10 +55,11 @@ export const useSocket = () => {
                 const audio = new Audio('/notification.mp3');
                 audio.play().catch(() => { }); // Catch error if user hasn't interacted
 
-                // Show toast
                 const firstAction = Array.isArray(data.actions) && data.actions.length > 0 ? data.actions[0] : null;
-                toast(data.title, {
-                    description: data.message,
+                const title = data.title || data.type || 'New Notification';
+                const message = data.message || 'You have a new update in the system.';
+                toast(title, {
+                    description: message,
                     action: firstAction?.url ? {
                         label: firstAction.label || 'View',
                         onClick: () => window.location.href = firstAction.url

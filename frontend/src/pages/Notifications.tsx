@@ -221,14 +221,14 @@ export function Notifications() {
                                     <div className="flex-1 min-w-0">
                                         <div className="flex items-start justify-between gap-2">
                                             <h4 className={`font-semibold ${notification.isRead ? 'text-[var(--text-secondary)]' : 'text-[var(--text-primary)]'}`}>
-                                                {notification.title}
+                                                {notification.title || notification.type || 'System Event'}
                                             </h4>
                                             <span className="text-xs text-[var(--text-secondary)] whitespace-nowrap">
-                                                {formatTime(notification.createdAt)}
+                                                {formatTime(notification.createdAt || notification.sentAt || new Date().toISOString())}
                                             </span>
                                         </div>
                                         <p className="text-sm text-[var(--text-secondary)] mt-1 line-clamp-2">
-                                            {notification.message}
+                                            {notification.message || 'No details provided.'}
                                         </p>
                                         {notification.actions && Array.isArray(notification.actions) && notification.actions.length > 0 && (
                                             <a

@@ -153,7 +153,7 @@ exports.processInvoice = asyncHandler(async (req, res, next) => {
                 originalName: req.file.originalname,
                 mimeType: req.file.mimetype,
                 size: req.file.size,
-                url: fileUrl,
+                path: fileUrl,
                 category: 'INVOICE',
                 tags: ['invoice', 'ocr', extractedData.vendorName?.toLowerCase().split(' ')[0] || 'vendor'].filter(Boolean),
                 description: extractedData.vendorName
