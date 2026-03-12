@@ -8,6 +8,31 @@
 const prisma = require('../config/prisma');
 const logger = require('../utils/logger');
 
+// ─── Secret Field Sanitizer ──────────────────────────────────────
+// Strips sensitive fields from any object/array before showing to AI/user.
+// This lets handlers use `findUnique()` WITHOUT a `select`, grabbing all
+// fields, then calling sanitize() to remove secrets. No more schema errors!
+const SENSITIVE_KEYS = new Set([
+    'password', 'passwordHash', 'refreshToken', 'refreshTokens',
+    'passwordResetToken', 'passwordResetExpires',
+    'inviteToken', 'inviteTokenExpires',
+    'passwordChangedAt', 'failedLoginAttempts', 'lockUntil',
+    'apiKey', 'secretKey', 'accessToken', 'privateKey',
+]);
+
+function sanitize(data) {
+    if (!data) return data;
+    if (Array.isArray(data)) return data.map(sanitize);
+    if (typeof data !== 'object') return data;
+    const clean = {};
+    for (const [key, val] of Object.entries(data)) {
+        if (SENSITIVE_KEYS.has(key)) continue;
+        clean[key] = typeof val === 'object' && val !== null ? sanitize(val) : val;
+    }
+    return clean;
+}
+
+
 // ─── Product Knowledge Base for Smart Auto-Fill ─────────────────
 // Maps product keywords to realistic default details
 const PRODUCT_KNOWLEDGE = {
@@ -796,11 +821,10 @@ async function listAssets(entities, context) {
 }
 
 async function listVendors(entities, context) {
-    const vendors = await prisma.vendor.findMany({
+    const vendors = sanitize(await prisma.vendor.findMany({
         take: parseInt(entities.limit) || 15,
         orderBy: { createdAt: 'desc' },
-        select: { name: true, contactPerson: true, email: true, phone: true, status: true },
-    });
+    }));
 
     if (vendors.length === 0) {
         return { success: true, message: '📭 No vendors found in the system.' };
@@ -809,7 +833,8 @@ async function listVendors(entities, context) {
     let msg = `🏢 **Vendors** (${vendors.length} found)\n\n`;
     msg += `| Vendor | Contact | Status |\n|--------|---------|--------|\n`;
     for (const v of vendors) {
-        const status = v.status === 'ACTIVE' ? '✅ Active' : '⛔ Inactive';
+        const isActive = v.isActive !== false && v.status !== 'INACTIVE' && !v.isBlacklisted;
+        const status = isActive ? '✅ Active' : '⛔ Inactive';
         msg += `| **${v.name}** | ${v.contactPerson || '—'} | ${status} |\n`;
     }
 
@@ -1394,11 +1419,11 @@ async function createOffice(entities, context) {
 
 // ── Users ───────────────────────────────────────────────────────
 async function listUsers(entities, context) {
-    const users = await prisma.user.findMany({
+    const users = sanitize(await prisma.user.findMany({
         take: parseInt(entities.limit) || 20,
         orderBy: { name: 'asc' },
-        select: { name: true, email: true, role: true, status: true, office: { select: { name: true } } },
-    });
+        include: { office: true },
+    }));
 
     if (users.length === 0) {
         return { success: true, message: '📭 No users found.' };
@@ -1409,7 +1434,8 @@ async function listUsers(entities, context) {
     msg += `| Name | Role | Office | Status |\n|------|------|--------|--------|\n`;
     for (const u of users) {
         const icon = roleIcon[u.role] || '👤';
-        const status = u.status === 'ACTIVE' ? '✅' : '⛔';
+        const active = u.isActive !== false && u.status !== 'INACTIVE';
+        const status = active ? '✅' : '⛔';
         msg += `| **${u.name}** | ${icon} ${u.role} | ${u.office?.name || '—'} | ${status} |\n`;
     }
 
@@ -1491,25 +1517,29 @@ async function listDocuments(entities, context) {
 
 // ── Profile ─────────────────────────────────────────────────────
 async function viewProfile(entities, context) {
-    const user = await prisma.user.findUnique({
+    // Fetch full user — sanitize() will strip all secrets
+    const raw = await prisma.user.findUnique({
         where: { id: context.userId },
-        select: { name: true, email: true, role: true, status: true, phone: true, avatar: true, office: { select: { name: true, code: true } }, createdAt: true },
+        include: { office: true },
     });
 
-    if (!user) return { success: false, message: 'Could not find your profile.' };
+    if (!raw) return { success: false, message: 'Could not find your profile.' };
+    const user = sanitize(raw);
 
     const roleIcon = { SUPER_ADMIN: '👑', ADMIN: '🔑', MANAGER: '📊', STAFF: '👤', VIEWER: '👁️' };
     let msg = `👤 **Your Profile**\n\n`;
     msg += `| Field | Value |\n|-------|-------|\n`;
-    msg += `| **Name** | ${user.name} |\n`;
-    msg += `| **Email** | ${user.email} |\n`;
-    msg += `| **Role** | ${roleIcon[user.role] || ''} ${user.role} |\n`;
-    msg += `| **Status** | ${user.status === 'ACTIVE' ? '✅ Active' : '⛔ Inactive'} |\n`;
+    msg += `| **Name** | ${user.name || '—'} |\n`;
+    msg += `| **Email** | ${user.email || '—'} |\n`;
+    msg += `| **Role** | ${roleIcon[user.role] || ''} ${user.role || '—'} |\n`;
+    const isActive = user.isActive !== false && user.status !== 'INACTIVE';
+    msg += `| **Status** | ${isActive ? '✅ Active' : '⛔ Inactive'} |\n`;
     if (user.phone) msg += `| **Phone** | ${user.phone} |\n`;
     msg += `| **Office** | ${user.office?.name || '—'} (${user.office?.code || '—'}) |\n`;
+    if (user.lastLogin) msg += `| **Last Login** | ${new Date(user.lastLogin).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })} |\n`;
     msg += `| **Joined** | ${new Date(user.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })} |\n`;
 
-    return { success: true, message: msg };
+    return { success: true, message: msg, data: user };
 }
 
 // ── Close Maintenance Ticket ──────────────────────────────────────
