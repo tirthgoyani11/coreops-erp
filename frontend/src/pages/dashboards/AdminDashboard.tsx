@@ -1,13 +1,9 @@
 import { useState, useEffect, memo } from 'react';
 import { motion } from 'framer-motion';
-import { Link } from 'react-router-dom';
 import {
     Package,
     Wrench,
     ClipboardCheck,
-    Clock,
-    User,
-    ChevronRight,
     DollarSign,
     AlertTriangle,
     CheckCircle2,
@@ -21,7 +17,6 @@ import { QuickActions } from '../../components/dashboard/QuickActions';
 import { RecentActivity } from '../../components/dashboard/RecentActivity';
 import api from '../../lib/api';
 import { formatCurrency } from '../../lib/utils';
-import { useSocket } from '../../hooks/useSocket';
 
 interface ApprovalItem {
     id: string;
@@ -75,8 +70,6 @@ export const AdminDashboard = memo(function AdminDashboard() {
     const [assetCategoryData, setAssetCategoryData] = useState<{ name: string; value: number }[]>([]);
     const [maintenanceTrendData, setMaintenanceTrendData] = useState<{ name: string; value: number }[]>([]);
     const [inventoryData, setInventoryData] = useState<{ name: string; value: number }[]>([]);
-
-    const socket = useSocket();
 
     useEffect(() => {
         const fetchDashboardData = async () => {

@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { formatDistanceToNow } from 'date-fns';
 import { Activity, User, Monitor, Ticket, Package, AlertCircle } from 'lucide-react';
-import api from '../../../lib/api';
+import api from '../../lib/api';
 
 interface AuditLog {
     id: string;
