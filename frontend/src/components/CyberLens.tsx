@@ -68,33 +68,29 @@ export function CyberLens({ isTyping, isFocused, isPeeking, state }: CyberLensPr
                     <svg viewBox="0 0 100 100" className="w-full h-full overflow-visible">
                         {/* Brackets */}
                         <motion.path
-                            d="M 20 20 L 10 20 L 10 40"
+                            d={isFocused ? "M 20 20 L 10 20 L 10 40" : "M 30 30 L 25 30 L 25 40"}
                             fill="none"
                             stroke={color}
                             strokeWidth="2"
-                            animate={{ d: isFocused ? "M 20 20 L 10 20 L 10 40" : "M 30 30 L 25 30 L 25 40" }}
                         />
                         <motion.path
-                            d="M 80 20 L 90 20 L 90 40"
+                            d={isFocused ? "M 80 20 L 90 20 L 90 40" : "M 70 30 L 75 30 L 75 40"}
                             fill="none"
                             stroke={color}
                             strokeWidth="2"
-                            animate={{ d: isFocused ? "M 80 20 L 90 20 L 90 40" : "M 70 30 L 75 30 L 75 40" }}
                             className="transition-all duration-300"
                         />
                         <motion.path
-                            d="M 20 80 L 10 80 L 10 60"
+                            d={isFocused ? "M 20 80 L 10 80 L 10 60" : "M 30 70 L 25 70 L 25 60"}
                             fill="none"
                             stroke={color}
                             strokeWidth="2"
-                            animate={{ d: isFocused ? "M 20 80 L 10 80 L 10 60" : "M 30 70 L 25 70 L 25 60" }}
                         />
                         <motion.path
-                            d="M 80 80 L 90 80 L 90 60"
+                            d={isFocused ? "M 80 80 L 90 80 L 90 60" : "M 70 70 L 75 70 L 75 60"}
                             fill="none"
                             stroke={color}
                             strokeWidth="2"
-                            animate={{ d: isFocused ? "M 80 80 L 90 80 L 90 60" : "M 70 70 L 75 70 L 75 60" }}
                         />
 
                         {/* Center Dot */}
