@@ -435,10 +435,10 @@ async function createAsset(entities, context) {
     msg += `| **Serial No.** | ${asset.serialNumber} |\n`;
     msg += `| **Condition** | ${asset.condition} |\n`;
     msg += `| **Status** | ${asset.status} |\n`;
-    msg += `| **Purchase Price** | $${purchasePrice.toLocaleString('en-US')} |\n`;
+    msg += `| **Purchase Price** | ₹${purchasePrice.toLocaleString('en-IN')} |\n`;
     msg += `| **Purchase Date** | ${now.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })} |\n`;
     if (warrantyEnd) msg += `| **Warranty** | ${warrantyMonths} months (until ${warrantyEnd.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}) |\n`;
-    msg += `\n📝 ${asset.description}`;
+    if (asset.notes) msg += `\n📝 ${asset.notes}`;
 
     return { success: true, message: msg, data: asset };
 }
