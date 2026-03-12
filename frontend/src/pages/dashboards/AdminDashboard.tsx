@@ -109,10 +109,7 @@ export const AdminDashboard = memo(function AdminDashboard() {
                     });
                 }
 
-                // Audit logs
-                if (logsRes.status === 'fulfilled' && logsRes.value.data?.data) {
-                    setAuditLogs(logsRes.value.data.data);
-                }
+
 
                 // Asset categories chart
                 if (categoryRes.status === 'fulfilled' && categoryRes.value.data?.data) {

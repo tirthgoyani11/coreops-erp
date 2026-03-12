@@ -358,6 +358,10 @@ export const ManagerDashboard = memo(function ManagerDashboard() {
                     />
                 </div>
 
+                <div className="lg:col-span-3 text-white">
+                    <RecentActivity />
+                </div>
+
                 {/* Technician Workload Card */}
                 <motion.div
                     initial={{ opacity: 0, y: 20 }}
