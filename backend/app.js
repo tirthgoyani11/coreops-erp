@@ -66,7 +66,7 @@ app.use(compression());
 // CORS configuration
 const allowedOrigins = process.env.ALLOWED_ORIGINS
     ? process.env.ALLOWED_ORIGINS.split(',')
-    : ['http://localhost:5173'];
+    : ['http://localhost:5173', 'https://coreops.tirthgoyani.in'];
 
 app.use(
     cors({
@@ -74,7 +74,7 @@ app.use(
             // Allow requests with no origin (mobile apps, Postman, etc.)
             if (!origin) return callback(null, true);
 
-            if (allowedOrigins.includes(origin)) {
+            if (allowedOrigins.includes(origin) || origin.endsWith('.tirthgoyani.in')) {
                 callback(null, true);
             } else {
                 logger.warn(`CORS blocked request from origin: ${origin}`);
