@@ -6,10 +6,10 @@ export interface CardProps extends React.HTMLAttributes<HTMLDivElement> {
 }
 
 const cardVariants = {
-    default: "border border-[var(--border-default)] bg-[var(--surface-card)] shadow-[var(--shadow-sm)]",
-    elevated: "border border-[var(--border-default)] bg-[var(--surface-elevated)] shadow-[var(--shadow-lg)]",
-    outlined: "border-2 border-[var(--border-default)] bg-transparent shadow-[var(--shadow-xs)]",
-    glass: "border border-[var(--border-muted)] bg-white/5 backdrop-blur-xl shadow-[var(--shadow-lg)] dark:bg-white/[0.03]",
+    default: "border border-[var(--border-default)] bg-[var(--surface-card)] shadow-[var(--shadow-sm)] hover:border-[var(--border-focus)] hover:shadow-[0_8px_30px_rgba(var(--primary-glow-rgb),0.12)]",
+    elevated: "border border-[var(--border-default)] bg-[var(--surface-elevated)] shadow-[var(--shadow-lg)] hover:border-[var(--border-focus)] hover:shadow-[0_8px_30px_rgba(var(--primary-glow-rgb),0.15)]",
+    outlined: "border-2 border-[var(--border-default)] bg-transparent shadow-[var(--shadow-xs)] hover:border-[var(--border-focus)] hover:shadow-[0_8px_30px_rgba(var(--primary-glow-rgb),0.08)]",
+    glass: "border border-[var(--border-muted)] bg-[var(--surface-card)]/60 backdrop-blur-xl shadow-[var(--shadow-md)] hover:border-[var(--border-focus)] hover:shadow-[0_8px_30px_rgba(var(--primary-glow-rgb),0.2)] dark:bg-[var(--surface-card)]/40",
 }
 
 const Card = React.forwardRef<HTMLDivElement, CardProps>(
@@ -17,7 +17,7 @@ const Card = React.forwardRef<HTMLDivElement, CardProps>(
         <div
             ref={ref}
             className={cn(
-                "rounded-[var(--radius-xl)] text-[var(--text-primary)] transition-[var(--transition-normal)]",
+                "group rounded-[var(--radius-xl)] text-[var(--text-primary)] transition-all duration-300 ease-out",
                 cardVariants[variant],
                 className
             )}

@@ -1,5 +1,7 @@
+import { useEffect } from "react"
 import { cn } from "../../lib/utils"
 import { TrendingUp, TrendingDown, Minus, type LucideIcon } from "lucide-react"
+import { motion, useMotionValue, useTransform, animate } from "framer-motion"
 
 export interface StatCardProps {
     title: string
@@ -12,6 +14,18 @@ export interface StatCardProps {
     }
     variant?: "default" | "primary" | "success" | "warning" | "error"
     className?: string
+}
+
+function AnimatedCounter({ value }: { value: number }) {
+    const count = useMotionValue(0);
+    const rounded = useTransform(count, (latest) => Math.round(latest).toLocaleString());
+
+    useEffect(() => {
+        const controls = animate(count, value, { duration: 1.5, ease: "easeOut" });
+        return () => controls.stop();
+    }, [value, count]);
+
+    return <motion.span>{rounded}</motion.span>;
 }
 
 export function StatCard({
@@ -42,24 +56,32 @@ export function StatCard({
             : trend.value < 0 ? "text-red-500"
                 : "text-[var(--text-muted)]"
         : ""
+        
+    const isNumericValue = typeof value === 'number' || (typeof value === 'string' && !isNaN(Number(value.replace(/,/g, ''))));
+    const numericValue = isNumericValue ? Number(value.toString().replace(/,/g, '')) : 0;
 
     return (
-        <div className={cn(
-            "rounded-[var(--radius-lg)] border border-[var(--border-default)] bg-[var(--surface-card)] p-5 shadow-[var(--shadow-sm)] hover:shadow-[var(--shadow-md)] transition-shadow duration-[var(--transition-normal)]",
-            className
-        )}>
+        <motion.div 
+            initial={{ opacity: 0, y: 15 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.4, ease: "easeOut" }}
+            className={cn(
+                "group rounded-[var(--radius-xl)] border border-[var(--border-default)] bg-[var(--surface-card)] p-5 shadow-[var(--shadow-sm)] hover:border-[var(--border-focus)] hover:shadow-[0_8px_30px_rgba(var(--primary-glow-rgb),0.12)] transition-all duration-300",
+                className
+            )}
+        >
             <div className="flex items-start justify-between mb-3">
                 <span className="text-[var(--text-xs)] font-medium uppercase tracking-wider text-[var(--text-secondary)]">
                     {title}
                 </span>
                 {Icon && (
-                    <div className={cn("p-2 rounded-[var(--radius-md)]", iconColors[variant])}>
+                    <div className={cn("p-2 rounded-[var(--radius-md)] transition-colors group-hover:bg-[var(--color-primary-muted)] group-hover:text-[var(--color-primary)]", iconColors[variant])}>
                         <Icon className="w-4 h-4" />
                     </div>
                 )}
             </div>
             <div className="text-2xl font-bold text-[var(--text-primary)] tracking-tight">
-                {value}
+                {isNumericValue ? <AnimatedCounter value={numericValue} /> : value}
             </div>
             <div className="flex items-center gap-2 mt-2">
                 {trend && TrendIcon && (
@@ -74,6 +96,6 @@ export function StatCard({
                     </span>
                 )}
             </div>
-        </div>
+        </motion.div>
     )
 }

@@ -11,7 +11,8 @@ import {
     ShieldCheck,
     GanttChart,
     ClipboardCheck,
-    BarChart3
+    BarChart3,
+    Wrench
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
@@ -33,6 +34,7 @@ import { Tabs, TabsList, TabsTrigger } from '../components/ui/Tabs'; // TabsCont
 import { MaintenanceTableView } from '../components/maintenance/MaintenanceTableView';
 import { MaintenanceKanbanView } from '../components/maintenance/MaintenanceKanbanView';
 import { MaintenanceCalendarView } from '../components/maintenance/MaintenanceCalendarView';
+import { PageHeader } from '../components/ui/PageHeader';
 
 export function Maintenance() {
     const { hasPermission } = useAuthStore(); // user unused
@@ -82,22 +84,19 @@ export function Maintenance() {
 
     return (
         <div className="space-y-6">
-            {/* Header */}
-            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                <div>
-                    <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Maintenance</h1>
-                    <p className="text-sm text-gray-500 dark:text-gray-400">
-                        Manage work orders, schedules, and repairs
-                    </p>
-                </div>
-
-                {hasPermission('tickets.create') && (
-                    <Button onClick={() => navigate('/maintenance/new')}>
-                        <Plus className="w-4 h-4 mr-2" />
-                        New Ticket
-                    </Button>
-                )}
-            </div>
+            <PageHeader
+                title="Maintenance"
+                subtitle="Manage work orders, schedules, and repairs"
+                icon={Wrench}
+                actions={
+                    hasPermission('tickets.create') && (
+                        <Button onClick={() => navigate('/maintenance/new')}>
+                            <Plus className="w-4 h-4 mr-2" />
+                            New Ticket
+                        </Button>
+                    )
+                }
+            />
 
             {/* Sub-page Navigation */}
             <div className="flex flex-wrap gap-2">

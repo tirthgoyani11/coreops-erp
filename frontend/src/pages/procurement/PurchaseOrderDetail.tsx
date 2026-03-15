@@ -67,8 +67,9 @@ function ReceiveDialog({ po, onClose, onSuccess }: any) {
                         <input {...register('grnReference')} className="w-full p-2 border rounded dark:bg-gray-700 dark:text-gray-100" placeholder="Optional" />
                     </div>
 
-                    <table className="w-full text-sm">
-                        <thead className="bg-gray-50 dark:bg-gray-700 text-gray-700 dark:text-gray-300">
+                    <div className="overflow-auto max-h-[300px] w-full">
+                        <table className="w-full text-sm">
+                            <thead className="sticky top-0 z-10 bg-gray-50/80 dark:bg-gray-900/80 backdrop-blur-md text-gray-500 font-medium border-b border-[var(--border-color)] shadow-sm">
                             <tr>
                                 <th className="p-2 text-left">Item</th>
                                 <th className="p-2 text-right">Ordered</th>
@@ -80,7 +81,7 @@ function ReceiveDialog({ po, onClose, onSuccess }: any) {
                         </thead>
                         <tbody className="divide-y dark:divide-gray-700">
                             {fields.map((field: any, index) => (
-                                <tr key={field.id} className="border-b dark:border-gray-700">
+                                <tr key={field.id} className="group hover:bg-[var(--color-primary)]/5 dark:hover:bg-[var(--color-primary)]/10 transition-colors border-b dark:border-gray-700">
                                     <td className="p-2 dark:text-gray-300">{field.name}</td>
                                     <td className="p-2 text-right dark:text-gray-300">{field.ordered}</td>
                                     <td className="p-2 text-right dark:text-gray-300">{field.receivedSoFar}</td>
@@ -102,7 +103,8 @@ function ReceiveDialog({ po, onClose, onSuccess }: any) {
                                 </tr>
                             ))}
                         </tbody>
-                    </table>
+                        </table>
+                    </div>
 
                     <div className="flex justify-end gap-3 pt-4">
                         <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
@@ -221,9 +223,9 @@ export function PurchaseOrderDetail() {
                 {/* Order Details */}
                 <Card className="md:col-span-2 p-6">
                     <h3 className="font-semibold text-lg mb-4 text-gray-900 dark:text-gray-100">Items</h3>
-                    <div className="overflow-x-auto">
+                    <div className="overflow-auto max-h-[400px] w-full">
                         <table className="w-full text-sm">
-                            <thead className="bg-gray-50 dark:bg-gray-800 text-gray-500">
+                            <thead className="sticky top-0 z-10 bg-gray-50/80 dark:bg-gray-900/80 backdrop-blur-md text-gray-500 font-medium border-b border-[var(--border-color)] shadow-sm">
                                 <tr>
                                     <th className="p-3 text-left">Item Details</th>
                                     <th className="p-3 text-right">Qty</th>
@@ -234,7 +236,7 @@ export function PurchaseOrderDetail() {
                             </thead>
                             <tbody className="divide-y dark:divide-gray-700">
                                 {po.items.map((item: any) => (
-                                    <tr key={item.id}>
+                                    <tr key={item.id} className="group hover:bg-[var(--color-primary)]/5 dark:hover:bg-[var(--color-primary)]/10 transition-colors">
                                         <td className="p-3">
                                             <p className="font-medium text-gray-900 dark:text-gray-100">{item.name}</p>
                                             <p className="text-xs text-gray-500">{item.description}</p>

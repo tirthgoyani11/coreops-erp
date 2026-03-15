@@ -191,7 +191,7 @@ export function Users() {
 
             {/* Create Modal */}
             {showCreateModal && (
-                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+                <div className="fixed inset-0 bg-black/60 backdrop-blur-md flex items-center justify-center z-50 p-4">
                     <motion.div
                         initial={{ opacity: 0, scale: 0.95 }}
                         animate={{ opacity: 1, scale: 1 }}
@@ -212,7 +212,7 @@ export function Users() {
                                     type="text"
                                     value={formData.name}
                                     onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                                    className="w-full px-3 py-2 bg-[var(--bg-overlay)] border border-[var(--border-color)] rounded-lg text-[var(--text-primary)] focus:outline-none focus:border-[var(--primary)]"
+                                    className="w-full px-3 py-2 bg-[var(--bg-overlay)] border border-[var(--border-color)] rounded-lg text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--primary)]/50 focus:border-[var(--primary)] transition-all"
                                     required
                                 />
                             </div>
@@ -222,7 +222,7 @@ export function Users() {
                                     type="email"
                                     value={formData.email}
                                     onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                                    className="w-full px-3 py-2 bg-[var(--bg-overlay)] border border-[var(--border-color)] rounded-lg text-[var(--text-primary)] focus:outline-none focus:border-[var(--primary)]"
+                                    className="w-full px-3 py-2 bg-[var(--bg-overlay)] border border-[var(--border-color)] rounded-lg text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--primary)]/50 focus:border-[var(--primary)] transition-all"
                                     required
                                 />
                             </div>
@@ -232,7 +232,7 @@ export function Users() {
                                     type="password"
                                     value={formData.password}
                                     onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                                    className="w-full px-3 py-2 bg-[var(--bg-overlay)] border border-[var(--border-color)] rounded-lg text-[var(--text-primary)] focus:outline-none focus:border-[var(--primary)]"
+                                    className="w-full px-3 py-2 bg-[var(--bg-overlay)] border border-[var(--border-color)] rounded-lg text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--primary)]/50 focus:border-[var(--primary)] transition-all"
                                     placeholder="Min 6 characters"
                                     required
                                 />
@@ -242,7 +242,7 @@ export function Users() {
                                 <select
                                     value={formData.role}
                                     onChange={(e) => setFormData({ ...formData, role: e.target.value as any })}
-                                    className="w-full px-3 py-2 bg-[var(--bg-overlay)] border border-[var(--border-color)] rounded-lg text-[var(--text-primary)] focus:outline-none focus:border-[var(--primary)]"
+                                    className="w-full px-3 py-2 bg-[var(--bg-overlay)] border border-[var(--border-color)] rounded-lg text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--primary)]/50 focus:border-[var(--primary)] transition-all"
                                 >
                                     {['SUPER_ADMIN', 'ADMIN'].includes(currentUserRole) && (
                                         <>
@@ -255,35 +255,16 @@ export function Users() {
                                     <option value="VIEWER">Viewer</option>
                                 </select>
                             </div>
-                            {formData.role !== 'SUPER_ADMIN' && currentUserRole === 'SUPER_ADMIN' && (
+                            {formData.role !== 'SUPER_ADMIN' && (
                                 <div>
                                     <label className="block text-sm text-[var(--text-secondary)] mb-1.5">Office</label>
                                     <select
                                         value={formData.officeId}
                                         onChange={(e) => setFormData({ ...formData, officeId: e.target.value })}
-                                        className="w-full px-3 py-2 bg-[var(--bg-overlay)] border border-[var(--border-color)] rounded-lg text-[var(--text-primary)] focus:outline-none focus:border-[var(--primary)]"
+                                        className="w-full px-3 py-2 bg-[var(--bg-overlay)] border border-[var(--border-color)] rounded-lg text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--primary)]/50 focus:border-[var(--primary)] transition-all"
                                         required
                                     >
                                         <option value="">Select an office</option>
-                                        {offices.map((office) => (
-                                            <option key={office.id} value={office.id}>
-                                                {office.name} ({office.code})
-                                            </option>
-                                        ))}
-                                    </select>
-                                </div>
-                            )}
-                            {formData.role !== 'SUPER_ADMIN' && currentUserRole === 'MANAGER' && (
-                                <div>
-                                    <label className="block text-sm text-[var(--text-secondary)] mb-1.5">Office</label>
-                                    <select
-                                        value={formData.officeId}
-                                        onChange={(e) => setFormData({ ...formData, officeId: e.target.value })}
-                                        className="w-full px-3 py-2 bg-[var(--bg-overlay)] border border-[var(--border-color)] rounded-lg text-[var(--text-primary)] focus:outline-none focus:border-[var(--primary)]"
-                                        required
-                                    >
-                                        <option value="">Select an office</option>
-                                        {/* Managers can only assign users to their own office, but we'll show all they fetch for now */}
                                         {offices.map((office) => (
                                             <option key={office.id} value={office.id}>
                                                 {office.name} ({office.code})

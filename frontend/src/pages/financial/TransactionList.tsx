@@ -36,9 +36,9 @@ export function TransactionList() {
                 </div>
             </div>
 
-            <div className="overflow-x-auto">
+            <div className="overflow-auto max-h-[600px] w-full">
                 <table className="w-full text-sm">
-                    <thead className="bg-gray-50 dark:bg-gray-700 text-gray-500">
+                    <thead className="sticky top-0 z-10 bg-gray-50/80 dark:bg-gray-900/80 backdrop-blur-md text-gray-500 font-medium border-b border-[var(--border-color)] shadow-sm">
                         <tr>
                             <th className="px-6 py-3 text-left">Date</th>
                             <th className="px-6 py-3 text-left">Description</th>
@@ -47,9 +47,9 @@ export function TransactionList() {
                             <th className="px-6 py-3 text-right">Amount</th>
                         </tr>
                     </thead>
-                    <tbody className="divide-y divide-gray-100 dark:divide-gray-700 bg-white dark:bg-gray-800">
+                    <tbody className="divide-y divide-gray-100 dark:divide-gray-700 bg-[var(--bg-card)]">
                         {transactions.map((tx: any) => (
-                            <tr key={tx.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                            <tr key={tx.id} className="group hover:bg-[var(--color-primary)]/5 dark:hover:bg-[var(--color-primary)]/10 transition-colors cursor-pointer relative">
                                 <td className="px-6 py-4 text-gray-500">
                                     {new Date(tx.date).toLocaleDateString()}
                                 </td>

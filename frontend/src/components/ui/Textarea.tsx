@@ -16,7 +16,7 @@ const Textarea = React.forwardRef<HTMLTextAreaElement, TextareaProps>(
                         "flex min-h-[80px] w-full rounded-[var(--radius-md)] border bg-transparent px-3 py-2 text-[var(--text-sm)] transition-[var(--transition-normal)]",
                         "border-[var(--border-default)] text-[var(--text-primary)]",
                         "placeholder:text-[var(--text-muted)]",
-                        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--surface-background)]",
+                        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]/30 focus-visible:border-[var(--color-primary)] focus-visible:ring-offset-0",
                         "disabled:cursor-not-allowed disabled:opacity-50",
                         "dark:bg-[var(--surface-card)]",
                         error && "border-[var(--color-error)] focus-visible:ring-[var(--color-error)] dark:border-[var(--color-error)]",

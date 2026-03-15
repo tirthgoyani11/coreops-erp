@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import api from '../lib/api';
 import { toast } from 'sonner';
 import { ArrowLeft, Download, ExternalLink, Calendar, User, Tag, FileText, Loader2 } from 'lucide-react';
-
+import { ShimmerButton } from '@/components/ui/shimmer-button';
 export default function DocumentViewer() {
     const { id } = useParams();
     const navigate = useNavigate();
@@ -84,14 +84,12 @@ export default function DocumentViewer() {
                     )}
 
                     <div className="pt-6 border-t border-[var(--border)]">
-                        <a
-                            href={downloadUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="flex items-center justify-center gap-2 w-full px-4 py-2 bg-[var(--primary)] text-white rounded-md hover:bg-[var(--primary)]/90"
+                        <ShimmerButton 
+                            onClick={() => window.open(downloadUrl, '_blank')}
+                            className="w-full flex items-center justify-center gap-2"
                         >
                             <Download size={16} /> Download File
-                        </a>
+                        </ShimmerButton>
                     </div>
                 </div>
             </div>

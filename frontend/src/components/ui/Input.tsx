@@ -24,7 +24,7 @@ const Input = React.forwardRef<HTMLInputElement, InputProps>(
                             "flex h-10 w-full rounded-[var(--radius-md)] border bg-transparent px-3 py-2 text-[var(--text-sm)] transition-[var(--transition-normal)]",
                             "border-[var(--border-default)] text-[var(--text-primary)]",
                             "placeholder:text-[var(--text-muted)]",
-                            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--surface-background)]",
+                            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]/30 focus-visible:border-[var(--color-primary)] focus-visible:ring-offset-0",
                             "disabled:cursor-not-allowed disabled:opacity-50",
                             "file:border-0 file:bg-transparent file:text-sm file:font-medium",
                             "dark:bg-[var(--surface-card)]",

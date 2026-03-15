@@ -43,9 +43,9 @@ export function InventoryTableView({ items, type }: InventoryTableViewProps) {
 
     return (
         <Card className="overflow-hidden border border-gray-200 dark:border-gray-800">
-            <div className="overflow-x-auto">
+            <div className="overflow-auto max-h-[600px] w-full">
                 <table className="w-full text-sm text-left">
-                    <thead className="bg-gray-50 dark:bg-gray-900/50 text-gray-500 font-medium border-b border-gray-200 dark:border-gray-800">
+                    <thead className="sticky top-0 z-10 bg-gray-50/80 dark:bg-gray-900/80 backdrop-blur-md text-gray-500 font-medium border-b border-gray-200 dark:border-gray-800 shadow-sm">
                         <tr>
                             <th className="px-4 py-3">SKU</th>
                             <th className="px-4 py-3">Name</th>
@@ -63,7 +63,7 @@ export function InventoryTableView({ items, type }: InventoryTableViewProps) {
                             return (
                                 <tr
                                     key={item.id}
-                                    className="group hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors cursor-pointer"
+                                    className="group hover:bg-[var(--color-primary)]/5 dark:hover:bg-[var(--color-primary)]/10 transition-colors cursor-pointer"
                                     onClick={() => navigate(`/inventory/${item.id}`)}
                                 >
                                     <td className="px-4 py-3 font-medium text-gray-900 dark:text-gray-100">
@@ -89,9 +89,9 @@ export function InventoryTableView({ items, type }: InventoryTableViewProps) {
                                         ₹{price.toLocaleString()}
                                     </td>
                                     <td className="px-4 py-3 text-gray-500">{item.storageLocation || '-'}</td>
-                                    <td className="px-4 py-3 text-right" onClick={(e) => e.stopPropagation()}>
+                                    <td className="px-4 py-3 text-right relative" onClick={(e) => e.stopPropagation()}>
                                         <div className="flex justify-end gap-2">
-                                            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => navigate(`/inventory/${item.id}`)}>
+                                            <Button variant="ghost" size="icon" className="h-8 w-8 opacity-50 group-hover:opacity-100 group-hover:bg-[var(--color-primary)]/20 group-hover:text-[var(--color-primary)] transition-all" onClick={() => navigate(`/inventory/${item.id}`)}>
                                                 <Eye className="w-4 h-4" />
                                             </Button>
                                         </div>

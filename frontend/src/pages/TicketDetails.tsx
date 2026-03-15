@@ -131,7 +131,7 @@ export default function TicketDetails() {
                     {ticket.status === 'COMPLETED' ? (
                         <Button variant="outline">Download Report</Button>
                     ) : ticket.status === 'IN_PROGRESS' || ticket.status === 'APPROVED' ? (
-                        <Button variant="success" onClick={fetchPreview}>
+                        <Button className="bg-emerald-600 hover:bg-emerald-700 text-white" onClick={fetchPreview}>
                             Complete Ticket
                         </Button>
                     ) : null}
@@ -292,19 +292,19 @@ export default function TicketDetails() {
                                 {(ticket.sparePartsUsed?.length ?? 0) === 0 ? (
                                     <p className="text-gray-500 text-sm">No parts used yet.</p>
                                 ) : (
-                                    <div className="overflow-x-auto">
+                                    <div className="overflow-auto max-h-[300px] w-full">
                                         <table className="w-full text-sm text-left">
-                                            <thead>
-                                                <tr className="text-gray-500 border-b">
-                                                    <th className="pb-2 text-left">Part Name</th>
-                                                    <th className="pb-2 text-right">Qty</th>
-                                                    <th className="pb-2 text-right">Cost</th>
-                                                    <th className="pb-2 text-right">Total</th>
+                                            <thead className="sticky top-0 z-10 bg-[var(--bg-card)]/80 backdrop-blur-md shadow-sm border-b border-[var(--border-color)]">
+                                                <tr className="text-gray-500">
+                                                    <th className="py-2 text-left">Part Name</th>
+                                                    <th className="py-2 text-right">Qty</th>
+                                                    <th className="py-2 text-right">Cost</th>
+                                                    <th className="py-2 text-right">Total</th>
                                                 </tr>
                                             </thead>
-                                            <tbody>
+                                            <tbody className="divide-y divide-[var(--border-color)]">
                                                 {(ticket.sparePartsUsed || []).map((part: any, i: number) => (
-                                                    <tr key={i} className="border-b last:border-0">
+                                                    <tr key={i} className="group hover:bg-[var(--color-primary)]/5 dark:hover:bg-[var(--color-primary)]/10 transition-colors">
                                                         <td className="py-2">{part.name} <span className="text-xs text-gray-400">({part.partNumber})</span></td>
                                                         <td className="py-2 text-right">{part.quantity}</td>
                                                         <td className="py-2 text-right">₹{part.costPerUnit}</td>
@@ -400,7 +400,7 @@ export default function TicketDetails() {
 
                     <DialogFooter>
                         <Button variant="outline" onClick={() => setShowCloseModal(false)}>Cancel</Button>
-                        <Button variant="success" onClick={handleCloseTicket} disabled={closing}>
+                        <Button className="bg-emerald-600 hover:bg-emerald-700 text-white" onClick={handleCloseTicket} disabled={closing}>
                             {closing ? 'Processing...' : 'Confirm Completion'}
                         </Button>
                     </DialogFooter>

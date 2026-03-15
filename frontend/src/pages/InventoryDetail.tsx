@@ -50,8 +50,38 @@ export function InventoryDetail() {
 
     return (
         <div className="space-y-6 max-w-5xl mx-auto">
+            <style>
+                {`
+                    @media print {
+                        body * {
+                            visibility: hidden;
+                        }
+                        .print-only-label, .print-only-label * {
+                            visibility: visible;
+                        }
+                        .print-only-label {
+                            position: absolute;
+                            left: 0;
+                            top: 0;
+                            margin: 0;
+                            padding: 20px;
+                            width: 100%;
+                            height: 100%;
+                            display: flex !important;
+                            flex-direction: column !important;
+                            align-items: center !important;
+                            justify-content: flex-start !important;
+                            border: none !important;
+                            background: white !important;
+                        }
+                        .print-hide {
+                            display: none !important;
+                        }
+                    }
+                `}
+            </style>
             {/* Header */}
-            <div className="flex flex-col sm:flex-row justify-between items-start gap-4">
+            <div className="flex flex-col sm:flex-row justify-between items-start gap-4 print-hide">
                 <div className="flex items-center gap-4">
                     <Button variant="ghost" size="icon" onClick={() => navigate('/inventory')}>
                         <ArrowLeft className="w-5 h-5" />
@@ -85,12 +115,13 @@ export function InventoryDetail() {
                 <div className="md:col-span-2 space-y-6">
                     <Card className="p-6">
                         <div className="flex flex-col sm:flex-row gap-6">
-                            <div className="flex flex-col items-center gap-2 p-4 border rounded-lg bg-white dark:bg-gray-800">
+                            <div className="flex flex-col items-center gap-2 p-4 border rounded-lg bg-white dark:bg-gray-800 print-only-label">
                                 <div className="bg-white p-2 rounded">
                                     <QRCode value={JSON.stringify({ id: item.id, sku: item.sku })} size={128} />
                                 </div>
-                                <span className="text-xs font-mono text-gray-500">{item.sku}</span>
-                                <Button size="sm" variant="outline" onClick={() => window.print()}>
+                                <span className="text-sm font-bold font-mono text-black dark:text-white mt-2">{item.sku}</span>
+                                <span className="text-xs text-black dark:text-gray-400 mt-1">{item.name}</span>
+                                <Button size="sm" variant="outline" className="print-hide mt-4" onClick={() => window.print()}>
                                     <Printer className="w-3 h-3 mr-2" /> Print Label
                                 </Button>
                             </div>

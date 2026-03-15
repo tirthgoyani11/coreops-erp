@@ -22,6 +22,7 @@ import {
 } from '../components/ui/Select';
 import { Card } from '../components/ui/Card';
 import { Tabs, TabsList, TabsTrigger } from '../components/ui/Tabs';
+import { PageHeader } from '../components/ui/PageHeader';
 
 // Views
 import { InventoryTableView } from '../components/inventory/InventoryTableView';
@@ -84,28 +85,25 @@ export function Inventory() {
 
     return (
         <div className="space-y-6">
-            {/* Header */}
-            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                <div>
-                    <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Inventory Management</h1>
-                    <p className="text-sm text-gray-500 dark:text-gray-400">
-                        Track products, spare parts, and stock levels
-                    </p>
-                </div>
-
-                {hasPermission('inventory.create') && (
-                    <div className="flex gap-2">
-                        <Button variant="outline" onClick={() => navigate('/inventory/operations')}>
-                            <ArrowUpRight className="w-4 h-4 mr-2" />
-                            Stock Op
-                        </Button>
-                        <Button onClick={() => navigate('/inventory/new')}>
-                            <Plus className="w-4 h-4 mr-2" />
-                            Add Item
-                        </Button>
-                    </div>
-                )}
-            </div>
+            <PageHeader 
+                title="Inventory Management"
+                subtitle="Track products, spare parts, and stock levels"
+                icon={Package}
+                actions={
+                    hasPermission('inventory.create') && (
+                        <>
+                            <Button variant="outline" onClick={() => navigate('/inventory/operations')}>
+                                <ArrowUpRight className="w-4 h-4 mr-2" />
+                                Stock Op
+                            </Button>
+                            <Button onClick={() => navigate('/inventory/new')}>
+                                <Plus className="w-4 h-4 mr-2" />
+                                Add Item
+                            </Button>
+                        </>
+                    )
+                }
+            />
 
             {/* Controls */}
             <Card className="p-4">

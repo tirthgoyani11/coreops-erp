@@ -258,11 +258,11 @@ export function AssetTable({ data, loading, onAssetClick, onBulkDelete, onRefres
     return (
         <div className="relative w-full">
             <div className="overflow-hidden rounded-2xl border border-[var(--border-color)] bg-[var(--bg-card)] shadow-xl shadow-black/5">
-                <div className="overflow-x-auto">
+                <div className="overflow-auto max-h-[600px] w-full">
                     <table className="w-full text-left text-sm">
-                        <thead>
+                        <thead className="sticky top-0 z-10 bg-[var(--bg-card)]/80 backdrop-blur-md shadow-sm border-b border-[var(--border-color)]">
                             {table.getHeaderGroups().map(headerGroup => (
-                                <tr key={headerGroup.id} className="border-b border-[var(--border-color)] bg-[var(--bg-card-hover)]/50">
+                                <tr key={headerGroup.id}>
                                     {headerGroup.headers.map(header => (
                                         <th key={header.id} className="p-4 font-medium text-[var(--text-secondary)] whitespace-nowrap">
                                             {header.isPlaceholder

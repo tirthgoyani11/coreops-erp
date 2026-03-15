@@ -10,7 +10,6 @@ import {
     Shield,
     Bell,
     FileText,
-    User,
     Ticket,
     DollarSign,
     BookOpen,
@@ -276,12 +275,6 @@ export const NAV_ITEMS: NavItem[] = [
         icon: Bell,
         roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF', 'TECHNICIAN', 'VIEWER'],
         badge: 'notifications'
-    },
-    {
-        label: 'Profile',
-        path: '/profile',
-        icon: User,
-        roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF', 'TECHNICIAN', 'VIEWER']
     }
 ];
 

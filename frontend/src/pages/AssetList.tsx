@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Download, Upload, Columns, X, FileSpreadsheet, CheckCircle, AlertTriangle, Loader2 } from 'lucide-react';
+import { Plus, Download, Upload, Columns, X, FileSpreadsheet, CheckCircle, AlertTriangle, Loader2, Server } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import api from '../lib/api';
 import { useAuthStore } from '../stores/authStore';
@@ -8,6 +8,7 @@ import { AssetStats } from '../components/assets/AssetStats';
 import { AssetFilters } from '../components/assets/AssetFilters';
 import { AssetTable } from '../components/assets/AssetTable';
 import { AssetOverview } from '../components/assets/detail/AssetOverview';
+import { PageHeader } from '../components/ui/PageHeader';
 
 interface Asset {
     id: string;
@@ -165,60 +166,53 @@ export function AssetList() {
             className="space-y-6 h-[calc(100vh-100px)] flex flex-col"
         >
             {/* 1. Header Section */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 shrink-0">
-                <div className="flex items-center gap-3">
-                    <div className="w-1.5 h-10 bg-gradient-to-b from-[var(--primary)] to-transparent rounded-full shadow-[0_0_15px_var(--primary)]" />
-                    <div>
-                        <h1 className="text-3xl font-bold text-[var(--text-primary)] tracking-tight">Asset Management</h1>
-                        <p className="text-[var(--text-secondary)]">Track, audit, and manage organization assets.</p>
-                    </div>
-                </div>
-
-                <div className="flex gap-3">
-                    {/* Split View Toggle */}
-                    <button
-                        onClick={() => {
-                            setIsSplitView(!isSplitView);
-                            if (isSplitView) setSelectedAssetId(null);
-                        }}
-                        className={`flex items-center gap-2 px-3 py-2.5 bg-[var(--bg-card)] border ${isSplitView ? 'border-[var(--primary)] text-[var(--primary)]' : 'border-[var(--border-color)] text-[var(--text-secondary)]'} rounded-xl hover:text-[var(--text-primary)] transition-all font-medium`}
-                        title="Toggle Split View"
-                    >
-                        <Columns size={18} />
-                    </button>
-
-                    {/* Import Button */}
-                    {canEdit && (
+            <PageHeader 
+                title="Asset Management"
+                subtitle="Track, audit, and manage organization assets."
+                icon={Server}
+                actions={
+                    <>
                         <button
-                            onClick={() => setImportModal(true)}
+                            onClick={() => {
+                                setIsSplitView(!isSplitView);
+                                if (isSplitView) setSelectedAssetId(null);
+                            }}
+                            className={`flex items-center gap-2 px-3 py-2.5 bg-[var(--bg-card)] border ${isSplitView ? 'border-[var(--primary)] text-[var(--primary)]' : 'border-[var(--border-color)] text-[var(--text-secondary)]'} rounded-xl hover:text-[var(--text-primary)] transition-all font-medium`}
+                            title="Toggle Split View"
+                        >
+                            <Columns size={18} />
+                        </button>
+
+                        {canEdit && (
+                            <button
+                                onClick={() => setImportModal(true)}
+                                className="flex items-center gap-2 px-4 py-2.5 bg-[var(--bg-card)] border border-[var(--border-color)] text-[var(--text-secondary)] rounded-xl hover:text-[var(--text-primary)] hover:border-[var(--primary)]/50 transition-all font-medium"
+                            >
+                                <Upload size={18} />
+                                <span className="hidden sm:inline">Import</span>
+                            </button>
+                        )}
+
+                        <button
+                            onClick={handleExport}
                             className="flex items-center gap-2 px-4 py-2.5 bg-[var(--bg-card)] border border-[var(--border-color)] text-[var(--text-secondary)] rounded-xl hover:text-[var(--text-primary)] hover:border-[var(--primary)]/50 transition-all font-medium"
                         >
-                            <Upload size={18} />
-                            <span className="hidden sm:inline">Import</span>
+                            <Download size={18} />
+                            <span className="hidden sm:inline">Export</span>
                         </button>
-                    )}
 
-                    {/* Export Button */}
-                    <button
-                        onClick={handleExport}
-                        className="flex items-center gap-2 px-4 py-2.5 bg-[var(--bg-card)] border border-[var(--border-color)] text-[var(--text-secondary)] rounded-xl hover:text-[var(--text-primary)] hover:border-[var(--primary)]/50 transition-all font-medium"
-                    >
-                        <Download size={18} />
-                        <span className="hidden sm:inline">Export</span>
-                    </button>
-
-                    {/* Create Button */}
-                    {canEdit && (
-                        <button
-                            onClick={() => navigate('/assets/new')}
-                            className="flex items-center justify-center gap-2 px-6 py-2.5 bg-[var(--primary)] text-black font-bold rounded-xl hover:opacity-90 transition-all active:scale-95 hover:shadow-[0_0_20px_rgba(185,255,102,0.4)]"
-                        >
-                            <Plus size={20} />
-                            <span>Create Asset</span>
-                        </button>
-                    )}
-                </div>
-            </div>
+                        {canEdit && (
+                            <button
+                                onClick={() => navigate('/assets/new')}
+                                className="flex items-center justify-center gap-2 px-6 py-2.5 bg-[var(--primary)] text-black font-bold rounded-xl hover:opacity-90 transition-all active:scale-95 hover:shadow-[0_0_20px_rgba(185,255,102,0.4)]"
+                            >
+                                <Plus size={20} />
+                                <span className="hidden sm:inline">Create Asset</span>
+                            </button>
+                        )}
+                    </>
+                }
+            />
 
             {/* 2. Stats Section */}
             {!isSplitView && (

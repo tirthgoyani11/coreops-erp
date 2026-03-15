@@ -20,9 +20,9 @@ export const SelectTrigger = ({ className, children }: any) => {
             type="button"
             onClick={() => setOpen(!open)}
             className={cn(
-                "flex h-10 w-full items-center justify-between rounded-[var(--radius-md)] border bg-transparent px-3 py-2 text-[var(--text-sm)] ring-offset-[var(--surface-background)] transition-[var(--transition-fast)]",
+                "flex h-10 w-full items-center justify-between rounded-[var(--radius-md)] border px-3 py-2 text-[var(--text-sm)] transition-[var(--transition-fast)] bg-[var(--bg-overlay)]",
                 "border-[var(--border-default)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)]",
-                "focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] focus:ring-offset-2",
+                "focus:outline-none focus:ring-2 focus:ring-[var(--primary)]/50 focus:border-[var(--primary)] focus:ring-offset-0",
                 "disabled:cursor-not-allowed disabled:opacity-50",
                 error && "border-[var(--color-error)] focus:ring-[var(--color-error)]",
                 className

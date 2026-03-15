@@ -49,9 +49,9 @@ export function MaintenanceTableView({ tickets }: MaintenanceTableViewProps) {
 
     return (
         <Card className="overflow-hidden border border-gray-200 dark:border-gray-800">
-            <div className="overflow-x-auto">
+            <div className="overflow-auto max-h-[600px] w-full">
                 <table className="w-full text-sm text-left">
-                    <thead className="text-xs text-gray-500 uppercase bg-gray-50 dark:bg-gray-900/50 dark:text-gray-400">
+                    <thead className="sticky top-0 z-10 text-xs text-gray-500 uppercase bg-gray-50/80 dark:bg-gray-900/80 backdrop-blur-md dark:text-gray-400 shadow-sm border-b border-gray-200 dark:border-gray-800">
                         <tr>
                             <th className="px-4 py-3">Ticket ID</th>
                             <th className="px-4 py-3">Asset</th>
@@ -67,7 +67,7 @@ export function MaintenanceTableView({ tickets }: MaintenanceTableViewProps) {
                         {tickets.map((ticket) => (
                             <tr
                                 key={ticket.id}
-                                className="group hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors cursor-pointer"
+                                className="group hover:bg-[var(--color-primary)]/5 dark:hover:bg-[var(--color-primary)]/10 transition-colors cursor-pointer relative"
                                 onClick={() => navigate(`/maintenance/${ticket.id}`)}
                             >
                                 <td className="px-4 py-3 font-medium text-primary-600">
@@ -113,7 +113,7 @@ export function MaintenanceTableView({ tickets }: MaintenanceTableViewProps) {
                                     {format(new Date(ticket.createdAt), 'MMM d, yyyy')}
                                 </td>
                                 <td className="px-4 py-3 text-right">
-                                    <Button variant="ghost" size="sm" className="opacity-0 group-hover:opacity-100 transition-opacity">
+                                    <Button variant="ghost" size="sm" className="opacity-50 group-hover:opacity-100 group-hover:bg-[var(--color-primary)]/20 group-hover:text-[var(--color-primary)] transition-all">
                                         View <ArrowRight className="w-4 h-4 ml-1" />
                                     </Button>
                                 </td>
