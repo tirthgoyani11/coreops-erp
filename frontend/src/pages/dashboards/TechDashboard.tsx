@@ -12,6 +12,7 @@ import {
     CheckCircle,
     AlertTriangle
 } from 'lucide-react';
+import { Skeleton } from '../../components/ui/Skeleton';
 
 export function TechDashboard() {
     const { user } = useAuthStore();
@@ -100,7 +101,23 @@ export function TechDashboard() {
                 </div>
                 <div className="space-y-3">
                     {loading ? (
-                        <div className="text-center py-8 text-gray-500">Loading tasks...</div>
+                        <div className="space-y-3">
+                            {[1, 2, 3].map(i => (
+                                <div key={i} className="p-4 rounded-xl border border-[var(--border-color)] bg-[var(--bg-card)]">
+                                    <div className="flex justify-between items-start">
+                                        <div className="space-y-2 w-2/3">
+                                            <Skeleton className="h-6 w-1/4 mb-2" />
+                                            <Skeleton className="h-5 w-3/4" />
+                                            <Skeleton className="h-4 w-1/2" />
+                                        </div>
+                                        <div className="flex flex-col items-end gap-2">
+                                            <Skeleton className="h-5 w-20 rounded-full" />
+                                            <Skeleton className="h-4 w-16" />
+                                        </div>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
                     ) : myTickets.length === 0 ? (
                         <Card className="p-8 text-center text-gray-500">
                             <CheckCircle className="w-12 h-12 mx-auto mb-3 text-green-500 opacity-50" />

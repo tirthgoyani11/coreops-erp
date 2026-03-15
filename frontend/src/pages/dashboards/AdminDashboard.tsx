@@ -1,5 +1,5 @@
 import { useState, useEffect, memo } from 'react';
-import { motion, type Variants } from 'framer-motion';
+import { motion } from 'framer-motion';
 import {
     Package,
     Wrench,
@@ -11,9 +11,10 @@ import {
     FileText,
     Receipt,
 } from 'lucide-react';
-import { StatCard } from '../../components/ui/StatCard';
+import { StatCard } from '../../components/dashboard/StatCard';
 import { DashboardChart } from '../../components/dashboard/DashboardChart';
 import { QuickActions } from '../../components/dashboard/QuickActions';
+import { Skeleton } from '../../components/ui/Skeleton';
 import { RecentActivity } from '../../components/dashboard/RecentActivity';
 import api from '../../lib/api';
 import { formatCurrency } from '../../lib/utils';
@@ -65,21 +66,6 @@ export const AdminDashboard = memo(function AdminDashboard() {
     });
     const [approvals, setApprovals] = useState<ApprovalItem[]>([]);
     const [loading, setLoading] = useState(true);
-
-    const containerVariants: Variants = {
-        hidden: { opacity: 0 },
-        show: {
-            opacity: 1,
-            transition: {
-                staggerChildren: 0.1
-            }
-        }
-    };
-
-    const itemVariants: Variants = {
-        hidden: { opacity: 0, y: 20 },
-        show: { opacity: 1, y: 0, transition: { type: "spring", stiffness: 300, damping: 24 } }
-    };
 
     // Chart data from API
     const [assetCategoryData, setAssetCategoryData] = useState<{ name: string; value: number }[]>([]);
@@ -177,73 +163,67 @@ export const AdminDashboard = memo(function AdminDashboard() {
             </div>
 
             {/* Stats Row */}
-            <motion.div 
-                variants={containerVariants}
-                initial="hidden"
-                animate="show"
-                className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4"
-            >
-                <motion.div variants={itemVariants}>
-                    <StatCard
-                        title="Total Assets"
-                        value={stats.totalAssets}
-                        icon={Package}
-                        variant="primary"
-                    />
-                </motion.div>
-                <motion.div variants={itemVariants}>
-                    <StatCard
-                        title="Active Tickets"
-                        value={stats.activeTickets}
-                        icon={Wrench}
-                        variant="default"
-                    />
-                </motion.div>
-                <motion.div variants={itemVariants}>
-                    <StatCard
-                        title="Pending Approvals"
-                        value={stats.pendingApprovals}
-                        icon={ClipboardCheck}
-                        variant="warning"
-                    />
-                </motion.div>
-                <motion.div variants={itemVariants}>
-                    <StatCard
-                        title="Asset Value"
-                        value={formatCurrency(stats.totalAssetValue)}
-                        icon={DollarSign}
-                        variant="success"
-                    />
-                </motion.div>
-            </motion.div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                <StatCard
+                    title="Total Assets"
+                    value={stats.totalAssets}
+                    icon={Package}
+                    color="primary"
+                    loading={loading}
+                />
+                <StatCard
+                    title="Active Tickets"
+                    value={stats.activeTickets}
+                    icon={Wrench}
+                    color="blue"
+                    loading={loading}
+                />
+                <StatCard
+                    title="Pending Approvals"
+                    value={stats.pendingApprovals}
+                    icon={ClipboardCheck}
+                    color="orange"
+                    loading={loading}
+                />
+                <StatCard
+                    title="Asset Value"
+                    value={formatCurrency(stats.totalAssetValue)}
+                    icon={DollarSign}
+                    color="green"
+                    loading={loading}
+                />
+            </div>
 
             {/* Secondary Stats */}
-            <motion.div 
-                variants={containerVariants}
-                initial="hidden"
-                animate="show"
-                className="grid grid-cols-2 sm:grid-cols-4 gap-4"
-            >
-                <motion.div variants={itemVariants} className="bg-[var(--bg-card)] border border-[var(--border-color)] rounded-2xl p-4 shadow-[var(--shadow-sm)] hover:border-[var(--color-primary)] hover:shadow-[0_8px_30px_rgba(var(--primary-glow-rgb),0.12)] transition-all duration-300 group">
-                    <p className="text-xs text-[var(--text-secondary)] mb-1 uppercase tracking-wider font-medium">Inventory Items</p>
-                    <p className="text-xl font-bold text-[var(--text-primary)] transition-colors group-hover:text-[var(--color-primary)]">{stats.totalInventory}</p>
-                </motion.div>
-                <motion.div variants={itemVariants} className="bg-[var(--bg-card)] border border-[var(--border-color)] rounded-2xl p-4 shadow-[var(--shadow-sm)] hover:border-amber-500 hover:shadow-[0_8px_30px_rgba(251,191,36,0.12)] transition-all duration-300 group">
-                    <div className="flex items-center gap-1 mb-1">
-                        <AlertTriangle className="w-3.5 h-3.5 text-amber-500" />
-                        <p className="text-xs text-[var(--text-secondary)] uppercase tracking-wider font-medium">Low Stock</p>
-                    </div>
-                    <p className="text-xl font-bold text-[var(--text-primary)] transition-colors group-hover:text-amber-500">{stats.lowStock}</p>
-                </motion.div>
-                <motion.div variants={itemVariants} className="bg-[var(--bg-card)] border border-[var(--border-color)] rounded-2xl p-4 shadow-[var(--shadow-sm)] hover:border-[var(--color-primary)] hover:shadow-[0_8px_30px_rgba(var(--primary-glow-rgb),0.12)] transition-all duration-300 group">
-                    <p className="text-xs text-[var(--text-secondary)] mb-1 uppercase tracking-wider font-medium">Vendors</p>
-                    <p className="text-xl font-bold text-[var(--text-primary)] transition-colors group-hover:text-[var(--color-primary)]">{stats.totalVendors}</p>
-                </motion.div>
-                <motion.div variants={itemVariants} className="bg-[var(--bg-card)] border border-[var(--border-color)] rounded-2xl p-4 shadow-[var(--shadow-sm)] hover:border-emerald-500 hover:shadow-[0_8px_30px_rgba(16,185,129,0.12)] transition-all duration-300 group">
-                    <p className="text-xs text-[var(--text-secondary)] mb-1 uppercase tracking-wider font-medium">Active Assets</p>
-                    <p className="text-xl font-bold text-[var(--text-primary)] transition-colors group-hover:text-emerald-500">{stats.activeAssets}</p>
-                </motion.div>
-            </motion.div>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                {loading ? (
+                    Array.from({ length: 4 }).map((_, i) => (
+                        <Skeleton key={i} variant="card" className="h-[72px]" />
+                    ))
+                ) : (
+                    <>
+                        <div className="bg-[var(--bg-card)] border border-[var(--border-color)] rounded-2xl p-4">
+                            <p className="text-xs text-[var(--text-secondary)] mb-1">Inventory Items</p>
+                            <p className="text-xl font-bold text-[var(--text-primary)]">{stats.totalInventory}</p>
+                        </div>
+                        <div className="bg-[var(--bg-card)] border border-[var(--border-color)] rounded-2xl p-4">
+                            <div className="flex items-center gap-1">
+                                <AlertTriangle className="w-3 h-3 text-amber-400" />
+                                <p className="text-xs text-[var(--text-secondary)]">Low Stock</p>
+                            </div>
+                            <p className="text-xl font-bold text-amber-400">{stats.lowStock}</p>
+                        </div>
+                        <div className="bg-[var(--bg-card)] border border-[var(--border-color)] rounded-2xl p-4">
+                            <p className="text-xs text-[var(--text-secondary)] mb-1">Vendors</p>
+                            <p className="text-xl font-bold text-[var(--text-primary)]">{stats.totalVendors}</p>
+                        </div>
+                        <div className="bg-[var(--bg-card)] border border-[var(--border-color)] rounded-2xl p-4">
+                            <p className="text-xs text-[var(--text-secondary)] mb-1">Active Assets</p>
+                            <p className="text-xl font-bold text-emerald-400">{stats.activeAssets}</p>
+                        </div>
+                    </>
+                )}
+            </div>
 
             {/* Charts Row */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -254,7 +234,7 @@ export const AdminDashboard = memo(function AdminDashboard() {
                     loading={loading}
                 />
                 <DashboardChart
-                    type="line"
+                    type="area"
                     data={maintenanceTrendData}
                     title="Monthly Maintenance Costs"
                     loading={loading}

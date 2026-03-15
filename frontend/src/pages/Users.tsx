@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Users as UsersIcon, Plus, Mail, Shield, Loader2, Search, Building2 } from 'lucide-react';
 import api from '../lib/api';
+import { Input } from '../components/ui/Input';
 import type { Office } from '../types';
 
 interface UserWithOffice {
@@ -207,33 +208,32 @@ export function Users() {
 
                         <form onSubmit={handleCreate} className="space-y-4">
                             <div>
-                                <label className="block text-sm text-[var(--text-secondary)] mb-1.5">Full Name</label>
-                                <input
+                                <Input
                                     type="text"
                                     value={formData.name}
                                     onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                                    className="w-full px-3 py-2 bg-[var(--bg-overlay)] border border-[var(--border-color)] rounded-lg text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--primary)]/50 focus:border-[var(--primary)] transition-all"
+                                    valid={formData.name.trim().length > 2}
+                                    floatingLabel="Full Name"
                                     required
                                 />
                             </div>
                             <div>
-                                <label className="block text-sm text-[var(--text-secondary)] mb-1.5">Email</label>
-                                <input
+                                <Input
                                     type="email"
                                     value={formData.email}
                                     onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                                    className="w-full px-3 py-2 bg-[var(--bg-overlay)] border border-[var(--border-color)] rounded-lg text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--primary)]/50 focus:border-[var(--primary)] transition-all"
+                                    valid={formData.email.includes('@') && formData.email.includes('.')}
+                                    floatingLabel="Email Address"
                                     required
                                 />
                             </div>
                             <div>
-                                <label className="block text-sm text-[var(--text-secondary)] mb-1.5">Password</label>
-                                <input
+                                <Input
                                     type="password"
                                     value={formData.password}
                                     onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                                    className="w-full px-3 py-2 bg-[var(--bg-overlay)] border border-[var(--border-color)] rounded-lg text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--primary)]/50 focus:border-[var(--primary)] transition-all"
-                                    placeholder="Min 6 characters"
+                                    valid={formData.password.length >= 6}
+                                    floatingLabel="Password (Min 6 chars)"
                                     required
                                 />
                             </div>

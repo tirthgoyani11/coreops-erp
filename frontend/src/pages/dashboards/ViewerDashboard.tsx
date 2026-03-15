@@ -146,9 +146,9 @@ export const ViewerDashboard = memo(function ViewerDashboard() {
                     loading={loading}
                 />
                 <DashboardChart
-                    type="line"
+                    type="area"
                     data={maintenanceTrendData}
-                    title="Maintenance Ticket Trend"
+                    title="Monthly Maintenance Costs"
                     loading={loading}
                 />
             </div>

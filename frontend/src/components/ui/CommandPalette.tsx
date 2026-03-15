@@ -23,6 +23,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({ isOpen, onClose 
     const [selectedIndex, setSelectedIndex] = useState(0);
     const [apiResults, setApiResults] = useState<any[]>([]);
     const [isSearching, setIsSearching] = useState(false);
+    const [activeFilter, setActiveFilter] = useState<'all' | 'assets' | 'tickets' | 'users'>('all');
     
     const inputRef = useRef<HTMLInputElement>(null);
     const navigate = useNavigate();
@@ -34,6 +35,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({ isOpen, onClose 
             setSearch('');
             setSelectedIndex(0);
             setApiResults([]);
+            setActiveFilter('all');
             setTimeout(() => inputRef.current?.focus(), 50); // slight delay for animation
         }
     }, [isOpen]);
@@ -54,9 +56,21 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({ isOpen, onClose 
         setIsSearching(true);
         const timer = setTimeout(async () => {
             try {
-                const { data } = await api.get(`/search?q=${encodeURIComponent(search)}`);
+                let url = `/search?q=${encodeURIComponent(search)}`;
+                if (activeFilter !== 'all') {
+                    // API implementation detail: assuming the backend supports a &type=filter parameter,
+                    // if not, we can filter locally. Let's filter locally for immediate safety.
+                }
+                const { data } = await api.get(url);
                 if (data.success) {
-                    setApiResults(data.data);
+                    let results = data.data;
+                    if (activeFilter !== 'all') {
+                        // Attempt local filtering if backend returns mixed results
+                        const typeMap = { 'assets': 'Asset', 'tickets': 'Ticket', 'users': 'User' };
+                        const targetType = typeMap[activeFilter];
+                        results = results.filter((r: any) => r.type === targetType);
+                    }
+                    setApiResults(results);
                 }
             } catch (error) {
                 console.error('Search failed:', error);
@@ -139,20 +153,49 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({ isOpen, onClose 
                 aria-modal="true"
             >
                 {/* Header / Search */}
-                <div className="flex items-center px-4 py-4 border-b border-[var(--border-color)]">
-                    <Search className={`w-5 h-5 mr-3 ${isSearching ? 'text-[var(--primary)] animate-pulse' : 'text-[var(--text-secondary)]'}`} />
-                    <input
-                        ref={inputRef}
-                        type="text"
-                        value={search}
-                        onChange={(e) => { setSearch(e.target.value); setSelectedIndex(0); }}
-                        onKeyDown={handleKeyDown}
-                        placeholder="Search assets, tickets, users, or type a command..."
-                        className="flex-1 bg-transparent text-[var(--text-primary)] focus:outline-none text-lg placeholder-[var(--text-secondary)]"
-                    />
-                    {isSearching && <Loader2 className="w-5 h-5 text-[var(--primary)] animate-spin mr-3" />}
-                    <div className="flex items-center gap-1 text-[10px] uppercase font-bold text-[var(--text-secondary)] bg-[var(--bg-background)] px-2 py-1 rounded">
-                        <span>Esc</span>
+                <div className="flex flex-col border-b border-[var(--border-color)]">
+                    <div className="flex items-center px-4 py-4">
+                        <Search className={`w-5 h-5 mr-3 ${isSearching ? 'text-[var(--primary)] animate-pulse' : 'text-[var(--text-secondary)]'}`} />
+                        <input
+                            ref={inputRef}
+                            type="text"
+                            value={search}
+                            onChange={(e) => { setSearch(e.target.value); setSelectedIndex(0); }}
+                            onKeyDown={handleKeyDown}
+                            placeholder="Search assets, tickets, users, or type a command..."
+                            className="flex-1 bg-transparent text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--primary)]/30 focus:border-[var(--primary)] text-lg placeholder-[var(--text-secondary)] rounded-md px-2"
+                        />
+                        {isSearching && <Loader2 className="w-5 h-5 text-[var(--primary)] animate-spin mr-3" />}
+                        <div className="flex items-center gap-1 text-[10px] uppercase font-bold text-[var(--text-secondary)] bg-[var(--bg-background)] px-2 py-1 rounded">
+                            <span>Esc</span>
+                        </div>
+                    </div>
+                    {/* Category Pills */}
+                    <div className="flex gap-2 px-4 pb-3">
+                        <button 
+                            onClick={() => { setActiveFilter('all'); setSelectedIndex(0); }}
+                            className={`text-xs px-3 py-1 rounded-full border transition-all ${activeFilter === 'all' ? 'bg-[var(--primary)]/10 border-[var(--primary)]/30 text-[var(--primary)]' : 'bg-[var(--bg-overlay)] border-[var(--border-color)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]'}`}
+                        >
+                            All
+                        </button>
+                        <button 
+                            onClick={() => { setActiveFilter('assets'); setSelectedIndex(0); }}
+                            className={`text-xs px-3 py-1 rounded-full border transition-all flex items-center gap-1 ${activeFilter === 'assets' ? 'bg-[var(--primary)]/10 border-[var(--primary)]/30 text-[var(--primary)]' : 'bg-[var(--bg-overlay)] border-[var(--border-color)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]'}`}
+                        >
+                            <Monitor className="w-3 h-3" /> Assets
+                        </button>
+                        <button 
+                            onClick={() => { setActiveFilter('tickets'); setSelectedIndex(0); }}
+                            className={`text-xs px-3 py-1 rounded-full border transition-all flex items-center gap-1 ${activeFilter === 'tickets' ? 'bg-[var(--primary)]/10 border-[var(--primary)]/30 text-[var(--primary)]' : 'bg-[var(--bg-overlay)] border-[var(--border-color)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]'}`}
+                        >
+                            <Ticket className="w-3 h-3" /> Tickets
+                        </button>
+                        <button 
+                            onClick={() => { setActiveFilter('users'); setSelectedIndex(0); }}
+                            className={`text-xs px-3 py-1 rounded-full border transition-all flex items-center gap-1 ${activeFilter === 'users' ? 'bg-[var(--primary)]/10 border-[var(--primary)]/30 text-[var(--primary)]' : 'bg-[var(--bg-overlay)] border-[var(--border-color)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]'}`}
+                        >
+                            <Users className="w-3 h-3" /> Users
+                        </button>
                     </div>
                 </div>
 
@@ -193,30 +236,35 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({ isOpen, onClose 
                                         <button
                                             onClick={() => { item.action(); onClose(); }}
                                             onMouseEnter={() => setSelectedIndex(index)}
-                                            className={`w-full flex items-center justify-between px-4 py-3 rounded-xl transition-all text-left ${
+                                            className={`w-full flex items-center justify-between px-4 py-3 rounded-xl transition-all text-left border ${
                                                 isSelected 
-                                                    ? 'bg-[var(--primary)]/10 text-[var(--primary)]' 
-                                                    : 'text-[var(--text-primary)] hover:bg-[var(--bg-hover)]'
+                                                    ? 'bg-[var(--primary)]/10 border-[var(--primary)]/50 shadow-[0_0_15px_rgba(var(--primary-glow-rgb),0.1)]' 
+                                                    : 'bg-transparent border-transparent hover:bg-[var(--bg-hover)]'
                                             }`}
                                         >
                                             <div className="flex items-center gap-3 overflow-hidden">
-                                                <div className={`p-2 rounded-lg ${isSelected ? 'bg-[var(--primary)]/20' : 'bg-[var(--bg-background)] border border-[var(--border-color)]'}`}>
-                                                    <Icon className={`w-4 h-4 ${item.color || (isSelected ? 'text-[var(--primary)]' : 'text-[var(--text-secondary)]')}`} />
+                                                <div className={`p-2 rounded-lg transition-colors ${isSelected ? 'bg-[var(--primary)] text-black shadow-lg' : 'bg-[var(--bg-overlay)] border border-[var(--border-color)] text-[var(--text-secondary)]'}`}>
+                                                    <Icon className="w-4 h-4" />
                                                 </div>
                                                 <div className="flex flex-col items-start truncate overflow-hidden">
-                                                    <span className="font-semibold text-sm truncate w-full">{item.name}</span>
+                                                    <span className={`font-semibold text-sm truncate w-full ${isSelected ? 'text-[var(--primary)]' : 'text-[var(--text-primary)]'}`}>{item.name}</span>
                                                     {(item as any).subtitle ? (
-                                                        <span className={`text-xs truncate w-full ${isSelected ? 'opacity-80' : 'text-[var(--text-secondary)]'}`}>
+                                                        <span className={`text-xs truncate w-full ${isSelected ? 'text-[var(--text-primary)] opacity-80' : 'text-[var(--text-secondary)]'}`}>
                                                             {(item as any).subtitle}
                                                         </span>
                                                     ) : (
-                                                        <span className={`text-[10px] font-bold uppercase ${isSelected ? 'opacity-80' : 'text-[var(--text-secondary)]'}`}>
+                                                        <span className={`text-[10px] font-bold uppercase ${isSelected ? 'text-[var(--primary)] opacity-80' : 'text-[var(--text-secondary)]'}`}>
                                                             {item.type}
                                                         </span>
                                                     )}
                                                 </div>
                                             </div>
-                                            {isSelected && <ArrowRight className="w-4 h-4 opacity-70 flex-shrink-0 ml-3" />}
+                                            {isSelected && (
+                                                <div className="flex items-center gap-2">
+                                                    <span className="text-[10px] uppercase font-bold text-[var(--primary)] opacity-80">Jump</span>
+                                                    <ArrowRight className="w-4 h-4 text-[var(--primary)] flex-shrink-0" />
+                                                </div>
+                                            )}
                                         </button>
                                     </React.Fragment>
                                 );

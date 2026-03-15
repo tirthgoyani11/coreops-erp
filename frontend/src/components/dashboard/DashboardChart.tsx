@@ -2,13 +2,13 @@ import { memo, useMemo } from 'react';
 import { motion } from 'framer-motion';
 import {
     PieChart, Pie, Cell,
-    LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
+    AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
     BarChart, Bar,
     ResponsiveContainer,
     Legend,
 } from 'recharts';
 
-type ChartType = 'pie' | 'line' | 'bar' | 'donut';
+type ChartType = 'pie' | 'line' | 'area' | 'bar' | 'donut';
 
 interface ChartData {
     name: string;
@@ -41,7 +41,7 @@ const CustomTooltip = ({ active, payload, label }: { active?: boolean; payload?:
     if (!active || !payload?.length) return null;
 
     return (
-        <div className="bg-[var(--bg-card)] border border-[var(--border-color)] rounded-lg px-3 py-2 shadow-xl">
+        <div className="bg-[var(--bg-overlay)]/90 backdrop-blur-md border border-[var(--border-color)] rounded-xl px-4 py-3 shadow-[0_8px_30px_rgba(0,0,0,0.12)]">
             {label && <p className="text-xs text-[var(--text-muted)] mb-1">{label}</p>}
             {payload.map((entry, index) => (
                 <p key={index} className="text-sm font-medium text-[var(--text-primary)]">
@@ -121,32 +121,43 @@ export const DashboardChart = memo(function DashboardChart({
                 );
 
             case 'line':
+            case 'area':
                 return (
                     <ResponsiveContainer width="100%" height={height}>
-                        <LineChart data={data}>
-                            <CartesianGrid strokeDasharray="3 3" stroke="var(--border-color)" />
+                        <AreaChart data={data}>
+                            <defs>
+                                <linearGradient id={`colorGradient-${dataKey}`} x1="0" y1="0" x2="0" y2="1">
+                                    <stop offset="5%" stopColor={chartColors[0]} stopOpacity={0.3} />
+                                    <stop offset="95%" stopColor={chartColors[0]} stopOpacity={0} />
+                                </linearGradient>
+                            </defs>
+                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border-color)" opacity={0.5} />
                             <XAxis
                                 dataKey="name"
                                 stroke="#71717a"
                                 fontSize={12}
                                 tickLine={false}
+                                axisLine={false}
+                                dy={10}
                             />
                             <YAxis
                                 stroke="var(--text-secondary)"
                                 fontSize={12}
                                 tickLine={false}
                                 axisLine={false}
+                                dx={-10}
                             />
-                            <Tooltip content={<CustomTooltip />} />
-                            <Line
+                            <Tooltip content={<CustomTooltip />} cursor={{ stroke: 'var(--border-color)', strokeWidth: 1, strokeDasharray: '4 4' }} />
+                            <Area
                                 type="monotone"
                                 dataKey={dataKey}
                                 stroke={chartColors[0]}
                                 strokeWidth={2}
-                                dot={{ fill: chartColors[0], strokeWidth: 2, r: 4 }}
-                                activeDot={{ r: 6, strokeWidth: 0 }}
+                                fillOpacity={1}
+                                fill={`url(#colorGradient-${dataKey})`}
+                                activeDot={{ r: 6, fill: chartColors[0], stroke: 'var(--bg-card)', strokeWidth: 2 }}
                             />
-                        </LineChart>
+                        </AreaChart>
                     </ResponsiveContainer>
                 );
 
@@ -154,20 +165,23 @@ export const DashboardChart = memo(function DashboardChart({
                 return (
                     <ResponsiveContainer width="100%" height={height}>
                         <BarChart data={data}>
-                            <CartesianGrid strokeDasharray="3 3" stroke="var(--border-color)" />
+                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border-color)" opacity={0.5} />
                             <XAxis
                                 dataKey="name"
                                 stroke="#71717a"
                                 fontSize={12}
                                 tickLine={false}
+                                axisLine={false}
+                                dy={10}
                             />
                             <YAxis
                                 stroke="var(--text-secondary)"
                                 fontSize={12}
                                 tickLine={false}
                                 axisLine={false}
+                                dx={-10}
                             />
-                            <Tooltip content={<CustomTooltip />} />
+                            <Tooltip content={<CustomTooltip />} cursor={{ fill: 'var(--bg-hover)', opacity: 0.5 }} />
                             <Bar
                                 dataKey={dataKey}
                                 fill={chartColors[0]}

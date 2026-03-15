@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { StatCard } from '../../components/dashboard/StatCard';
 import { DashboardChart } from '../../components/dashboard/DashboardChart';
+import { Skeleton } from '../../components/ui/Skeleton';
 import { RecentActivity } from '../../components/dashboard/RecentActivity';
 import api from '../../lib/api';
 import { formatCurrency } from '../../lib/utils';
@@ -73,13 +74,15 @@ const ApprovalQueue = memo(function ApprovalQueue({
     if (loading) {
         return (
             <div className="bg-[var(--bg-card)] border border-[var(--border-color)] rounded-2xl p-6">
-                <div className="w-32 h-5 rounded bg-[var(--bg-card-hover)] mb-4 animate-pulse" />
-                {[1, 2, 3].map(i => (
-                    <div key={i} className="p-4 rounded-xl bg-[var(--bg-card-hover)] mb-2 animate-pulse">
-                        <div className="h-5 w-48 rounded bg-[var(--bg-card-hover)] mb-2" />
-                        <div className="h-4 w-24 rounded bg-[var(--bg-card-hover)]" />
-                    </div>
-                ))}
+                <Skeleton className="w-32 h-5 mb-4" />
+                <div className="space-y-3">
+                    {[1, 2, 3].map(i => (
+                        <div key={i} className="p-4 rounded-xl border border-[var(--border-color)] bg-[var(--bg-overlay)]">
+                            <Skeleton className="h-5 w-48 mb-2" />
+                            <Skeleton className="h-4 w-24" />
+                        </div>
+                    ))}
+                </div>
             </div>
         );
     }
