@@ -36,6 +36,7 @@ const inventoryExtRoutes = require('./src/routes/inventoryExtRoutes');
 const procurementExtRoutes = require('./src/routes/procurementExtRoutes');
 const financeExtRoutes = require('./src/routes/financeExtRoutes');
 const userRoutes = require('./src/routes/userRoutes');
+const workflowRoutes = require('./src/routes/workflowRoutes');
 
 // Services
 const currencyService = require('./src/services/currencyService');
@@ -165,6 +166,7 @@ app.use('/api/inventory-ext', inventoryExtRoutes);
 app.use('/api/procurement-ext', procurementExtRoutes);
 app.use('/api/finance-ext', financeExtRoutes);
 app.use('/api/users', userRoutes);
+app.use('/api/workflows', workflowRoutes);
 app.use('/api/search', require('./src/routes/searchRoutes'));
 
 // Serve uploaded files (local storage — dev mode)

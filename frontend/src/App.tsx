@@ -86,6 +86,7 @@ const DocumentViewer = lazy(() => import('./pages/DocumentViewer'));
 const AuditLogs = lazy(() => import('./pages/AuditLogs'));
 const AccessDenied = lazy(() => import('./pages/AccessDenied'));
 const NotFound = lazy(() => import('./pages/NotFound').then(m => ({ default: m.NotFound })));
+const WorkflowBuilder = lazy(() => import('./pages/WorkflowBuilder').then(m => ({ default: m.WorkflowBuilder })));
 import './index.css';
 
 /**
@@ -294,6 +295,11 @@ function App() {
               <Route path="/settings" element={
                 <RoleGuard allowedRoles={['SUPER_ADMIN']}>
                   <Settings />
+                </RoleGuard>
+              } />
+              <Route path="/settings/workflows" element={
+                <RoleGuard allowedRoles={['SUPER_ADMIN', 'ADMIN']}>
+                  <WorkflowBuilder />
                 </RoleGuard>
               } />
               {/* Audit Logs - Managers + Viewer (read-only) */}

@@ -95,3 +95,11 @@ uploads/
 
 # Ignore vscode AI rules
 .github/instructions/codacy.instructions.md
+
+# GSD Agent Files
+.agent/
+.gsd/
+.gemini/
+.agent/
+.gsd/
+.gemini/
