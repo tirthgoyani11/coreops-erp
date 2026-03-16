@@ -6,6 +6,7 @@ import { StepBasicInfo } from '../components/assets/wizard/StepBasicInfo';
 import { StepLocation } from '../components/assets/wizard/StepLocation';
 import { StepFinancial } from '../components/assets/wizard/StepFinancial';
 import { StepReview } from '../components/assets/wizard/StepReview';
+import { DynamicFields, type CustomFieldValue } from '../components/ui/DynamicFields';
 import api from '../lib/api';
 import { cn } from '../lib/utils';
 import { useAuthStore } from '../stores/authStore';
@@ -46,7 +47,8 @@ export function AssetWizard() {
         vendorName: '',
         warrantyExpiryDate: '',
         status: 'ACTIVE',
-        assignedTo: ''
+        assignedTo: '',
+        customFields: [] as CustomFieldValue[]
     });
 
     // Fetch Data for Edit Mode
@@ -57,6 +59,17 @@ export function AssetWizard() {
                     setIsLoading(true);
                     const res = await api.get(`/assets/${id}`);
                     const asset = res.data.data || res.data;
+
+                    let loadedCustomFields: CustomFieldValue[] = [];
+                    try {
+                        const cfRes = await api.get(`/custom-fields/values/${id}`);
+                        loadedCustomFields = cfRes.data.data.map((cf: any) => ({
+                            fieldDefId: cf.fieldDefId,
+                            value: cf.value
+                        }));
+                    } catch (e) {
+                        console.error('Failed to load custom fields', e);
+                    }
 
                     setFormData({
                         name: asset.name || '',
@@ -74,7 +87,8 @@ export function AssetWizard() {
                         vendorName: '',
                         warrantyExpiryDate: asset.warrantyEnd ? new Date(asset.warrantyEnd).toISOString().split('T')[0] : '',
                         status: asset.status || 'ACTIVE',
-                        assignedTo: asset.assignedToId || asset.assignedTo?.id || ''
+                        assignedTo: asset.assignedToId || asset.assignedTo?.id || '',
+                        customFields: loadedCustomFields
                     });
                 } catch (error) {
                     console.error("Failed to load asset for editing", error);
@@ -171,8 +185,15 @@ export function AssetWizard() {
 
             if (isEditMode) {
                 await api.patch(`/assets/${id}`, payload);
+                if (formData.customFields.length > 0) {
+                    await api.post(`/custom-fields/values/${id}`, { values: formData.customFields });
+                }
             } else {
-                await api.post('/assets', payload);
+                const createdRes: any = await api.post('/assets', payload);
+                const createdId = createdRes.data?.data?.id || createdRes.data?.id;
+                if (createdId && formData.customFields.length > 0) {
+                    await api.post(`/custom-fields/values/${createdId}`, { values: formData.customFields });
+                }
             }
 
             // Success! Redirect to list
@@ -274,7 +295,19 @@ export function AssetWizard() {
                                 exit={{ opacity: 0, x: -20 }}
                                 transition={{ duration: 0.2 }}
                             >
-                                {currentStep === 1 && <StepBasicInfo data={formData} updateData={updateFormData} errors={errors} />}
+                                {currentStep === 1 && (
+                                    <div className="space-y-8">
+                                        <StepBasicInfo data={formData} updateData={updateFormData} errors={errors} />
+                                        <div className="pt-6 border-t border-[var(--border-color)]">
+                                            <DynamicFields
+                                                entityType="ASSET"
+                                                entityId={id}
+                                                values={formData.customFields}
+                                                onChange={(values) => updateFormData({ customFields: values })}
+                                            />
+                                        </div>
+                                    </div>
+                                )}
                                 {currentStep === 2 && <StepLocation data={formData} updateData={updateFormData} errors={errors} />}
                                 {currentStep === 3 && <StepFinancial data={formData} updateData={updateFormData} errors={errors} />}
                                 {currentStep === 4 && <StepReview data={formData} isSubmitting={isSubmitting} />}

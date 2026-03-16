@@ -1401,3 +1401,54 @@ model POAmendment {
 
   @@index([purchaseOrderId])
 }
+
+// ==========================================
+// WORKFLOW ENGINE (PHASE 4)
+// ==========================================
+
+model WorkflowRule {
+  id           String   @id @default(uuid())
+  entityType   String   // e.g., 'PURCHASE_ORDER', 'EXPENSE_CLAIM'
+  triggerEvent String   // e.g., 'ON_CREATE', 'ON_STATUS_CHANGE'
+  condition    Json     // e.g., { "field": "totalAmount", "operator": ">=", "value": 10000 }
+  actionType   String   // e.g., 'REQUIRE_APPROVAL'
+  actionValue  String   // e.g., 'CFO'
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([entityType, triggerEvent])
+}
+
+// ==========================================
+// DYNAMIC CUSTOM FIELDS (PHASE 4)
+// ==========================================
+
+model CustomFieldDef {
+  id          String   @id @default(uuid())
+  entityType  String   // e.g., 'ASSET', 'VENDOR', 'TICKET'
+  name        String   // e.g., 'Warranty Provider'
+  type        String   // 'STRING', 'NUMBER', 'DATE', 'BOOLEAN', 'SELECT'
+  isRequired  Boolean  @default(false)
+  options     Json?    // Optional array of choices for 'SELECT' type
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  values      CustomFieldValue[]
+
+  @@unique([entityType, name])
+}
+
+model CustomFieldValue {
+  id          String         @id @default(uuid())
+  fieldDefId  String
+  fieldDef    CustomFieldDef @relation(fields: [fieldDefId], references: [id], onDelete: Cascade)
+  entityId    String         // The ID of the target resource (e.g., Asset UUID)
+  value       String         // Stored as string globally, parsed on frontend based on type
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  @@unique([fieldDefId, entityId])
+  @@index([entityId])
+}
