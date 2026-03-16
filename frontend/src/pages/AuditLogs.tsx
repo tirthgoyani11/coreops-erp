@@ -30,10 +30,7 @@ interface AuditLog {
     action: string;
     resourceType: string;
     resourceId?: string;
-    changes?: {
-        before?: Record<string, unknown>;
-        after?: Record<string, unknown>;
-    };
+    changes?: Array<{ field: string; old: any; new: any }>;
     ipAddress?: string;
     userAgent?: string;
     status: 'success' | 'failure' | 'error';
@@ -453,12 +450,41 @@ const AuditLogs = () => {
                                     </div>
                                 </div>
                             </div>
-                            {selectedLog.changes && (
-                                <div>
-                                    <label className="text-sm text-gray-500 dark:text-gray-400">Changes</label>
-                                    <pre className="mt-2 p-4 bg-[var(--bg-background)] rounded-lg overflow-x-auto text-sm border border-[var(--border-color)] text-[var(--text-secondary)]">
-                                        {JSON.stringify(selectedLog.changes, null, 2)}
-                                    </pre>
+                            {selectedLog.changes && selectedLog.changes.length > 0 && (
+                                <div className="mt-6 border-t border-[var(--border-color)] pt-6">
+                                    <label className="text-sm font-semibold text-[var(--text-primary)] mb-4 block">
+                                        Field Changes
+                                    </label>
+                                    <div className="bg-[var(--bg-background)] rounded-lg border border-[var(--border-color)] overflow-hidden">
+                                        <table className="w-full text-sm">
+                                            <thead className="bg-[var(--bg-card-hover)] text-[var(--text-muted)]">
+                                                <tr>
+                                                    <th className="px-4 py-2 text-left font-medium">Field</th>
+                                                    <th className="px-4 py-2 text-left font-medium">Previous Value</th>
+                                                    <th className="px-4 py-2 text-left font-medium">New Value</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-[var(--border-color)]">
+                                                {selectedLog.changes.map((change, idx) => (
+                                                    <tr key={idx} className="hover:bg-[var(--bg-card-hover)]">
+                                                        <td className="px-4 py-3 font-medium text-[var(--text-secondary)] lowercase">
+                                                            {change.field}
+                                                        </td>
+                                                        <td className="px-4 py-3 text-red-600 dark:text-red-400">
+                                                            <span className="bg-red-50 dark:bg-red-900/20 px-2 py-1 rounded inline-block">
+                                                                <del>{change.old === null ? 'null' : String(change.old)}</del>
+                                                            </span>
+                                                        </td>
+                                                        <td className="px-4 py-3 text-green-600 dark:text-green-400 font-medium">
+                                                            <span className="bg-green-50 dark:bg-green-900/20 px-2 py-1 rounded inline-block">
+                                                                {change.new === null ? 'null' : String(change.new)}
+                                                            </span>
+                                                        </td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
                                 </div>
                             )}
                             {selectedLog.errorMessage && (
