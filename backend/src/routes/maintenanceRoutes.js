@@ -18,6 +18,9 @@ const protect = require('../middleware/verifyToken');
 const authorize = require('../middleware/authorize');
 const { writeLimiter } = require('../middleware/rateLimiter');
 
+// ── Predictive Maintenance AI (must be before /:id routes) ─────
+const predictiveService = require('../services/predictiveService');
+
 router.use(protect); // All routes require login
 
 router.route('/')
@@ -26,6 +29,10 @@ router.route('/')
 
 router.route('/stats')
     .get(getStats);
+
+// Predictive AI — MUST be before /:id to avoid Express param collision
+router.get('/fleet-risk', authorize('SUPER_ADMIN', 'ADMIN', 'MANAGER'), predictiveService.getFleetRisk);
+router.get('/predictions/:id', authorize('SUPER_ADMIN', 'ADMIN', 'MANAGER'), predictiveService.getAssetPredictions);
 
 router.route('/:id')
     .get(getTicket)

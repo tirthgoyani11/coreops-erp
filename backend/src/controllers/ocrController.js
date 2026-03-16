@@ -50,29 +50,135 @@ Required JSON schema:
 
 Return ONLY the JSON. No explanation, no markdown.`;
 
-// ─── Fallback text parser (used when AI vision is unavailable) ───
+// ─── Robust fallback text parser for Indian GST invoices ─────────
 function parseTextFallback(text) {
     const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
     let invoiceNumber = null, date = null, vendorName = null, totalAmount = null;
+    let gstNumber = null;
 
     for (const line of lines) {
-        if (!invoiceNumber && /inv(?:oice)?[\s#:.-]*([a-z0-9\-\/]+)/i.test(line)) {
-            invoiceNumber = line.match(/inv(?:oice)?[\s#:.-]*([a-z0-9\-\/]+)/i)[1];
+        const lower = line.toLowerCase();
+
+        // ─ Invoice Number ─
+        // Matches: Inv.No.: INV-5, Invoice #456, GST 3425-26, Bill No 456
+        if (!invoiceNumber) {
+            const invPatterns = [
+                // "Inv. No.: INV-5" or "Invoice No: 12345" — value after colon/space
+                /inv(?:oice)?[\s.]*(?:no|#|number)[\s.:]+([a-z0-9][\w\-\/]+)/i,
+                // "INV-123" or "Invoice 456" direct
+                /inv(?:oice)?[\s#:\-]+([a-z0-9][\w\-\/]+)/i,
+                /gst[\s#:.\-]*(\d[\d\-\/]+)/i,
+                /bill[\s]*(?:no|#|number)?[\s.:]+([a-z0-9][\w\-\/]+)/i,
+                /(?:voucher|memo|receipt|dc)[\s#:.\-]*([a-z0-9][\w\-\/]+)/i,
+            ];
+            for (const pat of invPatterns) {
+                const m = line.match(pat);
+                if (m && m[1] && m[1].length >= 2) {
+                    // Filter out common false positives
+                    if (!/^(original|duplicate|triplicate|for|the|tax|date|no|nos|number|bill|to|in)$/i.test(m[1])) {
+                        invoiceNumber = m[1];
+                        break;
+                    }
+                }
+            }
         }
-        if (!date) {
-            const m = line.match(/\b(\d{1,2}[\\/\-.]\d{1,2}[\\/\-.]\d{2,4})\b/) ||
-                      line.match(/\b(\d{4}-\d{2}-\d{2})\b/);
-            if (m) { try { date = new Date(m[1]).toISOString().split('T')[0]; } catch {} }
+
+        // ─ Date — prefer lines with "date" keyword ─
+        // Supports: 23-Jul-2025, 23/07/2025, 2025-07-23, July 23, 2025, 10-01-25
+        if (!date || /inv.*date|date/i.test(lower)) {
+            const datePatterns = [
+                /\b(\d{1,2}[\s\-\/.]+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*[\s\-\/.,]*\d{2,4})\b/i,
+                /\b((?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*[\s\-\/.,]+\d{1,2}[\s,]*\d{2,4})\b/i,
+                /\b(\d{1,2}[\/-]\d{1,2}[\/-]\d{2,4})\b/,
+                /\b(\d{4}-\d{2}-\d{2})\b/,
+            ];
+            for (const pat of datePatterns) {
+                const m = line.match(pat);
+                if (m) {
+                    try {
+                        let raw = m[1];
+                        // Handle 2-digit year: 10-01-25 → 10-01-2025
+                        const twoDigitYear = raw.match(/(\d{1,2})[\/-](\d{1,2})[\/-](\d{2})$/);
+                        if (twoDigitYear) {
+                            const yr = parseInt(twoDigitYear[3]);
+                            const fullYear = yr < 50 ? 2000 + yr : 1900 + yr;
+                            raw = `${twoDigitYear[1]}/${twoDigitYear[2]}/${fullYear}`;
+                        }
+                        const parsed = new Date(raw.replace(/[\-\.]/g, '/'));
+                        if (!isNaN(parsed.getTime()) && parsed.getFullYear() > 2000 && parsed.getFullYear() < 2100) {
+                            date = parsed.toISOString().split('T')[0];
+                            if (/inv.*date|date/i.test(lower)) break;
+                        }
+                    } catch {}
+                }
+            }
         }
-        if (!totalAmount) {
-            const m = line.match(/(?:total|grand\s*total|amount\s*due|net\s*amount)[^\d]*(\d[\d,]*\.?\d*)/i) ||
-                      line.match(/[₹\$]\s*(\d[\d,]*\.?\d*)/);
-            if (m) totalAmount = parseFloat(m[1].replace(/,/g, ''));
+
+        // ─ GST Number ─
+        if (!gstNumber) {
+            const m = line.match(/\b(\d{2}[A-Z]{5}\d{4}[A-Z]\d[A-Z\d]{2})\b/);
+            if (m) gstNumber = m[1];
         }
-        if (!vendorName && lines.indexOf(line) < 5 && line.length > 3) vendorName = line;
+
+        // ─ Total Amount — prefer lines with total/grand keywords ─
+        const isTotalLine = /total|grand|amount\s*due|net\s*(?:amount|payable)|payable|sub[\-\s]*total/i.test(lower);
+        if (isTotalLine) {
+            // Try colon-separated pattern first: "Total Amount : 38026.00"
+            const colonMatch = line.match(/(?:total\s*(?:amount|amt)?|grand\s*total|net\s*(?:amount|payable))\s*[:=]?\s*([\d,]+\.?\d*)/i);
+            if (colonMatch) {
+                const val = parseFloat(colonMatch[1].replace(/,/g, ''));
+                if (val > 0 && (!totalAmount || val > totalAmount)) totalAmount = val;
+            } else {
+                const amounts = line.match(/[\d,]+\.?\d*/g) || [];
+                for (const raw of amounts) {
+                    const val = parseFloat(raw.replace(/,/g, ''));
+                    if (val > 100 && (!totalAmount || val > totalAmount)) {
+                        totalAmount = val;
+                    }
+                }
+            }
+        }
     }
 
-    return { invoiceNumber, date, vendorName, totalAmount, lineItems: [], confidenceScore: 0.35, documentType: 'INVOICE' };
+    // ── Fallback: if no total found, use the largest decimal amount ──
+    if (!totalAmount) {
+        let maxAmount = 0;
+        const allAmounts = text.match(/[\d,]+\.\d{2}/g) || [];
+        for (const amt of allAmounts) {
+            const val = parseFloat(amt.replace(/,/g, ''));
+            if (val > maxAmount) maxAmount = val;
+        }
+        if (maxAmount > 0) totalAmount = maxAmount;
+    }
+
+    // ── Smart Vendor Name extraction ─────────────────────────
+    const noiseRe = /^(manufacturing|precision|supply|plot|road|tel\s|web\s|pan\s|gst|gstin|tax|invoice|original|duplicate|address|phone|e-?way|transport|place|challan|date|m\/s|total|igst|cgst|sgst|subject|our\s|goods|delivery|customer|thank|name\b|branch|acc|ifsc|upi|pay\s|\d)/i;
+
+    // Check for "m/s" marker first
+    for (let i = 0; i < Math.min(20, lines.length); i++) {
+        if (/^m\/s\b/i.test(lines[i])) {
+            vendorName = lines[i].replace(/^m\/s\s*/i, '').trim();
+            break;
+        }
+    }
+
+    // Otherwise find a clean company-like line in first 8 lines
+    if (!vendorName) {
+        for (let i = 0; i < Math.min(8, lines.length); i++) {
+            const line = lines[i];
+            if (line.length < 4 || noiseRe.test(line)) continue;
+            if ((line.match(/\d/g) || []).length > line.length * 0.4) continue;
+            vendorName = line.length > 60 ? line.substring(0, 60) : line;
+            break;
+        }
+    }
+
+    return {
+        invoiceNumber, date, vendorName, totalAmount, gstNumber,
+        lineItems: [],
+        confidenceScore: invoiceNumber && date && totalAmount ? 0.65 : 0.35,
+        documentType: 'INVOICE',
+    };
 }
 
 // ─────────────────────────────────────────────────────────────────
@@ -153,7 +259,7 @@ exports.processInvoice = asyncHandler(async (req, res, next) => {
                 originalName: req.file.originalname,
                 mimeType: req.file.mimetype,
                 size: req.file.size,
-                path: fileUrl,
+                url: fileUrl,
                 category: 'INVOICE',
                 tags: ['invoice', 'ocr', extractedData.vendorName?.toLowerCase().split(' ')[0] || 'vendor'].filter(Boolean),
                 description: extractedData.vendorName

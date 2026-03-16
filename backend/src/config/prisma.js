@@ -76,6 +76,59 @@ function applyGuards(client) {
                             );
                         }
                     }
+
+                    // ─── Field Level Diff Tracking for Audits ───
+                    if (operation === 'update' && model !== 'AuditLog' && model !== 'Notification') {
+                        const { asyncLocalStorage } = require('../middleware/context');
+                        const store = asyncLocalStorage ? asyncLocalStorage.getStore() : null;
+                        
+                        if (store) {
+                            let currentRecord = null;
+                            try {
+                                if (args.where) {
+                                    // Use raw query to avoid recursive hook loops
+                                    // But client isn't fully defined initially. We can use the parent client
+                                    currentRecord = await client[model].findUnique({ where: args.where });
+                                }
+                            } catch (e) {
+                                console.error(`[Audit] Failed to fetch current record for ${model} update diff:`, e.message);
+                            }
+
+                            const result = await query(args);
+
+                            if (currentRecord && result && args.data) {
+                                const changes = [];
+                                for (const key of Object.keys(args.data)) {
+                                    // Ignore relations and special objects
+                                    if (args.data[key] !== undefined && typeof args.data[key] !== 'object') {
+                                        // Compare values, converting dates to strings for safe comparison
+                                        const oldVal = currentRecord[key] instanceof Date ? currentRecord[key].toISOString() : String(currentRecord[key]);
+                                        const newVal = result[key] instanceof Date ? result[key].toISOString() : String(result[key]);
+                                        
+                                        if (currentRecord[key] !== result[key] && oldVal !== newVal) {
+                                            changes.push({
+                                                field: key,
+                                                old: currentRecord[key],
+                                                new: result[key]
+                                            });
+                                        }
+                                    }
+                                }
+
+                                if (changes.length > 0) {
+                                    const existingChanges = store.get('changes') || [];
+                                    existingChanges.push(...changes);
+                                    store.set('changes', existingChanges);
+                                    
+                                    if (!store.has('resourceId') && result.id) {
+                                        store.set('resourceId', result.id);
+                                    }
+                                }
+                            }
+                            return result;
+                        }
+                    }
+
                     return query(args);
                 }
             }

@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '../../components/ui/Dialog';
 import { Input } from '../../components/ui/Input';
+import { formatCurrency } from '../../lib/utils';
 
 interface GLAccount {
     id: string; code: string; name: string; type: string; balance: number;
@@ -43,9 +44,6 @@ const TYPE_BADGES: Record<string, string> = {
     EXPENSE: 'bg-red-500/15 text-red-400 border-red-500/30',
 };
 
-function formatCurrency(n: number): string {
-    return new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 0 }).format(n);
-}
 
 export function GLDashboard() {
     const [accounts, setAccounts] = useState<GLAccount[]>([]);

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Loader2, ArrowUpRight, Printer } from 'lucide-react';
 import api from '../../lib/api';
+import { formatCurrency } from '../../lib/utils';
 
 export function ARAging() {
     const [report, setReport] = useState<any>(null);
@@ -24,9 +25,7 @@ export function ARAging() {
         }
     };
 
-    const formatCurrency = (val: number) => {
-        return new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(val || 0);
-    };
+
 
     return (
         <div className="space-y-6 max-w-7xl mx-auto">

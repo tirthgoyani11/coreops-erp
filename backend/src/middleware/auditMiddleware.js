@@ -20,7 +20,19 @@ const audit = (action, resourceType) => {
                     const userName = req.user?.name || req.user?.firstName || 'System';
 
                     // Optional: Get resourceId from response locals if controllers set it
-                    const resourceId = res.locals.resourceId || req.params?.id || null;
+                    let resourceId = res.locals.resourceId || req.params?.id || null;
+                    
+                    // Field diff changes from Prisma interceptor
+                    const { asyncLocalStorage } = require('./context');
+                    const store = asyncLocalStorage ? asyncLocalStorage.getStore() : null;
+                    let changes = null;
+                    
+                    if (store) {
+                        changes = store.get('changes') || null;
+                        if (!resourceId && store.has('resourceId')) {
+                            resourceId = store.get('resourceId');
+                        }
+                    }
 
                     const auditLog = await prisma.auditLog.create({
                         data: {
@@ -28,6 +40,7 @@ const audit = (action, resourceType) => {
                             action,
                             resourceType,
                             resourceId,
+                            changes,
                             status: 'SUCCESS',
                             ipAddress: (req.headers['x-forwarded-for'] || '').split(',')[0].trim() || req.ip || req.connection?.remoteAddress,
                             userAgent: req.headers['user-agent'],

@@ -36,6 +36,8 @@ const MaintenanceAnalytics = lazy(() => import('./pages/MaintenanceAnalytics').t
 const SLADashboard = lazy(() => import('./pages/SLADashboard').then(m => ({ default: m.SLADashboard })));
 const MaintenanceCalendar = lazy(() => import('./pages/MaintenanceCalendar').then(m => ({ default: m.MaintenanceCalendar })));
 const MaintenanceGantt = lazy(() => import('./pages/MaintenanceGantt').then(m => ({ default: m.MaintenanceGantt })));
+const PredictiveDashboard = lazy(() => import('./pages/PredictiveDashboard').then(m => ({ default: m.PredictiveDashboard })));
+const InvoiceScanner = lazy(() => import('./pages/InvoiceScanner').then(m => ({ default: m.InvoiceScanner })));
 const TicketDetails = lazy(() => import('./pages/TicketDetails'));
 const TicketWizard = lazy(() => import('./pages/TicketWizard').then(m => ({ default: m.TicketWizard })));
 const ScanQR = lazy(() => import('./pages/ScanQR').then(m => ({ default: m.ScanQR })));
@@ -212,6 +214,10 @@ function App() {
               <Route path="/maintenance/sla" element={<RoleGuard allowedRoles={['SUPER_ADMIN', 'ADMIN', 'MANAGER']}><SLADashboard /></RoleGuard>} />
               <Route path="/maintenance/calendar" element={<RoleGuard allowedRoles={['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF', 'TECHNICIAN']}><MaintenanceCalendar /></RoleGuard>} />
               <Route path="/maintenance/gantt" element={<RoleGuard allowedRoles={['SUPER_ADMIN', 'ADMIN', 'MANAGER']}><MaintenanceGantt /></RoleGuard>} />
+              <Route path="/maintenance/predictive" element={<RoleGuard allowedRoles={['SUPER_ADMIN', 'ADMIN', 'MANAGER']}><PredictiveDashboard /></RoleGuard>} />
+
+              {/* AI Tools */}
+              <Route path="/invoice-scanner" element={<RoleGuard allowedRoles={['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF']}><InvoiceScanner /></RoleGuard>} />
 
               {/* Technician Mode */}
               <Route path="/my-tickets" element={<RoleGuard allowedRoles={['TECHNICIAN']}><MyTickets /></RoleGuard>} />

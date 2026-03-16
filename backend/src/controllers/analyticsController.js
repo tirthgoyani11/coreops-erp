@@ -29,7 +29,7 @@ exports.getDashboardStats = async (req, res) => {
             prisma.maintenanceTicket.count({ where: { ...where, status: { in: ['REQUESTED', 'IN_PROGRESS', 'APPROVED'] } } }),
             prisma.maintenanceTicket.count({ where: { ...where, approvalStatus: 'PENDING' } }),
             prisma.vendor.count({ where: { isBlacklisted: false } }),
-            prisma.asset.aggregate({ where: { ...where, status: 'ACTIVE' }, _sum: { currentBookValue: true } }),
+            prisma.asset.aggregate({ where: { ...where, status: 'ACTIVE' }, _sum: { currentBookValue: true, purchasePrice: true } }),
             prisma.purchaseOrder.count({ where: { ...(where.officeId ? { officeId: where.officeId } : {}), status: 'PENDING_APPROVAL' } }),
             prisma.expenseClaim.count({ where: { ...(where.officeId ? { officeId: where.officeId } : {}), status: 'SUBMITTED' } }),
         ]);
@@ -65,6 +65,7 @@ exports.getDashboardStats = async (req, res) => {
                         { id: 'RETIRED', count: retiredAssets },
                     ],
                     totalValue: assetValueAgg._sum.currentBookValue || 0,
+                    totalPurchaseValue: assetValueAgg._sum.purchasePrice || 0,
                 },
                 inventory: { total: totalInventory, lowStock: lowStockCount },
                 maintenance: { openTickets, pendingApprovals: pendingMaintenanceApprovals + pendingPOs + pendingExpenseClaims },

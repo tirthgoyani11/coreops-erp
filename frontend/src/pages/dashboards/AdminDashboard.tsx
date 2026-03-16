@@ -41,6 +41,7 @@ interface DashboardStats {
     totalAssets: number;
     activeAssets: number;
     totalAssetValue: number;
+    totalAssetPurchaseValue: number;
     activeTickets: number;
     pendingApprovals: number;
     totalInventory: number;
@@ -56,6 +57,7 @@ export const AdminDashboard = memo(function AdminDashboard() {
         totalAssets: 0,
         activeAssets: 0,
         totalAssetValue: 0,
+        totalAssetPurchaseValue: 0,
         activeTickets: 0,
         pendingApprovals: 0,
         totalInventory: 0,
@@ -93,6 +95,7 @@ export const AdminDashboard = memo(function AdminDashboard() {
                         totalAssets: d.assets?.total || 0,
                         activeAssets: d.assets?.active || 0,
                         totalAssetValue: d.assets?.totalValue || 0,
+                        totalAssetPurchaseValue: d.assets?.totalPurchaseValue || 0,
                         activeTickets: d.maintenance?.openTickets || 0,
                         pendingApprovals: d.maintenance?.pendingApprovals || 0,
                         totalInventory: d.inventory?.total || 0,
@@ -186,8 +189,9 @@ export const AdminDashboard = memo(function AdminDashboard() {
                     loading={loading}
                 />
                 <StatCard
-                    title="Asset Value"
+                    title="Asset Book Value"
                     value={formatCurrency(stats.totalAssetValue)}
+                    subtitle={`Purchase Cost: ${formatCurrency(stats.totalAssetPurchaseValue)}`}
                     icon={DollarSign}
                     color="green"
                     loading={loading}

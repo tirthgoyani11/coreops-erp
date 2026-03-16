@@ -54,6 +54,10 @@ app.use((req, res, next) => {
     next();
 });
 
+// Request context (AsyncLocalStorage)
+const { reqContext } = require('./src/middleware/context');
+app.use(reqContext);
+
 // Security middleware
 app.use(helmet({
     contentSecurityPolicy: process.env.NODE_ENV === 'production',

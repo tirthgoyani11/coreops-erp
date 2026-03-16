@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { CalendarRange, Loader2, AlertTriangle, ArrowRight, Save } from 'lucide-react';
 import api from '../../lib/api';
+import { formatCurrency } from '../../lib/utils';
 
 export function YearEndClose() {
     const [preview, setPreview] = useState<any>(null);
@@ -47,9 +48,7 @@ export function YearEndClose() {
         }
     };
 
-    const formatCurrency = (val: number) => {
-        return new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(val || 0);
-    };
+
 
     const totalAccounts = preview ? preview.revenueAccounts.length + preview.expenseAccounts.length : 0;
 

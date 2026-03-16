@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { ShieldCheck, Upload, Loader2, CheckCircle2, AlertCircle, FileText } from 'lucide-react';
 import api from '../../lib/api';
+import { formatCurrency } from '../../lib/utils';
 
 export function BankReconciliation() {
     const [statements, setStatements] = useState<any[]>([]);
@@ -93,9 +94,7 @@ export function BankReconciliation() {
         }
     };
 
-    const formatCurrency = (val: number) => {
-        return new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(val || 0);
-    };
+
 
     return (
         <div className="space-y-6 max-w-7xl mx-auto">

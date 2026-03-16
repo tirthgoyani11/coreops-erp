@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Receipt, Plus, Loader2, CheckCircle2, XCircle, DollarSign, List, FileText } from 'lucide-react';
 import api from '../../lib/api';
+import { formatCurrency } from '../../lib/utils';
 
 export function ExpenseClaims() {
     const [claims, setClaims] = useState<any[]>([]);
@@ -95,9 +96,7 @@ export function ExpenseClaims() {
         }
     };
 
-    const formatCurrency = (val: number) => {
-        return new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(val || 0);
-    };
+
 
     const getStatusColor = (status: string) => {
         switch (status) {

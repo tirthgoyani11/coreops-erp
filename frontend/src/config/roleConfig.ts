@@ -13,6 +13,7 @@ import {
     Ticket,
     DollarSign,
     BookOpen,
+    Brain,
     type LucideIcon
 } from 'lucide-react';
 
@@ -246,6 +247,17 @@ export const NAV_ITEMS: NavItem[] = [
         path: '/reports',
         icon: FileText,
         roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF', 'VIEWER']
+    },
+
+    // AI & Intelligence
+    {
+        label: 'AI & Intelligence',
+        icon: Brain,
+        roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF'],
+        subItems: [
+            { label: 'Predictive Maintenance', path: '/maintenance/predictive', roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER'] },
+            { label: 'Invoice Scanner', path: '/invoice-scanner', roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF'] }
+        ]
     },
 
     // Administration Group

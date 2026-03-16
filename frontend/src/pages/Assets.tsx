@@ -24,6 +24,7 @@ export function Assets() {
     const [showModal, setShowModal] = useState(false);
     const [formLoading, setFormLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [assetStats, setAssetStats] = useState<{ total: number; active: number; totalValue: number; totalPurchaseValue: number }>({ total: 0, active: 0, totalValue: 0, totalPurchaseValue: 0 });
 
     const [formData, setFormData] = useState({
         name: '',
@@ -39,12 +40,22 @@ export function Assets() {
 
     const fetchData = async () => {
         try {
-            const [assetsRes, officesRes] = await Promise.all([
+            const [assetsRes, officesRes, statsRes] = await Promise.all([
                 api.get('/assets'),
-                user?.role === 'SUPER_ADMIN' ? api.get('/offices') : Promise.resolve({ data: { data: [] } })
+                user?.role === 'SUPER_ADMIN' ? api.get('/offices') : Promise.resolve({ data: { data: [] } }),
+                api.get('/assets/stats')
             ]);
             setAssets(assetsRes.data.data || []);
             setOffices(officesRes.data.data || []);
+            if (statsRes.data?.data) {
+                const s = statsRes.data.data;
+                setAssetStats({
+                    total: s.total || 0,
+                    active: s.active || 0,
+                    totalValue: s.totalValue || 0,
+                    totalPurchaseValue: s.totalValue || 0,
+                });
+            }
         } catch (err) {
             console.error(err);
         } finally {
@@ -84,7 +95,7 @@ export function Assets() {
         }
     };
 
-    const totalValue = assets.reduce((sum, a) => sum + (a.purchasePrice || 0), 0);
+
 
     if (loading) {
         return (
@@ -109,15 +120,16 @@ export function Assets() {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <div className="bg-[var(--bg-card)] border border-[var(--border-color)] p-6 rounded-3xl relative overflow-hidden group hover:border-[var(--primary)]/30 transition-colors">
                     <div className="relative z-10">
-                        <p className="text-[var(--text-secondary)] font-medium mb-1">Total Asset Value</p>
-                        <h2 className="text-3xl font-bold text-[var(--text-primary)]">{formatCurrency(totalValue)}</h2>
+                        <p className="text-[var(--text-secondary)] font-medium mb-1">Total Purchase Cost</p>
+                        <h2 className="text-3xl font-bold text-[var(--text-primary)]">{formatCurrency(assetStats.totalPurchaseValue)}</h2>
+                        <p className="text-xs text-[var(--text-secondary)] mt-1 opacity-70">Book Value: {formatCurrency(assetStats.totalValue)}</p>
                     </div>
                     <div className="absolute right-0 top-0 h-full w-32 bg-gradient-to-l from-[var(--primary)]/5 to-transparent pointer-events-none" />
                 </div>
 
                 <div className="bg-[var(--bg-card)] border border-[var(--border-color)] p-6 rounded-3xl hover:border-[var(--primary)]/30 transition-colors">
                     <p className="text-[var(--text-secondary)] font-medium mb-1">Active Assets</p>
-                    <h2 className="text-3xl font-bold text-[var(--text-primary)]">{assets.filter(a => a.status === 'ACTIVE').length}</h2>
+                    <h2 className="text-3xl font-bold text-[var(--text-primary)]">{assetStats.active}</h2>
                 </div>
 
                 <button

@@ -7,6 +7,7 @@ import { motion } from 'framer-motion';
 interface StatCardProps {
     title: string;
     value: string | number;
+    subtitle?: string;
     icon: ComponentType<LucideProps>;
     change?: number;
     changeLabel?: string;
@@ -34,6 +35,7 @@ const iconBgClasses = {
 export const StatCard = memo(function StatCard({
     title,
     value,
+    subtitle,
     icon: Icon,
     change,
     changeLabel,
@@ -95,6 +97,11 @@ export const StatCard = memo(function StatCard({
                 {title}
                 {changeLabel && <span className="ml-1 text-xs">({changeLabel})</span>}
             </div>
+            {subtitle && (
+                <div className="text-xs text-[var(--text-secondary)] mt-1 opacity-70">
+                    {subtitle}
+                </div>
+            )}
         </motion.div>
     );
 });
