@@ -51,6 +51,7 @@ export function StepReview({ data, isSubmitting }: StepReviewProps) {
                 <ReviewItem label="Currency" value={selectedCurrency} />
                 <ReviewItem label="Purchase Date" value={data.purchaseDate || 'N/A'} />
                 {data.vendorName && <ReviewItem label="Vendor" value={data.vendorName} />}
+                {data.invoiceNumber && <ReviewItem label="Invoice Number" value={data.invoiceNumber} />}
                 {data.warrantyExpiryDate && <ReviewItem label="Warranty Expires" value={data.warrantyExpiryDate} />}
             </ReviewSection>
 

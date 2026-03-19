@@ -1,5 +1,6 @@
-import { DollarSign, Calendar, Truck } from 'lucide-react';
+import { DollarSign, Calendar, Truck, ScanLine } from 'lucide-react';
 import { cn } from '../../../lib/utils';
+import { InvoiceScanner } from '../../InvoiceScanner';
 
 interface StepFinancialProps {
     data: any;
@@ -12,8 +13,43 @@ export function StepFinancial({ data, updateData, errors }: StepFinancialProps) 
         updateData({ [e.target.name]: e.target.value });
     };
 
+    const handleOCRExtracted = (extracted: any) => {
+        const lineItems = Array.isArray(extracted?.lineItems) ? extracted.lineItems : [];
+        const totalFromItems = lineItems.reduce((sum: number, item: any) => {
+            const value = Number(item?.total ?? 0);
+            return Number.isFinite(value) ? sum + value : sum;
+        }, 0);
+
+        const totalAmount = Number(extracted?.totalAmount ?? totalFromItems ?? 0);
+        const invoiceNumber = String(extracted?.invoiceNumber || '').trim();
+        const vendorName = String(extracted?.vendorName || '').trim();
+        const ocrDate = String(extracted?.date || '').trim();
+
+        updateData({
+            purchasePrice:
+                Number.isFinite(totalAmount) && totalAmount > 0
+                    ? String(totalAmount)
+                    : data.purchasePrice,
+            purchaseDate: ocrDate || data.purchaseDate,
+            vendorName: vendorName || data.vendorName,
+            invoiceNumber: invoiceNumber || data.invoiceNumber,
+            currency: String(extracted?.currency || data.currency || 'INR').toUpperCase(),
+        });
+    };
+
     return (
         <div className="space-y-6">
+            <div className="rounded-2xl border border-[var(--border-color)] bg-[var(--bg-background)] p-4 md:p-5">
+                <div className="mb-3 flex items-center gap-2">
+                    <ScanLine size={16} className="text-[var(--primary)]" />
+                    <h4 className="text-sm font-semibold text-[var(--text-primary)]">Invoice OCR Auto-Fill</h4>
+                </div>
+                <p className="mb-4 text-xs text-[var(--text-secondary)]">
+                    Upload an invoice or bill to auto-fill purchase amount, vendor, date, currency, and invoice number.
+                </p>
+                <InvoiceScanner onDataExtracted={handleOCRExtracted} context="finance" compact />
+            </div>
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {/* Purchase Price */}
                 <div className="space-y-2">
@@ -70,6 +106,19 @@ export function StepFinancial({ data, updateData, errors }: StepFinancialProps) 
                             placeholder="e.g. Dell Inc."
                         />
                     </div>
+                </div>
+
+                {/* Invoice Number */}
+                <div className="space-y-2">
+                    <label className="text-sm font-medium text-[var(--text-secondary)]">Invoice Number</label>
+                    <input
+                        type="text"
+                        name="invoiceNumber"
+                        value={data.invoiceNumber || ''}
+                        onChange={handleChange}
+                        className="w-full px-4 py-3 bg-[var(--bg-background)] border border-[var(--border-color)] rounded-xl focus:outline-none focus:border-[var(--primary)] transition-colors text-[var(--text-primary)] placeholder-[var(--text-secondary)]"
+                        placeholder="e.g. INV-2026-001"
+                    />
                 </div>
 
                 {/* Warranty Expiry */}

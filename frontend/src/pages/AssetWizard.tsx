@@ -46,6 +46,7 @@ export function AssetWizard() {
         purchasePrice: '',
         purchaseDate: new Date().toISOString().split('T')[0], // Default today
         vendorName: '',
+        invoiceNumber: '',
         warrantyExpiryDate: '',
         status: 'ACTIVE',
         assignedTo: '',
@@ -120,6 +121,7 @@ export function AssetWizard() {
                         purchasePrice: (asset.purchasePrice || asset.purchaseCost)?.toString() || '',
                         purchaseDate: asset.purchaseDate ? new Date(asset.purchaseDate).toISOString().split('T')[0] : '',
                         vendorName: '',
+                        invoiceNumber: asset.invoiceNumber || '',
                         warrantyExpiryDate: asset.warrantyEnd ? new Date(asset.warrantyEnd).toISOString().split('T')[0] : '',
                         status: asset.status || 'ACTIVE',
                         assignedTo: asset.assignedToId || asset.assignedTo?.id || '',
@@ -205,6 +207,7 @@ export function AssetWizard() {
                 // Purchase Info
                 purchaseCost: parseFloat(formData.purchasePrice),
                 purchaseDate: formData.purchaseDate,
+                invoiceNumber: formData.invoiceNumber || null,
                 // vendor: ... (Backend expects ObjectId, we have string. Skipping to avoid 400),
                 warrantyEndDate: formData.warrantyExpiryDate || null,
 
