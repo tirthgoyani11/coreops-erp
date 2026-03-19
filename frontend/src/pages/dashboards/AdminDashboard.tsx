@@ -13,6 +13,9 @@ import {
     Building2,
     ArrowUpRight,
     ArrowDownRight,
+    Check,
+    X,
+    Loader2,
 } from 'lucide-react';
 import { StatCard } from '../../components/dashboard/StatCard';
 import { DashboardChart } from '../../components/dashboard/DashboardChart';
@@ -90,6 +93,55 @@ export const AdminDashboard = memo(function AdminDashboard() {
     const [maintenanceTrendData, setMaintenanceTrendData] = useState<{ name: string; value: number }[]>([]);
     const [inventoryData, setInventoryData] = useState<{ name: string; value: number }[]>([]);
     const [isAlertsModalOpen, setIsAlertsModalOpen] = useState(false);
+    const [actionBusyById, setActionBusyById] = useState<Record<string, boolean>>({});
+    const [queueMessage, setQueueMessage] = useState('');
+
+    const resolveApprovalRequest = (item: ApprovalItem, decision: 'APPROVE' | 'REJECT') => {
+        if (item.type === 'PURCHASE_ORDER') {
+            return {
+                method: 'patch' as const,
+                url: `/purchase-orders/${item.id}/${decision === 'APPROVE' ? 'approve' : 'reject'}`,
+                data: {},
+            };
+        }
+
+        if (item.type === 'MAINTENANCE') {
+            return {
+                method: 'patch' as const,
+                url: `/maintenance/${item.id}/${decision === 'APPROVE' ? 'approve' : 'reject'}`,
+                data: {},
+            };
+        }
+
+        return {
+            method: 'put' as const,
+            url: `/finance-ext/expense-claims/${item.id}/status`,
+            data: { status: decision === 'APPROVE' ? 'APPROVED' : 'REJECTED' },
+        };
+    };
+
+    const handleApprovalAction = async (item: ApprovalItem, decision: 'APPROVE' | 'REJECT') => {
+        try {
+            setActionBusyById((prev) => ({ ...prev, [item.id]: true }));
+            const req = resolveApprovalRequest(item, decision);
+            await api.request({ method: req.method, url: req.url, data: req.data });
+
+            setApprovals((prev) => prev.filter((row) => row.id !== item.id));
+            setStats((prev) => ({
+                ...prev,
+                pendingApprovals: Math.max(0, (prev.pendingApprovals || 0) - 1),
+            }));
+
+            setQueueMessage(`${item.number} ${decision === 'APPROVE' ? 'approved' : 'declined'} successfully.`);
+            window.setTimeout(() => setQueueMessage(''), 3500);
+        } catch (error: any) {
+            const message = error?.response?.data?.message || `Failed to ${decision === 'APPROVE' ? 'approve' : 'decline'} item.`;
+            setQueueMessage(message);
+            window.setTimeout(() => setQueueMessage(''), 4500);
+        } finally {
+            setActionBusyById((prev) => ({ ...prev, [item.id]: false }));
+        }
+    };
 
     useEffect(() => {
         const fetchDashboardData = async () => {
@@ -298,6 +350,12 @@ export const AdminDashboard = memo(function AdminDashboard() {
                         <span className="text-xs text-[var(--text-secondary)]">{approvals.length} pending</span>
                     </div>
 
+                    {queueMessage && (
+                        <div className="mb-3 rounded-lg border border-[var(--border-color)] bg-[var(--bg-overlay)] p-2 text-xs text-[var(--text-secondary)]">
+                            {queueMessage}
+                        </div>
+                    )}
+
                     <div className="space-y-3 flex-1 overflow-y-auto pr-1">
                         {loading ? (
                             <Skeleton variant="card" className="h-[260px]" />
@@ -310,6 +368,7 @@ export const AdminDashboard = memo(function AdminDashboard() {
                             approvals.slice(0, 8).map((item) => {
                                 const cfg = typeConfig[item.type] || typeConfig.MAINTENANCE;
                                 const TypeIcon = cfg.icon;
+                                const isBusy = !!actionBusyById[item.id];
                                 return (
                                     <div key={item.id} className="p-3 rounded-xl bg-[var(--bg-overlay)] border border-[var(--border-color)]">
                                         <div className="flex items-center justify-between gap-2 mb-1">
@@ -325,6 +384,24 @@ export const AdminDashboard = memo(function AdminDashboard() {
                                         <div className="mt-1 flex items-center justify-between text-xs text-[var(--text-secondary)]">
                                             <span className="font-mono">#{item.number}</span>
                                             <span>{formatCurrency(item.amount || 0)}</span>
+                                        </div>
+                                        <div className="mt-3 flex gap-2">
+                                            <button
+                                                onClick={() => handleApprovalAction(item, 'APPROVE')}
+                                                disabled={isBusy}
+                                                className="flex-1 inline-flex items-center justify-center gap-1.5 px-2 py-1.5 text-xs rounded-md border border-emerald-500/30 text-emerald-300 bg-emerald-500/10 hover:bg-emerald-500/15 disabled:opacity-60"
+                                            >
+                                                {isBusy ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />}
+                                                Approve
+                                            </button>
+                                            <button
+                                                onClick={() => handleApprovalAction(item, 'REJECT')}
+                                                disabled={isBusy}
+                                                className="flex-1 inline-flex items-center justify-center gap-1.5 px-2 py-1.5 text-xs rounded-md border border-rose-500/30 text-rose-300 bg-rose-500/10 hover:bg-rose-500/15 disabled:opacity-60"
+                                            >
+                                                {isBusy ? <Loader2 className="w-3 h-3 animate-spin" /> : <X className="w-3 h-3" />}
+                                                Decline
+                                            </button>
                                         </div>
                                     </div>
                                 );
