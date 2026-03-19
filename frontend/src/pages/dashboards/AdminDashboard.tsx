@@ -3,9 +3,7 @@ import { motion } from 'framer-motion';
 import {
     Package,
     Wrench,
-    ClipboardCheck,
     DollarSign,
-    AlertTriangle,
     CheckCircle2,
     FileText,
     Receipt,
