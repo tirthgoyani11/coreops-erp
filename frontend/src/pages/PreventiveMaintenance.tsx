@@ -57,6 +57,7 @@ export function PreventiveMaintenance() {
     const toast = useToast();
     const [schedules, setSchedules] = useState<PMSchedule[]>([]);
     const [dueSchedules, setDueSchedules] = useState<PMSchedule[]>([]);
+    const [assets, setAssets] = useState<Array<{ id: string; name: string; guai?: string; category?: string }>>([]);
     const [loading, setLoading] = useState(true);
     const [showCreateModal, setShowCreateModal] = useState(false);
     const [executing, setExecuting] = useState<string | null>(null);
@@ -75,12 +76,14 @@ export function PreventiveMaintenance() {
     const fetchSchedules = useCallback(async () => {
         try {
             setLoading(true);
-            const [schedulesRes, dueRes] = await Promise.all([
+            const [schedulesRes, dueRes, assetsRes] = await Promise.all([
                 api.get('/preventive'),
                 api.get('/preventive/due'),
+                api.get('/assets', { params: { limit: 100 } }),
             ]);
             setSchedules(schedulesRes.data.data || []);
             setDueSchedules(dueRes.data.data || []);
+            setAssets(assetsRes.data.data || []);
         } catch (err: any) {
             toast.error(err?.response?.data?.error || 'Failed to load schedules');
         } finally {
@@ -116,7 +119,7 @@ export function PreventiveMaintenance() {
             toast.success(res.data.message || 'Maintenance ticket created');
             fetchSchedules();
         } catch (err: any) {
-            toast.error(err?.response?.data?.error || 'Failed to execute schedule');
+            toast.error(err?.response?.data?.message || err?.response?.data?.error || 'Failed to execute schedule');
         } finally {
             setExecuting(null);
         }
@@ -309,6 +312,22 @@ export function PreventiveMaintenance() {
                                     onChange={e => setFormData(p => ({ ...p, name: e.target.value }))} required />
                             </div>
                             <div className="space-y-2">
+                                <Label>Asset *</Label>
+                                <Select value={formData.assetId}
+                                    onValueChange={(v: string) => setFormData(p => ({ ...p, assetId: v }))}>
+                                    <SelectTrigger>
+                                        <SelectValue placeholder="Select asset" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {assets.map((a) => (
+                                            <SelectItem key={a.id} value={a.id}>
+                                                {a.name} {a.guai ? `(${a.guai})` : ''}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                            <div className="space-y-2">
                                 <Label>Description</Label>
                                 <Input placeholder="What needs to be done" value={formData.description}
                                     onChange={e => setFormData(p => ({ ...p, description: e.target.value }))} />
@@ -364,7 +383,7 @@ export function PreventiveMaintenance() {
                         </div>
                         <DialogFooter>
                             <Button type="button" variant="outline" onClick={() => setShowCreateModal(false)}>Cancel</Button>
-                            <Button type="submit" disabled={!formData.name}>Create Schedule</Button>
+                            <Button type="submit" disabled={!formData.name || !formData.assetId}>Create Schedule</Button>
                         </DialogFooter>
                     </form>
                 </DialogContent>

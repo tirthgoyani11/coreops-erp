@@ -5,12 +5,16 @@ const {
     getTickets,
     getTicket,
     updateTicket,
+    getAssignableTechnicians,
+    autoScheduleTicket,
     updateWorkOrderStatus,
     approveTicket,
     rejectTicket,
     addWorkLog,
     consumePart,
     getStats,
+    getOperationsOverview,
+    getOperationalInsights,
     getTechnicianDashboard,
     getDigitalTwinPreview,
     checkAnomaly
@@ -32,8 +36,17 @@ router.route('/')
 router.route('/stats')
     .get(getStats);
 
+router.route('/overview')
+    .get(authorize('SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF', 'TECHNICIAN'), getOperationsOverview);
+
+router.route('/insights')
+    .get(authorize('SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF', 'TECHNICIAN'), getOperationalInsights);
+
 router.route('/technician/dashboard')
     .get(authorize('SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF', 'TECHNICIAN'), getTechnicianDashboard);
+
+router.route('/technicians')
+    .get(authorize('SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF'), getAssignableTechnicians);
 
 // Predictive AI — MUST be before /:id to avoid Express param collision
 router.get('/fleet-risk', authorize('SUPER_ADMIN', 'ADMIN', 'MANAGER'), predictiveService.getFleetRisk);
@@ -45,6 +58,7 @@ router.route('/:id')
 
 router.patch('/:id/approve', authorize('SUPER_ADMIN', 'ADMIN', 'MANAGER'), approveTicket);
 router.patch('/:id/reject', authorize('SUPER_ADMIN', 'ADMIN', 'MANAGER'), rejectTicket);
+router.post('/:id/auto-schedule', authorize('SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF'), autoScheduleTicket);
 router.patch('/:id/status', authorize('SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF', 'TECHNICIAN'), updateWorkOrderStatus);
 
 router.route('/:id/worklog')

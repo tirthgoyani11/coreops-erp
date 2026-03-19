@@ -12,6 +12,10 @@ const {
     getDemandForecast,
     getReorderCalc,
     getConsumptionReport,
+    getInventoryOverview,
+    getInventoryInsights,
+    reorderFromRisk,
+    fixToReorderPoint,
 } = require('../controllers/inventoryController');
 
 const protect = require('../middleware/verifyToken');
@@ -26,6 +30,9 @@ router.route('/')
 
 router.route('/alerts/low-stock')
     .get(getLowStock);
+
+router.get('/overview', getInventoryOverview);
+router.get('/insights', getInventoryInsights);
 
 router.route('/reports/valuation')
     .get(authorize('SUPER_ADMIN', 'ADMIN', 'MANAGER'), getStockValuation);
@@ -44,6 +51,9 @@ router.route('/:id')
 
 router.route('/:id/adjust')
     .post(adjustStock);
+
+router.post('/:id/reorder', authorize('SUPER_ADMIN', 'ADMIN', 'MANAGER'), reorderFromRisk);
+router.post('/:id/fix-reorder-point', authorize('SUPER_ADMIN', 'ADMIN', 'MANAGER'), fixToReorderPoint);
 
 module.exports = router;
 

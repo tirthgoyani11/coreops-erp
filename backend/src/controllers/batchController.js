@@ -2,13 +2,33 @@ const prisma = require('../config/prisma');
 const { asyncHandler, AppError } = require('../utils/errorHandler');
 const logger = require('../utils/logger');
 
+function isBatchTableMissingError(error) {
+    if (!error) return false;
+    if (error.code !== 'P2021') return false;
+    const msg = String(error.message || '');
+    const model = String(error?.meta?.modelName || '');
+    return msg.includes('InventoryBatch') || model === 'InventoryBatch';
+}
+
 // ── Get Batches for Inventory Item ─────────────────────
 exports.getBatches = asyncHandler(async (req, res) => {
-    const batches = await prisma.inventoryBatch.findMany({
-        where: { inventoryId: req.params.inventoryId },
-        orderBy: { receivedDate: 'desc' },
-    });
-    res.status(200).json({ success: true, count: batches.length, data: batches });
+    try {
+        const batches = await prisma.inventoryBatch.findMany({
+            where: { inventoryId: req.params.inventoryId },
+            orderBy: { receivedDate: 'desc' },
+        });
+        return res.status(200).json({ success: true, count: batches.length, data: batches });
+    } catch (error) {
+        if (isBatchTableMissingError(error)) {
+            return res.status(200).json({
+                success: true,
+                count: 0,
+                data: [],
+                capability: { enabled: false, reason: 'Batch tables are not initialized in this database.' },
+            });
+        }
+        throw error;
+    }
 });
 
 // ── Create Batch (on stock-in) ─────────────────────────
@@ -29,19 +49,27 @@ exports.createBatch = asyncHandler(async (req, res, next) => {
     });
     if (existing) return next(new AppError(`Batch "${batchNumber}" already exists for this item`, 409));
 
-    const batch = await prisma.inventoryBatch.create({
-        data: {
-            inventoryId,
-            batchNumber,
-            lotNumber,
-            quantity: Number(quantity),
-            remainingQuantity: Number(quantity),
-            expiryDate: expiryDate ? new Date(expiryDate) : null,
-            manufacturingDate: manufacturingDate ? new Date(manufacturingDate) : null,
-            costPerUnit: costPerUnit ? Number(costPerUnit) : null,
-            notes,
-        },
-    });
+    let batch;
+    try {
+        batch = await prisma.inventoryBatch.create({
+            data: {
+                inventoryId,
+                batchNumber,
+                lotNumber,
+                quantity: Number(quantity),
+                remainingQuantity: Number(quantity),
+                expiryDate: expiryDate ? new Date(expiryDate) : null,
+                manufacturingDate: manufacturingDate ? new Date(manufacturingDate) : null,
+                costPerUnit: costPerUnit ? Number(costPerUnit) : null,
+                notes,
+            },
+        });
+    } catch (error) {
+        if (isBatchTableMissingError(error)) {
+            return next(new AppError('Batch module is not initialized. Run database migrations for InventoryBatch first.', 503));
+        }
+        throw error;
+    }
 
     // Update inventory quantity
     await prisma.inventory.update({
@@ -70,60 +98,79 @@ exports.consumeBatch = asyncHandler(async (req, res, next) => {
     const { inventoryId } = req.params;
     const { quantity, reason, reference } = req.body;
 
-    if (!quantity || quantity <= 0) return next(new AppError('Valid quantity required', 400));
+    const requestedQty = Number(quantity);
+    if (!requestedQty || requestedQty <= 0) return next(new AppError('Valid quantity required', 400));
 
-    const availableBatches = await prisma.inventoryBatch.findMany({
-        where: { inventoryId, status: 'AVAILABLE', remainingQuantity: { gt: 0 } },
-        orderBy: { receivedDate: 'asc' }, // FIFO
-    });
+    let result;
+    try {
+        result = await prisma.$transaction(async (tx) => {
+            const availableBatches = await tx.inventoryBatch.findMany({
+                where: { inventoryId, status: 'AVAILABLE', remainingQuantity: { gt: 0 } },
+                orderBy: { receivedDate: 'asc' }, // FIFO
+            });
 
-    let remaining = Number(quantity);
-    const consumed = [];
+            const totalAvailable = availableBatches.reduce((sum, batch) => sum + Number(batch.remainingQuantity || 0), 0);
+            if (totalAvailable < requestedQty) {
+                const shortBy = requestedQty - totalAvailable;
+                throw new AppError(
+                    `Insufficient stock. Requested ${requestedQty}, available ${totalAvailable}. Short by ${shortBy} units.`,
+                    400
+                );
+            }
 
-    for (const batch of availableBatches) {
-        if (remaining <= 0) break;
+            let remaining = requestedQty;
+            const consumed = [];
 
-        const take = Math.min(remaining, batch.remainingQuantity);
-        const newRemaining = batch.remainingQuantity - take;
+            for (const batch of availableBatches) {
+                if (remaining <= 0) break;
 
-        await prisma.inventoryBatch.update({
-            where: { id: batch.id },
-            data: {
-                remainingQuantity: newRemaining,
-                status: newRemaining === 0 ? 'CONSUMED' : 'AVAILABLE',
-            },
+                const take = Math.min(remaining, batch.remainingQuantity);
+                const newRemaining = batch.remainingQuantity - take;
+
+                await tx.inventoryBatch.update({
+                    where: { id: batch.id },
+                    data: {
+                        remainingQuantity: newRemaining,
+                        status: newRemaining === 0 ? 'CONSUMED' : 'AVAILABLE',
+                    },
+                });
+
+                consumed.push({ batchNumber: batch.batchNumber, consumed: take, costPerUnit: batch.costPerUnit });
+                remaining -= take;
+            }
+
+            await tx.inventory.update({
+                where: { id: inventoryId },
+                data: { currentQuantity: { decrement: requestedQty } },
+            });
+
+            await tx.stockMovement.create({
+                data: {
+                    inventoryId,
+                    type: 'STOCK_OUT',
+                    quantity: requestedQty,
+                    reason: reason || 'Batch consumption (FIFO)',
+                    reference,
+                    performedById: req.user.id,
+                },
+            });
+
+            return {
+                consumed,
+                totalCost: consumed.reduce((sum, c) => sum + (c.consumed * (c.costPerUnit || 0)), 0),
+            };
         });
-
-        consumed.push({ batchNumber: batch.batchNumber, consumed: take, costPerUnit: batch.costPerUnit });
-        remaining -= take;
+    } catch (error) {
+        if (isBatchTableMissingError(error)) {
+            return next(new AppError('Batch module is not initialized. Run database migrations for InventoryBatch first.', 503));
+        }
+        throw error;
     }
-
-    if (remaining > 0) {
-        return next(new AppError(`Insufficient stock. Short by ${remaining} units.`, 400));
-    }
-
-    // Update inventory quantity
-    await prisma.inventory.update({
-        where: { id: inventoryId },
-        data: { currentQuantity: { decrement: Number(quantity) } },
-    });
-
-    // Stock movement
-    await prisma.stockMovement.create({
-        data: {
-            inventoryId,
-            type: 'STOCK_OUT',
-            quantity: Number(quantity),
-            reason: reason || 'Batch consumption (FIFO)',
-            reference,
-            performedById: req.user.id,
-        },
-    });
 
     res.status(200).json({
         success: true,
-        message: `${quantity} units consumed from ${consumed.length} batch(es)`,
-        data: { consumed, totalCost: consumed.reduce((sum, c) => sum + (c.consumed * (c.costPerUnit || 0)), 0) },
+        message: `${requestedQty} units consumed from ${result.consumed.length} batch(es)`,
+        data: result,
     });
 });
 
@@ -139,13 +186,26 @@ exports.getExpiringBatches = asyncHandler(async (req, res) => {
         expiryDate: { lte: futureDate, gte: new Date() },
     };
 
-    const batches = await prisma.inventoryBatch.findMany({
-        where,
-        include: {
-            inventory: { select: { id: true, name: true, sku: true, officeId: true } },
-        },
-        orderBy: { expiryDate: 'asc' },
-    });
+    let batches;
+    try {
+        batches = await prisma.inventoryBatch.findMany({
+            where,
+            include: {
+                inventory: { select: { id: true, name: true, sku: true, officeId: true } },
+            },
+            orderBy: { expiryDate: 'asc' },
+        });
+    } catch (error) {
+        if (isBatchTableMissingError(error)) {
+            return res.status(200).json({
+                success: true,
+                count: 0,
+                data: [],
+                capability: { enabled: false, reason: 'Batch tables are not initialized in this database.' },
+            });
+        }
+        throw error;
+    }
 
     // Filter by office for non-admin
     const filtered = req.user.role === 'SUPER_ADMIN'
@@ -153,6 +213,65 @@ exports.getExpiringBatches = asyncHandler(async (req, res) => {
         : batches.filter(b => b.inventory.officeId === req.user.officeId);
 
     res.status(200).json({ success: true, count: filtered.length, data: filtered });
+});
+
+// ── Batch Stock Summary (available qty per inventory) ──────────
+exports.getBatchStockSummary = asyncHandler(async (req, res) => {
+    let batches;
+    try {
+        batches = await prisma.inventoryBatch.findMany({
+            where: {
+                status: 'AVAILABLE',
+                remainingQuantity: { gt: 0 },
+            },
+            select: {
+                inventoryId: true,
+                remainingQuantity: true,
+                inventory: {
+                    select: {
+                        id: true,
+                        sku: true,
+                        name: true,
+                        officeId: true,
+                    },
+                },
+            },
+        });
+    } catch (error) {
+        if (isBatchTableMissingError(error)) {
+            return res.status(200).json({
+                success: true,
+                count: 0,
+                data: [],
+                capability: { enabled: false, reason: 'Batch tables are not initialized in this database.' },
+            });
+        }
+        throw error;
+    }
+
+    const isSuper = req.user.role === 'SUPER_ADMIN';
+    const userOfficeId = req.user.office?.id || req.user.officeId;
+    const resolvedOfficeId = typeof userOfficeId === 'object' ? userOfficeId.id : userOfficeId;
+
+    const summaryMap = new Map();
+    for (const b of batches) {
+        if (!isSuper && b.inventory?.officeId !== resolvedOfficeId) continue;
+
+        if (!summaryMap.has(b.inventoryId)) {
+            summaryMap.set(b.inventoryId, {
+                inventoryId: b.inventoryId,
+                sku: b.inventory?.sku || null,
+                name: b.inventory?.name || null,
+                availableQuantity: 0,
+            });
+        }
+
+        const row = summaryMap.get(b.inventoryId);
+        row.availableQuantity += Number(b.remainingQuantity || 0);
+    }
+
+    const data = Array.from(summaryMap.values()).sort((a, b) => b.availableQuantity - a.availableQuantity);
+    res.status(200).json({ success: true, count: data.length, data });
 });
 
 // ── Serialized Units ───────────────────────────────────

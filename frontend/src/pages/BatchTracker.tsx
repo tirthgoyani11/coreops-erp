@@ -1,7 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Package, AlertTriangle, Calendar, Search, Loader2, ArrowRight, Activity, TrendingDown } from 'lucide-react';
+import { Package, AlertTriangle, Calendar, Search, Loader2, ArrowRight, Activity, TrendingDown, RefreshCw, ShieldAlert } from 'lucide-react';
 import api from '../lib/api';
+import { useToast } from '../hooks/useToast';
+import { useAuthStore } from '../stores/authStore';
 import type { InventoryItem } from '../types';
 
 interface Batch {
@@ -21,45 +24,78 @@ interface Batch {
 }
 
 export function BatchTracker() {
+    const navigate = useNavigate();
+    const toast = useToast();
+    const { user } = useAuthStore();
+
     const [expiringBatches, setExpiringBatches] = useState<Batch[]>([]);
     const [inventoryItems, setInventoryItems] = useState<InventoryItem[]>([]);
     const [selectedItem, setSelectedItem] = useState<string>('');
     const [itemBatches, setItemBatches] = useState<Batch[]>([]);
+    const [batchStockSummary, setBatchStockSummary] = useState<Record<string, number>>({});
 
     const [isLoadingExpiring, setIsLoadingExpiring] = useState(true);
     const [isLoadingBatches, setIsLoadingBatches] = useState(false);
+    const [isRefreshing, setIsRefreshing] = useState(false);
+    const [isConsuming, setIsConsuming] = useState(false);
+    const [isUpdatingTracking, setIsUpdatingTracking] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
+    const [daysWindow, setDaysWindow] = useState(60);
+    const [consumeQuantity, setConsumeQuantity] = useState(1);
+    const [batchCapability, setBatchCapability] = useState<{ enabled: boolean; reason?: string }>({ enabled: true });
+
+    const canConsume = ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF'].includes(String(user?.role || ''));
+    const canConfigureTracking = ['SUPER_ADMIN', 'ADMIN', 'MANAGER'].includes(String(user?.role || ''));
+
+    const fetchDashboardData = async (showRefresh = false) => {
+        try {
+            if (showRefresh) setIsRefreshing(true);
+            setIsLoadingExpiring(true);
+            const [expiringRes, inventoryRes] = await Promise.all([
+                api.get(`/inventory-ext/batches/expiring?days=${daysWindow}`),
+                api.get('/inventory')
+            ]);
+
+            const summaryRes = await api.get('/inventory-ext/batches/stock-summary');
+
+            if (expiringRes.data.success) {
+                setExpiringBatches(expiringRes.data.data);
+                if (expiringRes.data.capability) {
+                    setBatchCapability(expiringRes.data.capability);
+                }
+            }
+            if (inventoryRes.data.success) {
+                setInventoryItems(inventoryRes.data.data);
+            }
+            if (summaryRes.data?.success) {
+                const map: Record<string, number> = {};
+                for (const row of summaryRes.data.data || []) {
+                    map[row.inventoryId] = Number(row.availableQuantity || 0);
+                }
+                setBatchStockSummary(map);
+                if (summaryRes.data.capability) {
+                    setBatchCapability(summaryRes.data.capability);
+                }
+            }
+        } catch (err) {
+            console.error('Failed to fetch initial batch data', err);
+            toast.error('Failed to load batch dashboard');
+        } finally {
+            setIsLoadingExpiring(false);
+            setIsRefreshing(false);
+        }
+    };
 
     useEffect(() => {
-        const fetchDashboardData = async () => {
-            try {
-                setIsLoadingExpiring(true);
-                const [expiringRes, inventoryRes] = await Promise.all([
-                    api.get('/inventory-ext/batches/expiring?days=60'),
-                    api.get('/inventory')
-                ]);
-
-                if (expiringRes.data.success) {
-                    setExpiringBatches(expiringRes.data.data);
-                }
-                if (inventoryRes.data.success) {
-                    setInventoryItems(inventoryRes.data.data);
-                }
-            } catch (err) {
-                console.error('Failed to fetch initial batch data', err);
-            } finally {
-                setIsLoadingExpiring(false);
-            }
-        };
-
         fetchDashboardData();
-    }, []);
+    }, [daysWindow]);
 
     useEffect(() => {
         if (!selectedItem) {
             setItemBatches([]);
             return;
         }
+        setConsumeQuantity(1);
 
         const fetchItemBatches = async () => {
             try {
@@ -94,27 +130,189 @@ export function BatchTracker() {
 
     const filteredInventory = inventoryItems.filter(item =>
         item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        item.sku.toLowerCase().includes(searchTerm.toLowerCase())
+        (item.sku || '').toLowerCase().includes(searchTerm.toLowerCase())
     );
+
+    const kpis = useMemo(() => {
+        const now = Date.now();
+        const expiringIn15 = expiringBatches.filter((b) => {
+            if (!b.expiryDate) return false;
+            const days = (new Date(b.expiryDate).getTime() - now) / (1000 * 3600 * 24);
+            return days >= 0 && days <= 15;
+        }).length;
+
+        const expiringIn30 = expiringBatches.filter((b) => {
+            if (!b.expiryDate) return false;
+            const days = (new Date(b.expiryDate).getTime() - now) / (1000 * 3600 * 24);
+            return days >= 0 && days <= 30;
+        }).length;
+
+        const totalExpiringUnits = expiringBatches.reduce((sum, b) => sum + Number(b.remainingQuantity || 0), 0);
+        const distinctItemsAtRisk = new Set(expiringBatches.map((b) => b.inventoryId)).size;
+
+        return {
+            totalExpiringBatches: expiringBatches.length,
+            expiringIn15,
+            expiringIn30,
+            totalExpiringUnits,
+            distinctItemsAtRisk,
+        };
+    }, [expiringBatches]);
+
+    const selectedItemData: any = useMemo(
+        () => inventoryItems.find((i) => i.id === selectedItem),
+        [inventoryItems, selectedItem]
+    );
+
+    const selectedAvailableQty = Number(selectedItemData?.currentQuantity ?? selectedItemData?.quantity ?? 0);
+    const selectedTrackingType = String((selectedItemData as any)?.trackingType || 'QUANTITY').toUpperCase();
+    const totalBatchAvailableQty = useMemo(
+        () => itemBatches
+            .filter((b) => b.status === 'AVAILABLE' && Number(b.remainingQuantity || 0) > 0)
+            .reduce((sum, b) => sum + Number(b.remainingQuantity || 0), 0),
+        [itemBatches]
+    );
+
+    const consumeFromFifo = async () => {
+        if (!selectedItem) return;
+        if (selectedTrackingType !== 'BATCH') {
+            toast.error('Selected SKU is not batch-tracked. Enable batch tracking first.');
+            return;
+        }
+        if (!consumeQuantity || consumeQuantity <= 0) {
+            toast.error('Enter a valid consume quantity');
+            return;
+        }
+        if (totalBatchAvailableQty <= 0) {
+            toast.error('No available batch stock to consume');
+            return;
+        }
+        if (consumeQuantity > totalBatchAvailableQty) {
+            toast.error(`Only ${totalBatchAvailableQty} unit(s) available in open batches`);
+            setConsumeQuantity(totalBatchAvailableQty);
+            return;
+        }
+
+        try {
+            setIsConsuming(true);
+            const res = await api.post(`/inventory-ext/${selectedItem}/batches/consume`, {
+                quantity: Number(consumeQuantity),
+                reason: 'Quick consume from Batch Tracker',
+                reference: `BATCH_TRACKER_${new Date().toISOString().slice(0, 10)}`,
+            });
+
+            if (res.data?.success) {
+                toast.success(res.data.message || 'Batch consumption successful');
+                const [itemRes] = await Promise.all([
+                    api.get(`/inventory-ext/${selectedItem}/batches`),
+                    fetchDashboardData(true),
+                ]);
+                if (itemRes.data?.success) {
+                    setItemBatches(itemRes.data.data);
+                }
+            }
+        } catch (err: any) {
+            const apiMessage = err?.response?.data?.message || 'Failed to consume batch';
+            toast.error(apiMessage);
+
+            const shortMatch = String(apiMessage).match(/Short by\s+(\d+)\s+units/i);
+            if (shortMatch && totalBatchAvailableQty > 0) {
+                setConsumeQuantity(totalBatchAvailableQty);
+            }
+        } finally {
+            setIsConsuming(false);
+        }
+    };
+
+    const enableBatchTracking = async () => {
+        if (!selectedItem) return;
+        if (selectedTrackingType === 'BATCH') return;
+
+        try {
+            setIsUpdatingTracking(true);
+            const res = await api.put(`/inventory/${selectedItem}`, { trackingType: 'BATCH' });
+            if (res.data?.success) {
+                toast.success('Batch tracking enabled for selected SKU');
+                await fetchDashboardData(true);
+            }
+        } catch (err: any) {
+            toast.error(err?.response?.data?.message || 'Failed to enable batch tracking');
+        } finally {
+            setIsUpdatingTracking(false);
+        }
+    };
+
+    const hasOpenBatchStock = totalBatchAvailableQty > 0;
 
     return (
         <div className="space-y-8">
+            {!batchCapability.enabled && (
+                <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 p-4 text-amber-200">
+                    <div className="font-semibold">Batch module is not initialized in this database</div>
+                    <div className="text-sm mt-1">{batchCapability.reason || 'Run database migrations for InventoryBatch and related tables.'}</div>
+                </div>
+            )}
+
             {/* Header */}
-            <div>
-                <h1 className="text-2xl font-bold text-[var(--text-primary)] flex items-center gap-3">
-                    <Package className="w-6 h-6 text-[var(--primary)]" />
-                    Batch & Lot Tracking
-                </h1>
-                <p className="text-[var(--text-secondary)] mt-1">
-                    Monitor inventory batches, check expiry dates, and trace lot histories.
-                </p>
+            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                <div>
+                    <h1 className="text-2xl font-bold text-[var(--text-primary)] flex items-center gap-3">
+                        <Package className="w-6 h-6 text-[var(--primary)]" />
+                        Batch & Lot Tracking
+                    </h1>
+                    <p className="text-[var(--text-secondary)] mt-1">
+                        Monitor inventory batches, check expiry dates, and trace lot histories.
+                    </p>
+                </div>
+                <div className="flex items-center gap-2">
+                    <select
+                        value={daysWindow}
+                        onChange={(e) => setDaysWindow(Number(e.target.value))}
+                        className="px-3 py-2 rounded-lg bg-[var(--bg-card)] border border-[var(--border-color)] text-[var(--text-primary)]"
+                    >
+                        <option value={30}>Next 30 days</option>
+                        <option value={60}>Next 60 days</option>
+                        <option value={90}>Next 90 days</option>
+                    </select>
+                    <button
+                        type="button"
+                        onClick={() => fetchDashboardData(true)}
+                        className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-[var(--border-color)] bg-[var(--bg-card)] text-[var(--text-primary)] hover:bg-[var(--bg-overlay)] transition-colors"
+                    >
+                        <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} /> Refresh
+                    </button>
+                </div>
+            </div>
+
+            {/* KPI Strip */}
+            <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+                <div className="rounded-xl border border-[var(--border-color)] bg-[var(--bg-card)] p-3">
+                    <div className="text-xs uppercase tracking-wider text-[var(--text-muted)]">Expiring Batches</div>
+                    <div className="text-xl font-bold text-[var(--text-primary)] mt-1">{kpis.totalExpiringBatches}</div>
+                </div>
+                <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-3">
+                    <div className="text-xs uppercase tracking-wider text-red-200">Critical 15d</div>
+                    <div className="text-xl font-bold text-red-300 mt-1">{kpis.expiringIn15}</div>
+                </div>
+                <div className="rounded-xl border border-orange-500/30 bg-orange-500/10 p-3">
+                    <div className="text-xs uppercase tracking-wider text-orange-200">Risk 30d</div>
+                    <div className="text-xl font-bold text-orange-300 mt-1">{kpis.expiringIn30}</div>
+                </div>
+                <div className="rounded-xl border border-[var(--border-color)] bg-[var(--bg-card)] p-3">
+                    <div className="text-xs uppercase tracking-wider text-[var(--text-muted)]">Units At Risk</div>
+                    <div className="text-xl font-bold text-[var(--text-primary)] mt-1">{kpis.totalExpiringUnits}</div>
+                </div>
+                <div className="rounded-xl border border-[var(--border-color)] bg-[var(--bg-card)] p-3">
+                    <div className="text-xs uppercase tracking-wider text-[var(--text-muted)]">Items Impacted</div>
+                    <div className="text-xl font-bold text-[var(--text-primary)] mt-1">{kpis.distinctItemsAtRisk}</div>
+                </div>
             </div>
 
             {/* Expiring Soon Alerts */}
             <div className="bg-red-500/5 border border-red-500/20 rounded-xl p-6">
                 <div className="flex items-center gap-2 mb-4">
                     <AlertTriangle className="w-5 h-5 text-red-400" />
-                    <h2 className="text-lg font-bold text-[var(--text-primary)] text-red-400">Expiring Within 60 Days</h2>
+                    <h2 className="text-lg font-bold text-[var(--text-primary)] text-red-400">Expiring Within {daysWindow} Days</h2>
                 </div>
 
                 {isLoadingExpiring ? (
@@ -150,6 +348,13 @@ export function BatchTracker() {
                                         </span>
                                     </div>
                                 </div>
+                                <button
+                                    type="button"
+                                    onClick={() => navigate(`/finance/exception-center?module=INVENTORY&ref=${batch.inventoryId}`)}
+                                    className="mt-3 inline-flex items-center gap-1 text-xs px-2 py-1 rounded border border-red-500/30 text-red-300 hover:bg-red-500/10"
+                                >
+                                    <ShieldAlert className="w-3 h-3" /> Open Exception
+                                </button>
                             </div>
                         ))}
                     </div>
@@ -173,9 +378,13 @@ export function BatchTracker() {
 
                     <div className="space-y-2 max-h-[500px] overflow-y-auto pr-2 custom-scrollbar">
                         {filteredInventory.length === 0 ? (
-                            <p className="text-[var(--text-muted)] text-sm text-center py-4">No tracking-enabled items found.</p>
+                            <div className="text-[var(--text-muted)] text-sm text-center py-4 space-y-2">
+                                <p>No inventory items found.</p>
+                                <p className="text-xs">Try adjusting the search text.</p>
+                            </div>
                         ) : (
                             filteredInventory.map(item => (
+                                // In batch tracker, prefer live batch-derived stock over generic inventory quantity.
                                 <button
                                     key={item.id}
                                     onClick={() => setSelectedItem(item.id)}
@@ -187,7 +396,10 @@ export function BatchTracker() {
                                     <div className="font-medium truncate">{item.name}</div>
                                     <div className={`text-xs mt-1 flex justify-between ${selectedItem === item.id ? 'text-[var(--primary)]/80' : 'text-[var(--text-secondary)]'}`}>
                                         <span>{item.sku}</span>
-                                        <span>Qty: {item.quantity}</span>
+                                        <span>Qty: {batchStockSummary[item.id] ?? (item as any).currentQuantity ?? item.quantity ?? 0}</span>
+                                    </div>
+                                    <div className={`text-[10px] mt-1 ${selectedItem === item.id ? 'text-[var(--primary)]/75' : 'text-[var(--text-muted)]'}`}>
+                                        {(item as any).trackingType || 'QUANTITY'} tracking
                                     </div>
                                 </button>
                             ))
@@ -213,6 +425,78 @@ export function BatchTracker() {
                                 <div className="text-sm px-3 py-1 bg-[var(--bg-overlay)] rounded-full text-[var(--text-secondary)] border border-[var(--border-color)]">
                                     Total Active Lots: <span className="font-bold text-[var(--text-primary)]">{itemBatches.filter(b => b.remainingQuantity > 0).length}</span>
                                 </div>
+                            </div>
+
+                            <div className="rounded-xl border border-[var(--border-color)] bg-[var(--bg-card)] p-4">
+                                <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+                                    <div className="text-sm text-[var(--text-secondary)]">
+                                        Selected SKU stock: <span className="font-semibold text-[var(--text-primary)]">{selectedAvailableQty}</span>
+                                    </div>
+                                    <div className="text-sm text-[var(--text-secondary)]">
+                                        Tracking mode: <span className="font-semibold text-[var(--text-primary)]">{selectedTrackingType}</span>
+                                    </div>
+                                    <div className="text-sm text-[var(--text-secondary)]">
+                                        Open batch availability: <span className="font-semibold text-[var(--text-primary)]">{totalBatchAvailableQty}</span>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <input
+                                            type="number"
+                                            min={1}
+                                            max={Math.max(1, totalBatchAvailableQty)}
+                                            value={consumeQuantity}
+                                            onChange={(e) => setConsumeQuantity(Math.max(1, Number(e.target.value || 1)))}
+                                            className="w-24 px-2 py-1.5 rounded border border-[var(--border-color)] bg-[var(--bg-overlay)] text-[var(--text-primary)]"
+                                            disabled={!hasOpenBatchStock}
+                                        />
+                                        <button
+                                            type="button"
+                                            onClick={consumeFromFifo}
+                                            disabled={!canConsume || isConsuming || !hasOpenBatchStock || selectedTrackingType !== 'BATCH'}
+                                            className="px-3 py-1.5 rounded border border-[var(--primary)]/40 text-[var(--primary)] hover:bg-[var(--primary)]/10 disabled:opacity-50"
+                                        >
+                                            {isConsuming
+                                                ? 'Consuming...'
+                                                : selectedTrackingType !== 'BATCH'
+                                                    ? 'Batch Tracking Required'
+                                                    : hasOpenBatchStock
+                                                        ? 'One-click FIFO Consume'
+                                                        : 'No Batch Stock'}
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => navigate(`/finance/exception-center?module=INVENTORY&ref=${selectedItem}`)}
+                                            className="px-3 py-1.5 rounded border border-[var(--border-color)] text-[var(--text-secondary)] hover:bg-[var(--bg-overlay)]"
+                                        >
+                                            Exception View
+                                        </button>
+                                    </div>
+                                </div>
+                                {!hasOpenBatchStock && (
+                                    <div className="mt-3 text-xs text-orange-300 flex flex-wrap gap-2 items-center">
+                                        <span>
+                                            {selectedTrackingType !== 'BATCH'
+                                                ? 'This SKU is not batch-tracked yet.'
+                                                : 'No available lot in batches for this SKU.'}
+                                        </span>
+                                        {selectedTrackingType !== 'BATCH' && canConfigureTracking && (
+                                            <button
+                                                type="button"
+                                                onClick={enableBatchTracking}
+                                                disabled={isUpdatingTracking}
+                                                className="px-2 py-1 rounded border border-emerald-400/40 hover:bg-emerald-500/10 disabled:opacity-50"
+                                            >
+                                                {isUpdatingTracking ? 'Enabling...' : 'Enable Batch Tracking'}
+                                            </button>
+                                        )}
+                                        <button
+                                            type="button"
+                                            onClick={() => navigate(`/inventory/operations?type=IN&item=${selectedItem}`)}
+                                            className="px-2 py-1 rounded border border-orange-400/40 hover:bg-orange-500/10"
+                                        >
+                                            Add Stock / Create Batch
+                                        </button>
+                                    </div>
+                                )}
                             </div>
 
                             {itemBatches.length === 0 ? (
@@ -253,7 +537,7 @@ export function BatchTracker() {
                                                     <div className="flex-1 h-2 bg-[var(--bg-overlay)] rounded-full overflow-hidden">
                                                         <div
                                                             className="h-full bg-[var(--primary)] rounded-full"
-                                                            style={{ width: `${(batch.remainingQuantity / batch.quantity) * 100}%` }}
+                                                            style={{ width: `${batch.quantity > 0 ? (batch.remainingQuantity / batch.quantity) * 100 : 0}%` }}
                                                         />
                                                     </div>
                                                     <span className="text-sm font-bold text-[var(--text-primary)] min-w-[40px] text-right">

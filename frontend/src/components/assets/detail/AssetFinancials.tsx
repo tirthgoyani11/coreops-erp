@@ -19,6 +19,7 @@ export function AssetFinancials({ asset }: AssetFinancialsProps) {
     const purchaseYear = new Date(asset.purchaseDate || new Date()).getFullYear();
     const currency = (asset.currency || 'INR').toUpperCase();
     const currencySymbol = getCurrencySymbol(currency);
+    const valuation = asset.valuation || null;
 
     // Use backend depreciation data if available, otherwise calculate
     const usefulLife = asset.depreciation?.usefulLife || 5;
@@ -78,6 +79,26 @@ export function AssetFinancials({ asset }: AssetFinancialsProps) {
                     <p className="text-xs text-[var(--text-secondary)] mt-1">Useful Life: {usefulLife}y • {depMethod}</p>
                 </div>
             </div>
+
+            {valuation && (
+                <div className="bg-[var(--bg-card)] border border-[var(--border-color)] rounded-2xl p-4">
+                    <p className="text-xs text-[var(--text-secondary)] uppercase tracking-wide mb-2">Branch and HQ Valuation Snapshot</p>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
+                        <div>
+                            <p className="text-[var(--text-secondary)]">Branch Value</p>
+                            <p className="font-semibold text-[var(--text-primary)]">{new Intl.NumberFormat('en-IN', { style: 'currency', currency: valuation.officeCurrency || currency, maximumFractionDigits: 2 }).format(Number(valuation.officeAmount || 0))}</p>
+                        </div>
+                        <div>
+                            <p className="text-[var(--text-secondary)]">HQ Value</p>
+                            <p className="font-semibold text-[var(--text-primary)]">{new Intl.NumberFormat('en-IN', { style: 'currency', currency: valuation.hqCurrency || 'INR', maximumFractionDigits: 2 }).format(Number(valuation.hqAmount || 0))}</p>
+                        </div>
+                        <div>
+                            <p className="text-[var(--text-secondary)]">FX at Snapshot</p>
+                            <p className="font-semibold text-[var(--text-primary)]">1 {valuation.officeCurrency} = {Number(valuation.hqRate || 1).toFixed(4)} {valuation.hqCurrency}</p>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* Depreciation Chart */}
             <div className="bg-[var(--bg-card)] border border-[var(--border-color)] rounded-2xl p-6">

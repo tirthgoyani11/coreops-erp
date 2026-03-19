@@ -227,6 +227,7 @@ export const NAV_ITEMS: NavItem[] = [
             { label: 'Cash Flow', path: '/cash-flow', roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'VIEWER'] },
             { label: 'AP Aging', path: '/finance/ap-aging', roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'VIEWER'] },
             { label: 'AR Aging', path: '/finance/ar-aging', roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'VIEWER'] },
+            { label: 'Exception Center', path: '/finance/exception-center', roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF'] },
             { label: 'Bank Reconciliation', path: '/bank-reconciliation', roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER'] },
             { label: 'Year End Close', path: '/year-end-close', roles: ['SUPER_ADMIN'] },
             { label: 'Expense Claims', path: '/expense-claims', roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF', 'TECHNICIAN'] }

@@ -9,7 +9,11 @@ import {
     User,
     AlertTriangle,
     FileText,
-    DollarSign
+    DollarSign,
+    CalendarClock,
+    PackagePlus,
+    ClipboardPlus,
+    Save
 } from 'lucide-react';
 import { format } from 'date-fns';
 
@@ -20,6 +24,34 @@ import { Card } from '../components/ui/Card';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '../components/ui/Tabs';
 import { Input } from '../components/ui/Input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '../components/ui/Dialog';
+
+function parseWorkLogMeta(rawNotes?: string) {
+    const notes = String(rawNotes || '');
+    const marker = '\n\n[META] ';
+    const idx = notes.indexOf(marker);
+
+    if (idx === -1) {
+        return {
+            displayNotes: notes,
+            meta: null as any,
+        };
+    }
+
+    const displayNotes = notes.slice(0, idx).trim();
+    const rawMeta = notes.slice(idx + marker.length).trim();
+
+    try {
+        return {
+            displayNotes,
+            meta: JSON.parse(rawMeta),
+        };
+    } catch {
+        return {
+            displayNotes: notes,
+            meta: null as any,
+        };
+    }
+}
 
 export default function TicketDetails() {
     const { id } = useParams();
@@ -38,12 +70,37 @@ export default function TicketDetails() {
 
     // Approval state
     const [approvalNote, setApprovalNote] = useState('');
+    const [technicians, setTechnicians] = useState<any[]>([]);
+    const [inventoryItems, setInventoryItems] = useState<any[]>([]);
+    const [selectedTechnicianId, setSelectedTechnicianId] = useState('');
+    const [scheduleStartAt, setScheduleStartAt] = useState('');
+    const [scheduleHours, setScheduleHours] = useState<number>(8);
+    const [costForm, setCostForm] = useState({ estimatedCost: 0, actualCost: 0 });
+    const [partForm, setPartForm] = useState({ inventoryId: '', quantity: 1 });
+    const [workLogForm, setWorkLogForm] = useState({
+        notes: '',
+        startTime: '',
+        endTime: '',
+        timeSpentMinutes: 30,
+        maintenanceType: 'CORRECTIVE',
+    });
+    const [actionBusy, setActionBusy] = useState(false);
 
     // Fetch ticket
     const fetchTicket = async () => {
         try {
             const res = await api.get(`/maintenance/${id}`);
             setTicket(res.data.data);
+            setSelectedTechnicianId(res.data.data?.assignedToId || '');
+            setCostForm({
+                estimatedCost: Number(res.data.data?.estimatedCost || 0),
+                actualCost: Number(res.data.data?.actualCost || 0),
+            });
+            setScheduleStartAt(
+                res.data.data?.assignedDate
+                    ? new Date(res.data.data.assignedDate).toISOString().slice(0, 16)
+                    : new Date(Date.now() + 60 * 60 * 1000).toISOString().slice(0, 16)
+            );
         } catch (error) {
             toast.error('Failed to load ticket details');
             navigate('/maintenance');
@@ -52,8 +109,22 @@ export default function TicketDetails() {
         }
     };
 
+    const fetchSupportData = async () => {
+        try {
+            const [techRes, invRes] = await Promise.all([
+                api.get('/maintenance/technicians'),
+                api.get('/inventory', { params: { type: 'SPARE', limit: 100 } }),
+            ]);
+            setTechnicians(techRes.data?.data || []);
+            setInventoryItems(invRes.data?.data || []);
+        } catch {
+            // Non-blocking; user can still view ticket details.
+        }
+    };
+
     useEffect(() => {
         fetchTicket();
+        fetchSupportData();
     }, [id]);
 
     const handleApproval = async (status: 'approved' | 'rejected') => {
@@ -101,6 +172,108 @@ export default function TicketDetails() {
             setClosing(false);
         }
     }
+
+    const saveAssignment = async () => {
+        if (!id) return;
+        setActionBusy(true);
+        try {
+            await api.put(`/maintenance/${id}`, {
+                assignedTo: selectedTechnicianId || null,
+                scheduledStartAt: scheduleStartAt || null,
+                estimatedHours: scheduleHours,
+            });
+            toast.success('Assignment and schedule updated');
+            await fetchTicket();
+        } catch (error: any) {
+            toast.error(error.response?.data?.message || 'Failed to update assignment');
+        } finally {
+            setActionBusy(false);
+        }
+    };
+
+    const runAutoSchedule = async () => {
+        if (!id) return;
+        setActionBusy(true);
+        try {
+            await api.post(`/maintenance/${id}/auto-schedule`, {
+                startAt: scheduleStartAt || undefined,
+                estimatedHours: scheduleHours,
+            });
+            toast.success('Auto-schedule applied with balanced technician load');
+            await fetchTicket();
+            await fetchSupportData();
+        } catch (error: any) {
+            toast.error(error.response?.data?.message || 'Auto-schedule failed');
+        } finally {
+            setActionBusy(false);
+        }
+    };
+
+    const saveCosts = async () => {
+        if (!id) return;
+        setActionBusy(true);
+        try {
+            await api.put(`/maintenance/${id}`, {
+                estimatedCost: Number(costForm.estimatedCost || 0),
+                actualCost: Number(costForm.actualCost || 0),
+            });
+            toast.success('Maintenance costs updated');
+            await fetchTicket();
+        } catch (error: any) {
+            toast.error(error.response?.data?.message || 'Failed to update costs');
+        } finally {
+            setActionBusy(false);
+        }
+    };
+
+    const addPartUsage = async () => {
+        if (!id || !partForm.inventoryId) {
+            toast.error('Select a part first');
+            return;
+        }
+
+        setActionBusy(true);
+        try {
+            await api.post(`/maintenance/${id}/parts`, {
+                inventoryId: partForm.inventoryId,
+                quantity: Number(partForm.quantity || 0),
+            });
+            toast.success('Part usage recorded and inventory adjusted');
+            setPartForm({ inventoryId: '', quantity: 1 });
+            await fetchTicket();
+            await fetchSupportData();
+        } catch (error: any) {
+            toast.error(error.response?.data?.message || 'Failed to record part usage');
+        } finally {
+            setActionBusy(false);
+        }
+    };
+
+    const addWorkLog = async () => {
+        if (!id || !workLogForm.notes.trim()) {
+            toast.error('Please add work log notes');
+            return;
+        }
+
+        setActionBusy(true);
+        try {
+            await api.post(`/maintenance/${id}/worklog`, {
+                notes: workLogForm.notes.trim(),
+                startTime: workLogForm.startTime || null,
+                endTime: workLogForm.endTime || null,
+                timeSpentMinutes: Number(workLogForm.timeSpentMinutes || 0),
+                maintenanceType: workLogForm.maintenanceType,
+            });
+            toast.success('Work log added');
+            setWorkLogForm((prev) => ({ ...prev, notes: '' }));
+            await fetchTicket();
+        } catch (error: any) {
+            toast.error(error.response?.data?.message || 'Failed to add work log');
+        } finally {
+            setActionBusy(false);
+        }
+    };
+
     if (loading) return <div className="p-8 text-center">Loading...</div>;
     if (!ticket) return <div className="p-8 text-center">Ticket not found</div>;
 
@@ -237,6 +410,100 @@ export default function TicketDetails() {
                                 </dl>
                             </Card>
 
+                            {isManager && (
+                                <Card className="p-6">
+                                    <h3 className="font-semibold mb-4 flex items-center gap-2">
+                                        <CalendarClock className="w-4 h-4" />
+                                        Assignment & Auto-Schedule
+                                    </h3>
+                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                                        <div>
+                                            <label className="text-xs text-gray-500">Technician</label>
+                                            <select
+                                                value={selectedTechnicianId}
+                                                onChange={(e) => setSelectedTechnicianId(e.target.value)}
+                                                className="mt-1 w-full rounded-md border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-3 py-2 text-sm"
+                                            >
+                                                <option value="">Unassigned</option>
+                                                {technicians.map((tech) => (
+                                                    <option key={tech.id} value={tech.id}>
+                                                        {tech.name} ({tech.openAssignments} open)
+                                                    </option>
+                                                ))}
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label className="text-xs text-gray-500">Scheduled Start</label>
+                                            <Input
+                                                type="datetime-local"
+                                                value={scheduleStartAt}
+                                                onChange={(e) => setScheduleStartAt(e.target.value)}
+                                                className="mt-1"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="text-xs text-gray-500">Estimated Hours</label>
+                                            <Input
+                                                type="number"
+                                                min={1}
+                                                max={720}
+                                                value={scheduleHours}
+                                                onChange={(e) => setScheduleHours(Number(e.target.value || 0))}
+                                                className="mt-1"
+                                            />
+                                        </div>
+                                    </div>
+                                    <div className="flex flex-wrap gap-2 mt-4">
+                                        <Button variant="outline" onClick={saveAssignment} disabled={actionBusy}>
+                                            <Save className="w-4 h-4 mr-2" /> Save Assignment
+                                        </Button>
+                                        <Button onClick={runAutoSchedule} disabled={actionBusy}>
+                                            Auto Schedule
+                                        </Button>
+                                    </div>
+                                </Card>
+                            )}
+
+                            {isManager && (
+                                <Card className="p-6">
+                                    <h3 className="font-semibold mb-4 flex items-center gap-2">
+                                        <DollarSign className="w-4 h-4" />
+                                        Maintenance Cost Control
+                                    </h3>
+                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                                        <div>
+                                            <label className="text-xs text-gray-500">Estimated Cost</label>
+                                            <Input
+                                                type="number"
+                                                min={0}
+                                                value={costForm.estimatedCost}
+                                                onChange={(e) => setCostForm((prev) => ({ ...prev, estimatedCost: Number(e.target.value || 0) }))}
+                                                className="mt-1"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="text-xs text-gray-500">Actual Cost</label>
+                                            <Input
+                                                type="number"
+                                                min={0}
+                                                value={costForm.actualCost}
+                                                onChange={(e) => setCostForm((prev) => ({ ...prev, actualCost: Number(e.target.value || 0) }))}
+                                                className="mt-1"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="text-xs text-gray-500">Parts Total</label>
+                                            <div className="mt-1 h-8 px-3 rounded-md border border-gray-200 dark:border-gray-700 flex items-center text-sm text-gray-700 dark:text-gray-200 bg-gray-50 dark:bg-gray-900/50">
+                                                ₹{(ticket.sparePartsUsed || []).reduce((sum: number, p: any) => sum + Number(p.quantity || 0) * Number(p.costPerUnit || 0), 0).toLocaleString('en-IN')}
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div className="mt-4">
+                                        <Button variant="outline" onClick={saveCosts} disabled={actionBusy}>Update Costs</Button>
+                                    </div>
+                                </Card>
+                            )}
+
                             {ticket.approvalStatus === 'PENDING' && isManager && (
                                 <Card className="p-6 border-orange-200 bg-orange-50 dark:bg-orange-900/10 dark:border-orange-800">
                                     <h3 className="font-semibold mb-2 flex items-center gap-2 text-orange-800 dark:text-orange-200">
@@ -260,23 +527,121 @@ export default function TicketDetails() {
                             <Card className="p-6">
                                 <div className="flex justify-between items-center mb-4">
                                     <h3 className="font-semibold">Technician Logs</h3>
-                                    <Button variant="outline" size="sm">Add Entry</Button>
+                                    <Button variant="outline" size="sm" onClick={addWorkLog} disabled={actionBusy}>
+                                        <ClipboardPlus className="w-4 h-4 mr-1" /> Add Entry
+                                    </Button>
                                 </div>
+
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4 p-3 rounded-md border border-gray-200 dark:border-gray-800">
+                                    <Input
+                                        type="datetime-local"
+                                        value={workLogForm.startTime}
+                                        onChange={(e) => setWorkLogForm((prev) => ({ ...prev, startTime: e.target.value }))}
+                                    />
+                                    <Input
+                                        type="datetime-local"
+                                        value={workLogForm.endTime}
+                                        onChange={(e) => setWorkLogForm((prev) => ({ ...prev, endTime: e.target.value }))}
+                                    />
+                                    <Input
+                                        type="number"
+                                        min={1}
+                                        value={workLogForm.timeSpentMinutes}
+                                        onChange={(e) => setWorkLogForm((prev) => ({ ...prev, timeSpentMinutes: Number(e.target.value || 0) }))}
+                                        placeholder="Time spent (minutes)"
+                                    />
+                                    <select
+                                        value={workLogForm.maintenanceType}
+                                        onChange={(e) => setWorkLogForm((prev) => ({ ...prev, maintenanceType: e.target.value }))}
+                                        className="h-8 rounded-md border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-3 text-sm"
+                                    >
+                                        <option value="CORRECTIVE">Corrective</option>
+                                        <option value="PREVENTIVE">Preventive</option>
+                                        <option value="INSPECTION">Inspection</option>
+                                        <option value="REPLACEMENT">Replacement</option>
+                                    </select>
+                                    <div className="md:col-span-2">
+                                        <textarea
+                                            className="flex min-h-[80px] w-full rounded-md border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-3 py-2 text-sm"
+                                            placeholder="Add work summary, findings, and actions..."
+                                            value={workLogForm.notes}
+                                            onChange={(e) => setWorkLogForm((prev) => ({ ...prev, notes: e.target.value }))}
+                                        />
+                                    </div>
+                                </div>
+
                                 {(ticket.workLogs?.length ?? 0) === 0 ? (
                                     <p className="text-gray-500 text-sm">No work logged yet.</p>
                                 ) : (
                                     <div className="space-y-4">
                                         {ticket.workLogs.map((log: any, i: number) => (
+                                            (() => {
+                                                const parsed = parseWorkLogMeta(log.notes);
+                                                const attachments = Array.isArray(parsed.meta?.attachments) ? parsed.meta.attachments.filter(Boolean) : [];
+                                                const partsUsed = Array.isArray(parsed.meta?.partsUsed) ? parsed.meta.partsUsed.filter(Boolean) : [];
+                                                const hasLocation = parsed.meta?.location?.latitude != null && parsed.meta?.location?.longitude != null;
+
+                                                return (
                                             <div key={i} className="flex gap-4 pb-4 border-b last:border-0 border-gray-100 dark:border-gray-800">
                                                 <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center text-gray-600 text-xs font-bold">
                                                     {log.technician?.name?.charAt(0)}
                                                 </div>
                                                 <div>
                                                     <p className="text-sm font-medium">{log.technician?.name}</p>
-                                                    <p className="text-xs text-gray-500">{format(new Date(log.startTime), 'MMM d, h:mm a')} - {log.hoursWorked} hrs</p>
-                                                    <p className="text-sm mt-1">{log.notes}</p>
+                                                    <p className="text-xs text-gray-500">
+                                                        {log.startTime ? format(new Date(log.startTime), 'MMM d, h:mm a') : 'No start time'}
+                                                        {' '}· {log.hoursWorked != null ? `${Number(log.hoursWorked).toFixed(2)} hrs` : 'Duration N/A'}
+                                                    </p>
+
+                                                    {parsed.meta && (
+                                                        <div className="mt-1 flex flex-wrap gap-1.5">
+                                                            {parsed.meta.maintenanceType && (
+                                                                <span className="text-[10px] px-2 py-0.5 rounded-full border border-blue-200 dark:border-blue-700 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 uppercase">
+                                                                    {parsed.meta.maintenanceType}
+                                                                </span>
+                                                            )}
+                                                            {parsed.meta.timeSpentMinutes ? (
+                                                                <span className="text-[10px] px-2 py-0.5 rounded-full border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/30 text-gray-700 dark:text-gray-300">
+                                                                    {parsed.meta.timeSpentMinutes} min
+                                                                </span>
+                                                            ) : null}
+                                                            {hasLocation && (
+                                                                <span className="text-[10px] px-2 py-0.5 rounded-full border border-emerald-200 dark:border-emerald-700 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300">
+                                                                    GPS tagged
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                    )}
+
+                                                    {parsed.displayNotes ? (
+                                                        <p className="text-sm mt-2 whitespace-pre-wrap">{parsed.displayNotes}</p>
+                                                    ) : (
+                                                        <p className="text-sm mt-2 text-gray-500 italic">No manual notes added</p>
+                                                    )}
+
+                                                    {(attachments.length > 0 || partsUsed.length > 0 || hasLocation) && (
+                                                        <div className="mt-2 space-y-1 text-xs text-gray-600 dark:text-gray-300">
+                                                            {hasLocation && (
+                                                                <p>
+                                                                    Location: {Number(parsed.meta.location.latitude).toFixed(5)}, {Number(parsed.meta.location.longitude).toFixed(5)}
+                                                                </p>
+                                                            )}
+                                                            {attachments.length > 0 && (
+                                                                <p>
+                                                                    Attachments: {attachments.join(', ')}
+                                                                </p>
+                                                            )}
+                                                            {partsUsed.length > 0 && (
+                                                                <p>
+                                                                    Parts: {partsUsed.join(', ')}
+                                                                </p>
+                                                            )}
+                                                        </div>
+                                                    )}
                                                 </div>
                                             </div>
+                                                );
+                                            })()
                                         ))}
                                     </div>
                                 )}
@@ -287,8 +652,39 @@ export default function TicketDetails() {
                             <Card className="p-6">
                                 <div className="flex justify-between items-center mb-4">
                                     <h3 className="font-semibold">Spare Parts Used</h3>
-                                    <Button variant="outline" size="sm">Add Part</Button>
+                                    <Button variant="outline" size="sm" onClick={addPartUsage} disabled={actionBusy}>
+                                        <PackagePlus className="w-4 h-4 mr-1" /> Add Part
+                                    </Button>
                                 </div>
+
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4 p-3 rounded-md border border-gray-200 dark:border-gray-800">
+                                    <div className="md:col-span-2">
+                                        <label className="text-xs text-gray-500">Spare Part</label>
+                                        <select
+                                            value={partForm.inventoryId}
+                                            onChange={(e) => setPartForm((prev) => ({ ...prev, inventoryId: e.target.value }))}
+                                            className="mt-1 w-full h-8 rounded-md border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-3 text-sm"
+                                        >
+                                            <option value="">Select part</option>
+                                            {inventoryItems.map((part: any) => (
+                                                <option key={part.id} value={part.id}>
+                                                    {part.name} ({part.currentQuantity} in stock)
+                                                </option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label className="text-xs text-gray-500">Quantity</label>
+                                        <Input
+                                            type="number"
+                                            min={1}
+                                            value={partForm.quantity}
+                                            onChange={(e) => setPartForm((prev) => ({ ...prev, quantity: Number(e.target.value || 0) }))}
+                                            className="mt-1"
+                                        />
+                                    </div>
+                                </div>
+
                                 {(ticket.sparePartsUsed?.length ?? 0) === 0 ? (
                                     <p className="text-gray-500 text-sm">No parts used yet.</p>
                                 ) : (

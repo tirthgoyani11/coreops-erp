@@ -3,6 +3,89 @@ const { asyncHandler, AppError } = require('../utils/errorHandler');
 const QRCode = require('qrcode');
 const logger = require('../utils/logger');
 const { convertCurrency } = require('../utils/currencyConverter');
+const aiService = require('../services/aiService');
+
+const LIFECYCLE_STATES = [
+    'REQUESTED',
+    'PROCURED',
+    'RECEIVED',
+    'ACTIVE',
+    'UNDER_MAINTENANCE',
+    'IMPAIRED',
+    'RETIRED',
+    'DISPOSED',
+];
+
+const LIFECYCLE_TRANSITIONS = {
+    REQUESTED: ['PROCURED'],
+    PROCURED: ['RECEIVED'],
+    RECEIVED: ['ACTIVE'],
+    ACTIVE: ['UNDER_MAINTENANCE', 'IMPAIRED', 'RETIRED', 'DISPOSED'],
+    UNDER_MAINTENANCE: ['ACTIVE', 'IMPAIRED', 'RETIRED', 'DISPOSED'],
+    IMPAIRED: ['UNDER_MAINTENANCE', 'RETIRED', 'DISPOSED'],
+    RETIRED: ['DISPOSED'],
+    DISPOSED: [],
+};
+
+function tryParseLifecycleNote(notes) {
+    if (!notes || typeof notes !== 'string') return null;
+    if (!notes.startsWith('LIFECYCLE|')) return null;
+    const raw = notes.slice('LIFECYCLE|'.length);
+    try {
+        const parsed = JSON.parse(raw);
+        if (parsed && typeof parsed.to === 'string') {
+            return parsed;
+        }
+    } catch {
+        return null;
+    }
+    return null;
+}
+
+function mapLifecycleToAssetStatus(state) {
+    switch (state) {
+        case 'UNDER_MAINTENANCE':
+        case 'IMPAIRED':
+            return 'MAINTENANCE';
+        case 'RETIRED':
+            return 'RETIRED';
+        case 'DISPOSED':
+            return 'SOLD';
+        case 'ACTIVE':
+            return 'ACTIVE';
+        default:
+            return null;
+    }
+}
+
+async function resolveCurrentLifecycleState(asset) {
+    const latestLifecycle = (asset.maintenanceHistory || [])
+        .map((h) => tryParseLifecycleNote(h.notes))
+        .filter(Boolean)[0];
+
+    if (latestLifecycle?.to) return latestLifecycle.to;
+
+    if (asset.status === 'SOLD' || asset.status === 'DECOMMISSIONED') return 'DISPOSED';
+    if (asset.status === 'RETIRED' || asset.status === 'LOST') return 'RETIRED';
+    if (asset.status === 'MAINTENANCE') return 'UNDER_MAINTENANCE';
+
+    const linkedPO = asset.purchaseOrderNumber
+        ? await prisma.purchaseOrder.findFirst({
+            where: {
+                poNumber: asset.purchaseOrderNumber,
+                ...(asset.officeId ? { officeId: asset.officeId } : {}),
+            },
+            select: { id: true },
+        })
+        : null;
+
+    if (!linkedPO) return 'REQUESTED';
+
+    const grnCount = await prisma.goodsReceipt.count({ where: { purchaseOrderId: linkedPO.id } });
+    if (grnCount > 0) return 'RECEIVED';
+
+    return 'PROCURED';
+}
 
 /**
  * Generate GUAI (Globally Unique Asset Identifier)
@@ -22,6 +105,114 @@ async function generateGUAI(officeId) {
 
     const seq = String(counter.sequence).padStart(6, '0');
     return `${countryCode}-${locationCode}-${seq}`;
+}
+
+async function resolveHeadquarterCurrency(officeId) {
+    try {
+        if (!officeId) return 'INR';
+
+        const office = await prisma.office.findUnique({
+            where: { id: officeId },
+            select: {
+                id: true,
+                type: true,
+                baseCurrency: true,
+                parent: { select: { id: true, baseCurrency: true, type: true } },
+            },
+        });
+
+        if (!office) return 'INR';
+        if (office.type === 'HEADQUARTERS') return (office.baseCurrency || 'INR').toUpperCase();
+        if (office.parent?.baseCurrency) return String(office.parent.baseCurrency).toUpperCase();
+
+        const hq = await prisma.office.findFirst({
+            where: { type: 'HEADQUARTERS', isActive: true },
+            select: { baseCurrency: true },
+            orderBy: { createdAt: 'asc' },
+        });
+
+        return (hq?.baseCurrency || office.baseCurrency || 'INR').toUpperCase();
+    } catch {
+        return 'INR';
+    }
+}
+
+async function buildDualCurrencySnapshot({ amount, officeCurrency, officeId, displayCurrency }) {
+    const safeAmount = Number(amount || 0);
+    const officeCur = String(officeCurrency || 'INR').toUpperCase();
+    const hqCurrency = await resolveHeadquarterCurrency(officeId);
+
+    let hqAmount = safeAmount;
+    let hqRate = 1;
+    if (safeAmount && officeCur !== hqCurrency) {
+        try {
+            hqAmount = await convertCurrency(safeAmount, officeCur, hqCurrency);
+            hqRate = await convertCurrency(1, officeCur, hqCurrency);
+        } catch {
+            hqAmount = safeAmount;
+            hqRate = 1;
+        }
+    }
+
+    const effectiveDisplayCurrency = String(displayCurrency || officeCur).toUpperCase();
+    let displayAmount = safeAmount;
+    if (safeAmount && officeCur !== effectiveDisplayCurrency) {
+        try {
+            displayAmount = await convertCurrency(safeAmount, officeCur, effectiveDisplayCurrency);
+        } catch {
+            displayAmount = safeAmount;
+        }
+    }
+
+    return {
+        officeCurrency: officeCur,
+        officeAmount: Number(safeAmount.toFixed(2)),
+        hqCurrency,
+        hqAmount: Number(Number(hqAmount || 0).toFixed(2)),
+        hqRate: Number(Number(hqRate || 1).toFixed(6)),
+        displayCurrency: effectiveDisplayCurrency,
+        displayAmount: Number(Number(displayAmount || 0).toFixed(2)),
+        convertedAt: new Date().toISOString(),
+    };
+}
+
+async function writeAssetFinanceLog({
+    asset,
+    officeId,
+    userId,
+    actionType,
+    description,
+}) {
+    try {
+        const snapshot = await buildDualCurrencySnapshot({
+            amount: asset.purchasePrice,
+            officeCurrency: asset.currency,
+            officeId,
+            displayCurrency: 'INR',
+        });
+
+        await prisma.financeLog.create({
+            data: {
+                type: actionType,
+                amount: Number(asset.purchasePrice || 0),
+                currency: String(asset.currency || 'INR').toUpperCase(),
+                officeId,
+                recordedById: userId,
+                referenceType: 'ASSET',
+                referenceId: asset.id,
+                description,
+                metadata: {
+                    guai: asset.guai,
+                    name: asset.name,
+                    purchaseOrderNumber: asset.purchaseOrderNumber || null,
+                    invoiceNumber: asset.invoiceNumber || null,
+                    valuation: snapshot,
+                },
+            },
+        });
+    } catch (error) {
+        logger.warn(`Failed to persist asset finance log (${actionType}): ${error.message}`);
+    }
 }
 
 /**
@@ -100,10 +291,28 @@ exports.createAsset = asyncHandler(async (req, res, next) => {
         logger.error('Failed to generate QR code:', qrError);
     }
 
+    await writeAssetFinanceLog({
+        asset,
+        officeId: targetOfficeId,
+        userId: req.user.id,
+        actionType: 'ASSET_CAPEX',
+        description: `Asset ${asset.guai} created with purchase value ${asset.purchasePrice} ${asset.currency}`,
+    });
+
+    const valuation = await buildDualCurrencySnapshot({
+        amount: asset.purchasePrice,
+        officeCurrency: asset.currency,
+        officeId: targetOfficeId,
+        displayCurrency: req.user.role === 'SUPER_ADMIN' ? 'INR' : asset.currency,
+    });
+
     res.status(201).json({
         success: true,
         message: 'Asset created successfully',
-        data: asset,
+        data: {
+            ...asset,
+            valuation,
+        },
     });
 });
 
@@ -132,7 +341,16 @@ exports.getAssets = asyncHandler(async (req, res, next) => {
             skip,
             take: limit,
             include: {
-                office: { select: { id: true, name: true, code: true } },
+                office: {
+                    select: {
+                        id: true,
+                        name: true,
+                        code: true,
+                        type: true,
+                        baseCurrency: true,
+                        parent: { select: { id: true, name: true, code: true, baseCurrency: true } },
+                    },
+                },
                 createdBy: { select: { id: true, name: true, email: true } },
             },
             orderBy: { createdAt: 'desc' },
@@ -140,11 +358,31 @@ exports.getAssets = asyncHandler(async (req, res, next) => {
         prisma.asset.count({ where }),
     ]);
 
+    const enrichedAssets = await Promise.all(
+        assets.map(async (asset) => {
+            const displayCurrency = req.user.role === 'SUPER_ADMIN'
+                ? 'INR'
+                : (asset.office?.baseCurrency || asset.currency || 'INR');
+
+            const valuation = await buildDualCurrencySnapshot({
+                amount: asset.purchasePrice,
+                officeCurrency: asset.currency || asset.office?.baseCurrency,
+                officeId: asset.officeId,
+                displayCurrency,
+            });
+
+            return {
+                ...asset,
+                valuation,
+            };
+        })
+    );
+
     res.status(200).json({
         success: true,
-        count: assets.length,
+        count: enrichedAssets.length,
         pagination: { page, limit, totalPages: Math.ceil(total / limit), totalResults: total },
-        data: assets,
+        data: enrichedAssets,
     });
 });
 
@@ -179,7 +417,84 @@ exports.getAsset = asyncHandler(async (req, res, next) => {
         asset.currency = officeCurrency;
     }
 
-    res.status(200).json({ success: true, data: asset });
+    const [linkedPO, linkedInvoice, latestFinanceLog] = await Promise.all([
+        asset.purchaseOrderNumber
+            ? prisma.purchaseOrder.findFirst({
+                where: {
+                    poNumber: asset.purchaseOrderNumber,
+                    ...(asset.officeId ? { officeId: asset.officeId } : {}),
+                },
+                select: {
+                    id: true,
+                    poNumber: true,
+                    status: true,
+                    totalAmount: true,
+                    currency: true,
+                    createdAt: true,
+                },
+            })
+            : Promise.resolve(null),
+        asset.invoiceNumber
+            ? prisma.invoice.findFirst({
+                where: {
+                    invoiceNumber: asset.invoiceNumber,
+                    ...(asset.officeId ? { officeId: asset.officeId } : {}),
+                },
+                select: {
+                    id: true,
+                    invoiceNumber: true,
+                    status: true,
+                    totalAmount: true,
+                    currency: true,
+                    dueDate: true,
+                },
+            })
+            : Promise.resolve(null),
+        prisma.financeLog.findFirst({
+            where: { referenceType: 'ASSET', referenceId: asset.id },
+            orderBy: { createdAt: 'desc' },
+            select: {
+                id: true,
+                type: true,
+                amount: true,
+                currency: true,
+                createdAt: true,
+                metadata: true,
+            },
+        }),
+    ]);
+
+    const viewerDisplayCurrency = req.user.role === 'SUPER_ADMIN'
+        ? 'INR'
+        : (asset.office?.baseCurrency || asset.currency || 'INR');
+    const valuation = await buildDualCurrencySnapshot({
+        amount: asset.purchasePrice,
+        officeCurrency: asset.currency,
+        officeId: asset.officeId,
+        displayCurrency: viewerDisplayCurrency,
+    });
+
+    const workflow = {
+        purchaseOrder: linkedPO,
+        invoice: linkedInvoice,
+        maintenance: {
+            totalTickets: (asset.maintenanceTickets || []).length,
+            openTickets: (asset.maintenanceTickets || []).filter((t) => !['COMPLETED', 'CLOSED', 'CANCELLED', 'REJECTED'].includes(String(t.status || '').toUpperCase())).length,
+            lastTicket: (asset.maintenanceTickets || [])[0] || null,
+        },
+        finance: {
+            latestLog: latestFinanceLog,
+        },
+    };
+
+    res.status(200).json({
+        success: true,
+        data: {
+            ...asset,
+            valuation,
+            workflow,
+        },
+    });
 });
 
 /**
@@ -320,6 +635,16 @@ exports.updateAsset = asyncHandler(async (req, res, next) => {
         data: updateData,
     });
 
+    if (purchaseCost !== undefined || currency !== undefined || purchaseOrderNumber !== undefined || invoiceNumber !== undefined) {
+        await writeAssetFinanceLog({
+            asset,
+            officeId: asset.officeId,
+            userId: req.user.id,
+            actionType: 'ASSET_VALUATION_UPDATE',
+            description: `Asset ${asset.guai} financial details updated`,
+        });
+    }
+
     // Log history entry for significant changes
     const historyNotes = [];
     if (status && status !== existing.status) historyNotes.push(`Status: ${existing.status} → ${status}`);
@@ -338,8 +663,408 @@ exports.updateAsset = asyncHandler(async (req, res, next) => {
     res.status(200).json({
         success: true,
         message: 'Asset updated successfully',
-        data: asset,
+        data: {
+            ...asset,
+            valuation: await buildDualCurrencySnapshot({
+                amount: asset.purchasePrice,
+                officeCurrency: asset.currency,
+                officeId: asset.officeId,
+                displayCurrency: req.user.role === 'SUPER_ADMIN' ? 'INR' : asset.currency,
+            }),
+        },
     });
+});
+
+/**
+ * @desc    AI-powered asset workflow insights
+ * @route   GET /api/assets/:id/insights
+ * @access  ALL authenticated
+ */
+exports.getAssetInsights = asyncHandler(async (req, res, next) => {
+    const asset = await prisma.asset.findUnique({
+        where: { id: req.params.id },
+        include: {
+            office: { select: { id: true, name: true, code: true, baseCurrency: true } },
+            maintenanceTickets: { orderBy: { createdAt: 'desc' }, take: 15 },
+            maintenanceHistory: { orderBy: { date: 'desc' }, take: 20 },
+        },
+    });
+
+    if (!asset) return next(new AppError('Asset not found', 404));
+
+    if (!['SUPER_ADMIN', 'ADMIN'].includes(req.user.role)) {
+        const userOfficeId = req.user.office?.id || req.user.officeId;
+        const resolvedUserOfficeId = typeof userOfficeId === 'object' ? userOfficeId.id : userOfficeId;
+        if (asset.officeId !== resolvedUserOfficeId) {
+            return next(new AppError('Access denied to this asset', 403));
+        }
+    }
+
+    const openTickets = (asset.maintenanceTickets || []).filter((t) => !['COMPLETED', 'CLOSED', 'CANCELLED', 'REJECTED'].includes(String(t.status || '').toUpperCase()));
+    const lifetimeMaintenanceCost = (asset.maintenanceHistory || []).reduce((sum, h) => sum + Number(h.cost || 0), 0);
+    const maintenanceEvents = (asset.maintenanceHistory || []).length;
+    const repairRatio = asset.purchasePrice > 0 ? (lifetimeMaintenanceCost / asset.purchasePrice) : 0;
+
+    const fallback = {
+        healthScore: Math.max(0, Math.min(100, Math.round(100 - (repairRatio * 35) - (openTickets.length * 10)))),
+        summary: `Asset ${asset.guai} has ${openTickets.length} open ticket(s) and maintenance spend of ${lifetimeMaintenanceCost.toFixed(2)} ${asset.currency}.`,
+        actions: [
+            openTickets.length > 0
+                ? `Prioritize closure of ${openTickets.length} open maintenance ticket(s) for ${asset.guai}.`
+                : `No active ticket backlog for ${asset.guai}; keep preventive schedule active.`,
+            repairRatio >= 0.5
+                ? 'Repair-to-purchase ratio is high; evaluate replacement CAPEX case.'
+                : 'Repair ratio is within acceptable band; continue corrective+preventive mix.',
+            'Ensure invoice and PO references are attached for finance traceability.',
+        ],
+    };
+
+    let ai = null;
+    try {
+        const prompt = `You are an ERP asset operations analyst. Return strict JSON only.
+Data:\n${JSON.stringify({
+            guai: asset.guai,
+            category: asset.category,
+            office: asset.office,
+            purchasePrice: asset.purchasePrice,
+            currency: asset.currency,
+            openTickets: openTickets.map((t) => ({ ticketNumber: t.ticketNumber, status: t.status, priority: t.priority })),
+            maintenanceEvents,
+            lifetimeMaintenanceCost,
+            repairRatio,
+        }, null, 2)}
+Schema:\n{\n  \"healthScore\": number,\n  \"summary\": \"string max 180 chars\",\n  \"actions\": [\"string\",\"string\",\"string\"]\n}\nRules:\n- healthScore between 0 and 100\n- actions should be practical and short\n- no markdown`;
+
+        const result = await aiService.generateJSON('planning', prompt, { temperature: 0.2, maxTokens: 500 });
+        if (result?.parsed && typeof result.parsed === 'object') {
+            ai = result.parsed;
+        }
+    } catch {
+        ai = null;
+    }
+
+    const data = {
+        source: ai ? 'ai+rules' : 'rules',
+        healthScore: Number.isFinite(Number(ai?.healthScore))
+            ? Math.max(0, Math.min(100, Math.round(Number(ai.healthScore))))
+            : fallback.healthScore,
+        summary: typeof ai?.summary === 'string' && ai.summary.trim().length > 0
+            ? ai.summary.trim().slice(0, 180)
+            : fallback.summary,
+        actions: Array.isArray(ai?.actions) && ai.actions.length > 0
+            ? ai.actions.slice(0, 4)
+            : fallback.actions,
+        metrics: {
+            openTickets: openTickets.length,
+            maintenanceEvents,
+            lifetimeMaintenanceCost: Number(lifetimeMaintenanceCost.toFixed(2)),
+            repairRatio: Number(repairRatio.toFixed(3)),
+            currency: asset.currency,
+        },
+        generatedAt: new Date().toISOString(),
+    };
+
+    res.status(200).json({ success: true, data });
+});
+
+/**
+ * @desc    Get asset workflow timeline across procurement, finance and maintenance
+ * @route   GET /api/assets/:id/workflow-timeline
+ * @access  ALL authenticated
+ */
+exports.getAssetWorkflowTimeline = asyncHandler(async (req, res, next) => {
+    const asset = await prisma.asset.findUnique({
+        where: { id: req.params.id },
+        include: {
+            office: { select: { id: true, name: true, code: true, baseCurrency: true } },
+            maintenanceHistory: { orderBy: { date: 'desc' }, take: 50 },
+            maintenanceTickets: {
+                orderBy: { createdAt: 'desc' },
+                take: 25,
+                include: { assignedTo: { select: { id: true, name: true } } },
+            },
+        },
+    });
+
+    if (!asset) return next(new AppError('Asset not found', 404));
+
+    if (!['SUPER_ADMIN', 'ADMIN'].includes(req.user.role)) {
+        const userOfficeId = req.user.office?.id || req.user.officeId;
+        const resolvedUserOfficeId = typeof userOfficeId === 'object' ? userOfficeId.id : userOfficeId;
+        if (asset.officeId !== resolvedUserOfficeId) {
+            return next(new AppError('Access denied to this asset', 403));
+        }
+    }
+
+    const [po, invoice, financeLogs] = await Promise.all([
+        asset.purchaseOrderNumber
+            ? prisma.purchaseOrder.findFirst({
+                where: {
+                    poNumber: asset.purchaseOrderNumber,
+                    ...(asset.officeId ? { officeId: asset.officeId } : {}),
+                },
+                include: {
+                    goodsReceipts: {
+                        select: { id: true, grnNumber: true, status: true, receivedDate: true, createdAt: true },
+                        orderBy: { createdAt: 'asc' },
+                    },
+                },
+            })
+            : Promise.resolve(null),
+        asset.invoiceNumber
+            ? prisma.invoice.findFirst({
+                where: {
+                    invoiceNumber: asset.invoiceNumber,
+                    ...(asset.officeId ? { officeId: asset.officeId } : {}),
+                },
+                select: { id: true, invoiceNumber: true, status: true, totalAmount: true, currency: true, createdAt: true },
+            })
+            : Promise.resolve(null),
+        prisma.financeLog.findMany({
+            where: {
+                referenceType: 'ASSET',
+                referenceId: asset.id,
+            },
+            orderBy: { createdAt: 'asc' },
+            take: 60,
+        }),
+    ]);
+
+    const timeline = [];
+
+    timeline.push({
+        id: `asset-created-${asset.id}`,
+        stage: 'REQUESTED',
+        module: 'ASSET',
+        timestamp: asset.createdAt,
+        title: `Asset requested: ${asset.guai}`,
+        details: {
+            name: asset.name,
+            category: asset.category,
+            office: asset.office?.name,
+        },
+    });
+
+    if (po) {
+        timeline.push({
+            id: `po-${po.id}`,
+            stage: 'PROCURED',
+            module: 'PROCUREMENT',
+            timestamp: po.createdAt,
+            title: `Purchase order linked: ${po.poNumber}`,
+            details: {
+                status: po.status,
+                totalAmount: po.totalAmount,
+                currency: po.currency,
+            },
+        });
+
+        for (const grn of po.goodsReceipts || []) {
+            timeline.push({
+                id: `grn-${grn.id}`,
+                stage: 'RECEIVED',
+                module: 'PROCUREMENT',
+                timestamp: grn.receivedDate || grn.createdAt,
+                title: `Goods receipt: ${grn.grnNumber}`,
+                details: {
+                    status: grn.status,
+                },
+            });
+        }
+    }
+
+    if (invoice) {
+        timeline.push({
+            id: `invoice-${invoice.id}`,
+            stage: 'CAPITALIZED',
+            module: 'FINANCE',
+            timestamp: invoice.createdAt,
+            title: `Invoice linked: ${invoice.invoiceNumber}`,
+            details: {
+                status: invoice.status,
+                totalAmount: invoice.totalAmount,
+                currency: invoice.currency,
+            },
+        });
+    }
+
+    for (const ticket of asset.maintenanceTickets || []) {
+        timeline.push({
+            id: `ticket-${ticket.id}`,
+            stage: 'UNDER_MAINTENANCE',
+            module: 'MAINTENANCE',
+            timestamp: ticket.createdAt,
+            title: `Maintenance ticket: ${ticket.ticketNumber}`,
+            details: {
+                status: ticket.status,
+                priority: ticket.priority,
+                assignedTo: ticket.assignedTo?.name || null,
+            },
+        });
+    }
+
+    for (const log of financeLogs || []) {
+        timeline.push({
+            id: `finlog-${log.id}`,
+            stage: 'FINANCE_EVENT',
+            module: 'FINANCE',
+            timestamp: log.createdAt,
+            title: `Finance event: ${log.type}`,
+            details: {
+                amount: log.amount,
+                currency: log.currency,
+                description: log.description,
+                metadata: log.metadata,
+            },
+        });
+    }
+
+    const lifecycleEvents = (asset.maintenanceHistory || [])
+        .map((h) => {
+            const parsed = tryParseLifecycleNote(h.notes);
+            if (!parsed) return null;
+            return {
+                id: `lifecycle-${h.id}`,
+                stage: parsed.to,
+                module: 'LIFECYCLE',
+                timestamp: h.date,
+                title: `Lifecycle transition: ${parsed.from || 'N/A'} -> ${parsed.to}`,
+                details: {
+                    reason: parsed.reason || null,
+                    changedBy: parsed.changedBy || null,
+                    idempotencyKey: parsed.idempotencyKey || null,
+                },
+            };
+        })
+        .filter(Boolean);
+
+    timeline.push(...lifecycleEvents);
+    timeline.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+
+    const currentState = await resolveCurrentLifecycleState(asset);
+
+    res.status(200).json({
+        success: true,
+        data: {
+            assetId: asset.id,
+            guai: asset.guai,
+            currentLifecycleState: currentState,
+            allowedNextStates: LIFECYCLE_TRANSITIONS[currentState] || [],
+            timeline,
+        },
+    });
+});
+
+/**
+ * @desc    Transition asset lifecycle state with strict transition validation
+ * @route   PATCH /api/assets/:id/lifecycle
+ * @access  MANAGER, SUPER_ADMIN
+ */
+exports.transitionAssetLifecycle = asyncHandler(async (req, res, next) => {
+    const requestedState = String(req.body.toState || '').toUpperCase().trim();
+    const reason = String(req.body.reason || '').trim();
+    const idempotencyKey = String(
+        req.body.idempotencyKey || req.headers['x-idempotency-key'] || ''
+    ).trim();
+
+    if (!requestedState || !LIFECYCLE_STATES.includes(requestedState)) {
+        return next(new AppError(`Invalid lifecycle state. Allowed: ${LIFECYCLE_STATES.join(', ')}`, 400));
+    }
+
+    const asset = await prisma.asset.findUnique({
+        where: { id: req.params.id },
+        include: {
+            maintenanceHistory: {
+                where: { type: 'LIFECYCLE' },
+                orderBy: { date: 'desc' },
+                take: 20,
+            },
+        },
+    });
+
+    if (!asset) return next(new AppError('Asset not found', 404));
+
+    if (req.user.role !== 'SUPER_ADMIN') {
+        const userOfficeId = req.user.office?.id || req.user.officeId;
+        if (asset.officeId !== (typeof userOfficeId === 'object' ? userOfficeId.id : userOfficeId)) {
+            return next(new AppError('Access denied to this asset', 403));
+        }
+    }
+
+    if (idempotencyKey) {
+        const existing = await prisma.settings.findUnique({
+            where: { key: `asset_lifecycle_idempotency:${asset.id}:${idempotencyKey}` },
+        });
+        if (existing?.value) {
+            return res.status(200).json({ success: true, data: existing.value, replayed: true });
+        }
+    }
+
+    const currentState = await resolveCurrentLifecycleState(asset);
+    const allowedTransitions = LIFECYCLE_TRANSITIONS[currentState] || [];
+
+    if (!allowedTransitions.includes(requestedState)) {
+        return next(new AppError(`Invalid transition: ${currentState} -> ${requestedState}`, 400));
+    }
+
+    const mappedStatus = mapLifecycleToAssetStatus(requestedState);
+
+    const updatedAsset = await prisma.asset.update({
+        where: { id: asset.id },
+        data: mappedStatus ? { status: mappedStatus } : {},
+    });
+
+    const lifecyclePayload = {
+        from: currentState,
+        to: requestedState,
+        reason: reason || null,
+        changedBy: req.user.id,
+        idempotencyKey: idempotencyKey || null,
+        changedAt: new Date().toISOString(),
+    };
+
+    await Promise.all([
+        prisma.assetMaintenanceHistory.create({
+            data: {
+                assetId: asset.id,
+                type: 'LIFECYCLE',
+                notes: `LIFECYCLE|${JSON.stringify(lifecyclePayload)}`,
+            },
+        }),
+        prisma.financeLog.create({
+            data: {
+                type: 'ASSET_LIFECYCLE',
+                amount: Number(updatedAsset.purchasePrice || 0),
+                currency: String(updatedAsset.currency || 'INR').toUpperCase(),
+                description: `Lifecycle transition ${currentState} -> ${requestedState} for ${updatedAsset.guai}`,
+                referenceType: 'ASSET',
+                referenceId: updatedAsset.id,
+                officeId: updatedAsset.officeId,
+                recordedById: req.user.id,
+                metadata: lifecyclePayload,
+            },
+        }),
+    ]);
+
+    const response = {
+        assetId: updatedAsset.id,
+        guai: updatedAsset.guai,
+        fromState: currentState,
+        toState: requestedState,
+        mappedAssetStatus: mappedStatus || updatedAsset.status,
+        allowedNextStates: LIFECYCLE_TRANSITIONS[requestedState] || [],
+        transitionedAt: lifecyclePayload.changedAt,
+    };
+
+    if (idempotencyKey) {
+        await prisma.settings.upsert({
+            where: { key: `asset_lifecycle_idempotency:${asset.id}:${idempotencyKey}` },
+            update: { value: response },
+            create: { key: `asset_lifecycle_idempotency:${asset.id}:${idempotencyKey}`, value: response },
+        });
+    }
+
+    res.status(200).json({ success: true, message: 'Lifecycle state updated', data: response });
 });
 
 /**

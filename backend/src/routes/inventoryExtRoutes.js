@@ -10,6 +10,7 @@ router.use(verifyToken);
 
 // ── Batch Tracking ─────────────────────────────────────
 router.get('/batches/expiring', batchController.getExpiringBatches);
+router.get('/batches/stock-summary', batchController.getBatchStockSummary);
 router.get('/:inventoryId/batches', batchController.getBatches);
 router.post('/:inventoryId/batches', authorize('MANAGER', 'ADMIN', 'SUPER_ADMIN', 'STAFF'), batchController.createBatch);
 router.post('/:inventoryId/batches/consume', authorize('MANAGER', 'ADMIN', 'SUPER_ADMIN', 'STAFF'), batchController.consumeBatch);

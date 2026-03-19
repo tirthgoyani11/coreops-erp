@@ -25,6 +25,7 @@ import {
 import { cn } from '../../lib/utils';
 import { motion, AnimatePresence } from 'framer-motion';
 import api from '../../lib/api';
+import { formatCurrency } from '../../lib/utils';
 
 interface AssetTableProps {
     data: any[];
@@ -136,6 +137,38 @@ export function AssetTable({ data, loading, onAssetClick, onBulkDelete, onRefres
             cell: info => {
                 const status = info.getValue();
                 return <StatusBadge status={status} />;
+            },
+        }),
+        columnHelper.display({
+            id: 'value',
+            header: 'Value',
+            cell: info => {
+                const asset = info.row.original;
+                const valuation = asset.valuation;
+
+                if (!valuation) {
+                    return (
+                        <div className="text-xs text-[var(--text-secondary)]">
+                            {formatCurrency(Number(asset.purchasePrice || 0), (asset.currency || 'INR').toUpperCase())}
+                        </div>
+                    );
+                }
+
+                return (
+                    <div className="text-xs leading-tight">
+                        <p className="font-semibold text-[var(--text-primary)]">
+                            {formatCurrency(Number(valuation.displayAmount || 0), valuation.displayCurrency || asset.currency || 'INR')}
+                        </p>
+                        <p className="text-[var(--text-secondary)]">
+                            Branch: {formatCurrency(Number(valuation.officeAmount || 0), valuation.officeCurrency || asset.currency || 'INR')}
+                        </p>
+                        {valuation.hqCurrency && (
+                            <p className="text-[var(--text-secondary)]">
+                                HQ: {formatCurrency(Number(valuation.hqAmount || 0), valuation.hqCurrency)}
+                            </p>
+                        )}
+                    </div>
+                );
             },
         }),
         columnHelper.display({

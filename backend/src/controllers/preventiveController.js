@@ -165,7 +165,50 @@ exports.executeSchedule = asyncHandler(async (req, res, next) => {
     });
 
     if (!schedule) return next(new AppError('Schedule not found', 404));
-    if (!schedule.assetId) return next(new AppError('Schedule must have an asset to execute', 400));
+
+    let executionAssetId = schedule.assetId || null;
+
+    // Optional runtime override allows executing category schedules against a chosen asset.
+    const requestedAssetId = req.body?.assetId ? String(req.body.assetId).trim() : '';
+    if (requestedAssetId) {
+        const requestedAsset = await prisma.asset.findUnique({
+            where: { id: requestedAssetId },
+            select: { id: true, officeId: true },
+        });
+
+        if (!requestedAsset) {
+            return next(new AppError('Selected asset was not found', 404));
+        }
+
+        if (requestedAsset.officeId !== schedule.officeId) {
+            return next(new AppError('Selected asset does not belong to this schedule office', 400));
+        }
+
+        executionAssetId = requestedAsset.id;
+    }
+
+    // If schedule is category-based, auto-resolve only when there is exactly one matching asset.
+    if (!executionAssetId && schedule.assetCategory) {
+        const candidates = await prisma.asset.findMany({
+            where: {
+                officeId: schedule.officeId,
+                category: { equals: schedule.assetCategory, mode: 'insensitive' },
+                status: { notIn: ['RETIRED', 'LOST', 'SOLD', 'DECOMMISSIONED'] },
+            },
+            select: { id: true, name: true, guai: true },
+            take: 5,
+        });
+
+        if (candidates.length === 1) {
+            executionAssetId = candidates[0].id;
+        } else if (candidates.length > 1) {
+            return next(new AppError('Schedule has multiple matching assets. Execute with a specific assetId.', 400));
+        }
+    }
+
+    if (!executionAssetId) {
+        return next(new AppError('Schedule must have an asset to execute. Update schedule with an asset or provide assetId in execute request.', 400));
+    }
 
     // Generate ticket number
     const counter = await prisma.counter.upsert({
@@ -179,7 +222,7 @@ exports.executeSchedule = asyncHandler(async (req, res, next) => {
     const ticket = await prisma.maintenanceTicket.create({
         data: {
             ticketNumber,
-            assetId: schedule.assetId,
+            assetId: executionAssetId,
             officeId: schedule.officeId,
             issueDescription: `[Preventive] ${schedule.name}: ${schedule.description || 'Scheduled maintenance'}`,
             issueType: 'PREVENTIVE',

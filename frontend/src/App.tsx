@@ -73,6 +73,7 @@ const ProfitLoss = lazy(() => import('./pages/financial/ProfitLoss').then(m => (
 const CashFlow = lazy(() => import('./pages/financial/CashFlow').then(m => ({ default: m.CashFlow })));
 const APAging = lazy(() => import('./pages/financial/APAging').then(m => ({ default: m.APAging })));
 const ARAging = lazy(() => import('./pages/financial/ARAging').then(m => ({ default: m.ARAging })));
+const ExceptionCenter = lazy(() => import('./pages/financial/ExceptionCenter').then(m => ({ default: m.ExceptionCenter })));
 const InventoryAnalytics = lazy(() => import('./pages/financial/InventoryAnalytics').then(m => ({ default: m.InventoryAnalytics })));
 const Analytics = lazy(() => import('./pages/Analytics').then(m => ({ default: m.Analytics })));
 const Notifications = lazy(() => import('./pages/Notifications').then(m => ({ default: m.Notifications })));
@@ -265,6 +266,7 @@ function App() {
 
               <Route path="/finance/ap-aging" element={<RoleGuard allowedRoles={['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'VIEWER']}><APAging /></RoleGuard>} />
               <Route path="/finance/ar-aging" element={<RoleGuard allowedRoles={['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'VIEWER']}><ARAging /></RoleGuard>} />
+              <Route path="/finance/exception-center" element={<RoleGuard allowedRoles={['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF']}><ExceptionCenter /></RoleGuard>} />
 
               {/* Analytics - Not for Technician */}
               <Route

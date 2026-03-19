@@ -1,4 +1,5 @@
 const prisma = require('../config/prisma');
+const aiService = require('../services/aiService');
 
 /**
  * Maintenance Controller (Prisma)
@@ -39,6 +40,25 @@ function parseEnumList(input, allowed = []) {
 
     if (mapped.length === 0) return undefined;
     return mapped.length === 1 ? mapped[0] : { in: mapped };
+}
+
+function getOfficeScope(user) {
+    if (user.role === 'SUPER_ADMIN') return {};
+    const oid = user.office?.id || user.officeId;
+    return { officeId: typeof oid === 'object' ? oid.id : oid };
+}
+
+function ageHoursFrom(dateValue) {
+    if (!dateValue) return 0;
+    return Math.max(0, Math.round((Date.now() - new Date(dateValue).getTime()) / (1000 * 60 * 60)));
+}
+
+function getDefaultResolutionHours(priority) {
+    const normalized = String(priority || '').toUpperCase();
+    if (normalized === 'CRITICAL') return 4;
+    if (normalized === 'HIGH') return 12;
+    if (normalized === 'MEDIUM') return 24;
+    return 48;
 }
 
 // @desc    Create ticket
@@ -302,17 +322,87 @@ exports.getTicket = async (req, res) => {
 // @route   PUT /api/maintenance/:id
 exports.updateTicket = async (req, res) => {
     try {
-        const { status, assignedTo, approvalStatus, approvalNotes, resolution } = req.body;
+        const {
+            status,
+            assignedTo,
+            approvalStatus,
+            approvalNotes,
+            resolution,
+            estimatedCost,
+            actualCost,
+            scheduledStartAt,
+            estimatedHours,
+        } = req.body;
 
         const ticket = await prisma.maintenanceTicket.findUnique({ where: { id: req.params.id } });
         if (!ticket) return res.status(404).json({ success: false, message: 'Ticket not found' });
 
         const updateData = {};
+        const statusNormalized = status ? String(status).toUpperCase() : null;
+        const isManager = ['SUPER_ADMIN', 'ADMIN', 'MANAGER'].includes(req.user.role);
 
-        if (assignedTo) {
-            updateData.assignedToId = assignedTo;
-            updateData.assignedDate = new Date();
-            updateData.status = 'IN_PROGRESS';
+        if (estimatedCost != null) {
+            const value = Number(estimatedCost);
+            if (Number.isNaN(value) || value < 0) {
+                return res.status(400).json({ success: false, message: 'estimatedCost must be a non-negative number' });
+            }
+            updateData.estimatedCost = value;
+        }
+
+        if (actualCost != null) {
+            const value = Number(actualCost);
+            if (Number.isNaN(value) || value < 0) {
+                return res.status(400).json({ success: false, message: 'actualCost must be a non-negative number' });
+            }
+            updateData.actualCost = value;
+        }
+
+        if (assignedTo !== undefined) {
+            const assignToId = String(assignedTo || '').trim();
+            if (!assignToId) {
+                updateData.assignedToId = null;
+                if (['IN_PROGRESS', 'PENDING_PARTS'].includes(ticket.status)) {
+                    updateData.status = 'REQUESTED';
+                }
+            } else {
+                const technician = await prisma.user.findUnique({
+                    where: { id: assignToId },
+                    select: { id: true, role: true, officeId: true, isActive: true },
+                });
+
+                if (!technician || !technician.isActive) {
+                    return res.status(404).json({ success: false, message: 'Assigned technician not found or inactive' });
+                }
+
+                if (technician.role !== 'TECHNICIAN' && !isManager) {
+                    return res.status(403).json({ success: false, message: 'Only managers can assign non-technician users' });
+                }
+
+                if (req.user.role !== 'SUPER_ADMIN' && ticket.officeId && technician.officeId && technician.officeId !== ticket.officeId) {
+                    return res.status(400).json({ success: false, message: 'Assigned technician must belong to the same office' });
+                }
+
+                updateData.assignedToId = assignToId;
+                updateData.assignedDate = new Date();
+                if (ticket.status === 'REQUESTED' || ticket.status === 'PENDING') {
+                    updateData.status = 'PENDING';
+                }
+            }
+        }
+
+        if (scheduledStartAt || estimatedHours != null) {
+            const startAt = scheduledStartAt ? new Date(scheduledStartAt) : (ticket.assignedDate || new Date());
+            if (Number.isNaN(startAt.getTime())) {
+                return res.status(400).json({ success: false, message: 'scheduledStartAt is invalid' });
+            }
+
+            const etaHours = estimatedHours != null ? Number(estimatedHours) : getDefaultResolutionHours(ticket.priority);
+            if (Number.isNaN(etaHours) || etaHours <= 0 || etaHours > 720) {
+                return res.status(400).json({ success: false, message: 'estimatedHours must be between 1 and 720' });
+            }
+
+            updateData.assignedDate = startAt;
+            updateData.slaResolutionDeadline = new Date(startAt.getTime() + etaHours * 60 * 60 * 1000);
         }
 
         if (approvalStatus) {
@@ -329,9 +419,14 @@ exports.updateTicket = async (req, res) => {
             else if (approvalStatus.toUpperCase() === 'REJECTED') updateData.status = 'REJECTED';
         }
 
-        if (status) {
-            updateData.status = status;
-            if (status === 'COMPLETED' || status === 'CLOSED') {
+        if (statusNormalized) {
+            const allowedStatuses = ['REQUESTED', 'PENDING', 'IN_PROGRESS', 'PENDING_PARTS', 'APPROVED', 'REJECTED', 'COMPLETED', 'CLOSED', 'CANCELLED'];
+            if (!allowedStatuses.includes(statusNormalized)) {
+                return res.status(400).json({ success: false, message: 'Invalid status value' });
+            }
+
+            updateData.status = statusNormalized;
+            if (statusNormalized === 'COMPLETED' || statusNormalized === 'CLOSED') {
                 updateData.completedDate = new Date();
                 // Restore asset to ACTIVE
                 if (ticket.assetId) {
@@ -379,6 +474,137 @@ exports.updateTicket = async (req, res) => {
         });
 
         res.status(200).json({ success: true, data: updated });
+    } catch (error) {
+        res.status(500).json({ success: false, message: 'Server Error', error: error.message });
+    }
+};
+
+// @desc    Get assignable technicians for maintenance
+// @route   GET /api/maintenance/technicians
+exports.getAssignableTechnicians = async (req, res) => {
+    try {
+        const where = { role: 'TECHNICIAN', isActive: true };
+        if (req.user.role !== 'SUPER_ADMIN') {
+            const oid = req.user.office?.id || req.user.officeId;
+            where.officeId = typeof oid === 'object' ? oid.id : oid;
+        }
+
+        const openStatuses = ['REQUESTED', 'PENDING', 'IN_PROGRESS', 'PENDING_PARTS', 'APPROVED'];
+
+        const [technicians, activeLoad] = await Promise.all([
+            prisma.user.findMany({
+                where,
+                select: {
+                    id: true,
+                    name: true,
+                    email: true,
+                    officeId: true,
+                    office: { select: { id: true, name: true } },
+                },
+                orderBy: { name: 'asc' },
+            }),
+            prisma.maintenanceTicket.groupBy({
+                by: ['assignedToId'],
+                where: {
+                    assignedToId: { not: null },
+                    status: { in: openStatuses },
+                },
+                _count: { assignedToId: true },
+            }),
+        ]);
+
+        const loadMap = new Map(activeLoad.map((row) => [row.assignedToId, row._count.assignedToId]));
+        const data = technicians.map((tech) => ({
+            ...tech,
+            openAssignments: loadMap.get(tech.id) || 0,
+        }));
+
+        res.status(200).json({ success: true, count: data.length, data });
+    } catch (error) {
+        res.status(500).json({ success: false, message: 'Server Error', error: error.message });
+    }
+};
+
+// @desc    Auto-schedule and auto-assign ticket
+// @route   POST /api/maintenance/:id/auto-schedule
+exports.autoScheduleTicket = async (req, res) => {
+    try {
+        const ticket = await prisma.maintenanceTicket.findUnique({ where: { id: req.params.id } });
+        if (!ticket) return res.status(404).json({ success: false, message: 'Ticket not found' });
+
+        const { startAt, estimatedHours } = req.body || {};
+        const start = startAt ? new Date(startAt) : new Date();
+        if (Number.isNaN(start.getTime())) {
+            return res.status(400).json({ success: false, message: 'Invalid schedule start date' });
+        }
+
+        const eta = estimatedHours != null ? Number(estimatedHours) : getDefaultResolutionHours(ticket.priority);
+        if (Number.isNaN(eta) || eta <= 0 || eta > 720) {
+            return res.status(400).json({ success: false, message: 'estimatedHours must be between 1 and 720' });
+        }
+
+        const techWhere = {
+            role: 'TECHNICIAN',
+            isActive: true,
+            ...(ticket.officeId ? { officeId: ticket.officeId } : {}),
+        };
+        const technicians = await prisma.user.findMany({
+            where: techWhere,
+            select: { id: true, name: true },
+            orderBy: { name: 'asc' },
+        });
+
+        if (!technicians.length) {
+            return res.status(400).json({ success: false, message: 'No active technician available for this office' });
+        }
+
+        const openStatuses = ['REQUESTED', 'PENDING', 'IN_PROGRESS', 'PENDING_PARTS', 'APPROVED'];
+        const grouped = await prisma.maintenanceTicket.groupBy({
+            by: ['assignedToId'],
+            where: {
+                assignedToId: { in: technicians.map((t) => t.id) },
+                status: { in: openStatuses },
+            },
+            _count: { assignedToId: true },
+        });
+
+        const loadMap = new Map(grouped.map((row) => [row.assignedToId, row._count.assignedToId]));
+        technicians.sort((a, b) => {
+            const la = loadMap.get(a.id) || 0;
+            const lb = loadMap.get(b.id) || 0;
+            if (la !== lb) return la - lb;
+            return a.name.localeCompare(b.name);
+        });
+
+        const selected = technicians[0];
+        const deadline = new Date(start.getTime() + eta * 60 * 60 * 1000);
+
+        const updated = await prisma.maintenanceTicket.update({
+            where: { id: ticket.id },
+            data: {
+                assignedToId: selected.id,
+                assignedDate: start,
+                slaResolutionDeadline: deadline,
+                status: ['REQUESTED', 'PENDING'].includes(ticket.status) ? 'PENDING' : ticket.status,
+            },
+            include: {
+                asset: { select: { id: true, name: true } },
+                assignedTo: { select: { id: true, name: true } },
+            },
+        });
+
+        res.status(200).json({
+            success: true,
+            data: {
+                ticket: updated,
+                scheduling: {
+                    assignedTechnician: selected,
+                    startAt: start,
+                    estimatedHours: eta,
+                    resolutionDeadline: deadline,
+                },
+            },
+        });
     } catch (error) {
         res.status(500).json({ success: false, message: 'Server Error', error: error.message });
     }
@@ -457,6 +683,8 @@ exports.addWorkLog = async (req, res) => {
         let hoursWorked = null;
         if (startTime && endTime) {
             hoursWorked = (new Date(endTime) - new Date(startTime)) / (1000 * 60 * 60);
+        } else if (timeSpentMinutes != null && !Number.isNaN(Number(timeSpentMinutes))) {
+            hoursWorked = Number(timeSpentMinutes) / 60;
         }
 
         const metadata = {
@@ -697,6 +925,282 @@ exports.getStats = async (req, res) => {
         res.status(200).json({
             success: true,
             data: { totalTickets, openTickets, criticalTickets, avgResolutionTime: Math.round(avgResolutionTime * 10) / 10 },
+        });
+    } catch (error) {
+        res.status(500).json({ success: false, message: 'Server Error', error: error.message });
+    }
+};
+
+// @desc    Executive maintenance operations overview
+// @route   GET /api/maintenance/overview
+exports.getOperationsOverview = async (req, res) => {
+    try {
+        const scope = getOfficeScope(req.user);
+        const openStatuses = ['REQUESTED', 'PENDING', 'IN_PROGRESS', 'PENDING_PARTS', 'APPROVED'];
+        const now = new Date();
+        const next24h = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+        const last30d = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+
+        const [
+            openTickets,
+            criticalOpen,
+            highOpen,
+            unassignedOpen,
+            slaBreached,
+            slaAtRisk,
+            closedRecent,
+            openTicketRows,
+        ] = await Promise.all([
+            prisma.maintenanceTicket.count({
+                where: { ...scope, status: { in: openStatuses } },
+            }),
+            prisma.maintenanceTicket.count({
+                where: { ...scope, status: { in: openStatuses }, priority: 'CRITICAL' },
+            }),
+            prisma.maintenanceTicket.count({
+                where: { ...scope, status: { in: openStatuses }, priority: 'HIGH' },
+            }),
+            prisma.maintenanceTicket.count({
+                where: { ...scope, status: { in: openStatuses }, assignedToId: null },
+            }),
+            prisma.maintenanceTicket.count({
+                where: { ...scope, status: { in: openStatuses }, slaBreached: true },
+            }),
+            prisma.maintenanceTicket.count({
+                where: {
+                    ...scope,
+                    status: { in: openStatuses },
+                    slaBreached: false,
+                    slaResolutionDeadline: { gte: now, lte: next24h },
+                },
+            }),
+            prisma.maintenanceTicket.findMany({
+                where: {
+                    ...scope,
+                    status: { in: ['COMPLETED', 'CLOSED'] },
+                    completedDate: { gte: last30d },
+                },
+                select: {
+                    reportedDate: true,
+                    completedDate: true,
+                    firstResponseAt: true,
+                },
+            }),
+            prisma.maintenanceTicket.findMany({
+                where: { ...scope, status: { in: openStatuses } },
+                select: {
+                    id: true,
+                    ticketNumber: true,
+                    priority: true,
+                    status: true,
+                    createdAt: true,
+                    assignedToId: true,
+                    assignedTo: { select: { id: true, name: true } },
+                },
+                orderBy: { createdAt: 'asc' },
+            }),
+        ]);
+
+        const resolutionHours = [];
+        const responseMinutes = [];
+
+        for (const t of closedRecent) {
+            if (t.completedDate && t.reportedDate) {
+                resolutionHours.push((new Date(t.completedDate).getTime() - new Date(t.reportedDate).getTime()) / (1000 * 60 * 60));
+            }
+            if (t.firstResponseAt && t.reportedDate) {
+                responseMinutes.push((new Date(t.firstResponseAt).getTime() - new Date(t.reportedDate).getTime()) / (1000 * 60));
+            }
+        }
+
+        const avgResolutionHours = resolutionHours.length
+            ? Number((resolutionHours.reduce((a, b) => a + b, 0) / resolutionHours.length).toFixed(1))
+            : 0;
+
+        const avgFirstResponseMins = responseMinutes.length
+            ? Number((responseMinutes.reduce((a, b) => a + b, 0) / responseMinutes.length).toFixed(1))
+            : 0;
+
+        const backlogByPriority = { CRITICAL: 0, HIGH: 0, MEDIUM: 0, LOW: 0 };
+        const technicianMap = new Map();
+
+        for (const t of openTicketRows) {
+            if (backlogByPriority[t.priority] != null) {
+                backlogByPriority[t.priority] += 1;
+            }
+
+            if (!t.assignedToId || !t.assignedTo?.name) continue;
+            const prev = technicianMap.get(t.assignedToId) || {
+                technicianId: t.assignedToId,
+                technicianName: t.assignedTo.name,
+                openTickets: 0,
+                criticalTickets: 0,
+                oldestTicketAgeHours: 0,
+            };
+
+            prev.openTickets += 1;
+            if (t.priority === 'CRITICAL') prev.criticalTickets += 1;
+            prev.oldestTicketAgeHours = Math.max(prev.oldestTicketAgeHours, ageHoursFrom(t.createdAt));
+            technicianMap.set(t.assignedToId, prev);
+        }
+
+        const technicianLoad = Array.from(technicianMap.values())
+            .sort((a, b) => b.openTickets - a.openTickets || b.criticalTickets - a.criticalTickets)
+            .slice(0, 8);
+
+        res.status(200).json({
+            success: true,
+            data: {
+                openTickets,
+                criticalOpen,
+                highOpen,
+                unassignedOpen,
+                slaBreached,
+                slaAtRisk,
+                avgResolutionHours,
+                avgFirstResponseMins,
+                backlogByPriority,
+                technicianLoad,
+                generatedAt: new Date().toISOString(),
+            },
+        });
+    } catch (error) {
+        res.status(500).json({ success: false, message: 'Server Error', error: error.message });
+    }
+};
+
+// @desc    AI-assisted operational brief for maintenance
+// @route   GET /api/maintenance/insights
+exports.getOperationalInsights = async (req, res) => {
+    try {
+        const scope = getOfficeScope(req.user);
+        const openStatuses = ['REQUESTED', 'PENDING', 'IN_PROGRESS', 'PENDING_PARTS', 'APPROVED'];
+        const requestedLimit = parseInt(req.query.limit, 10);
+        const limit = Number.isFinite(requestedLimit)
+            ? Math.max(5, Math.min(requestedLimit, 30))
+            : 12;
+
+        const openTickets = await prisma.maintenanceTicket.findMany({
+            where: { ...scope, status: { in: openStatuses } },
+            include: {
+                asset: { select: { id: true, name: true, guai: true, category: true } },
+                assignedTo: { select: { id: true, name: true } },
+            },
+            orderBy: [{ priority: 'desc' }, { createdAt: 'asc' }],
+            take: limit,
+        });
+
+        const now = Date.now();
+        const watchlist = openTickets.slice(0, 5).map((t) => ({
+            id: t.id,
+            ticketNumber: t.ticketNumber,
+            priority: t.priority,
+            status: t.status,
+            asset: t.asset?.name || 'Unknown Asset',
+            assignedTo: t.assignedTo?.name || 'Unassigned',
+            ageHours: Math.max(0, Math.round((now - new Date(t.createdAt).getTime()) / (1000 * 60 * 60))),
+            slaBreached: Boolean(t.slaBreached),
+            issueDescription: t.issueDescription,
+        }));
+
+        const unassignedCount = openTickets.filter((t) => !t.assignedToId).length;
+        const breachedCount = openTickets.filter((t) => t.slaBreached).length;
+        const pendingPartsCount = openTickets.filter((t) => t.status === 'PENDING_PARTS').length;
+        const criticalAged = openTickets.filter((t) => t.priority === 'CRITICAL' && ageHoursFrom(t.createdAt) >= 24).length;
+
+        const fallbackActions = [];
+        if (unassignedCount > 0) fallbackActions.push(`Assign ownership for ${unassignedCount} unassigned open ticket(s) in the next standup.`);
+        if (breachedCount > 0) fallbackActions.push(`Run escalation workflow for ${breachedCount} SLA-breached ticket(s) and set 4-hour checkpoints.`);
+        if (criticalAged > 0) fallbackActions.push(`Create rapid response swarm for ${criticalAged} critical ticket(s) older than 24 hours.`);
+        if (pendingPartsCount > 0) fallbackActions.push(`Expedite procurement for ${pendingPartsCount} ticket(s) blocked on parts.`);
+        if (fallbackActions.length === 0) fallbackActions.push('Maintain current operating cadence and review the top 5 watchlist tickets every 2 hours.');
+
+        const fallbackStructural = [
+            'Introduce auto-routing rules by asset category and technician skill to reduce first assignment latency.',
+            'Adopt SLA early-warning automation at 24h and 4h before deadline with manager escalation.',
+            'Publish weekly MTTR and first-response scorecards per office and technician cohort.',
+        ];
+
+        const fallbackRiskScore = Math.min(100, Math.round((breachedCount * 18) + (criticalAged * 12) + (unassignedCount * 8)));
+        const fallbackSummary = `Open:${openTickets.length}, Unassigned:${unassignedCount}, Breached:${breachedCount}, PendingParts:${pendingPartsCount}`;
+
+        let aiBrief = null;
+        try {
+            const compactTickets = watchlist.map((t) => ({
+                ticketNumber: t.ticketNumber,
+                priority: t.priority,
+                status: t.status,
+                ageHours: t.ageHours,
+                assignedTo: t.assignedTo,
+                slaBreached: t.slaBreached,
+                issue: t.issueDescription,
+                asset: t.asset,
+            }));
+
+            const prompt = `You are an enterprise maintenance operations advisor for CoreOps ERP.
+Return strict JSON only.
+Input snapshot:
+${JSON.stringify({
+                totalOpen: openTickets.length,
+                unassignedCount,
+                breachedCount,
+                pendingPartsCount,
+                criticalAged,
+                tickets: compactTickets,
+            }, null, 2)}
+
+Schema:
+{
+  "summary": "string max 180 chars",
+  "riskScore": number,
+  "immediateActions": ["string", "string", "string"],
+  "structuralFixes": ["string", "string", "string"]
+}
+Rules:
+- Keep items practical and ERP-operational.
+- riskScore must be 0-100.
+- No markdown, no extra keys.`;
+
+            const result = await aiService.generateJSON('planning', prompt, {
+                temperature: 0.2,
+                maxTokens: 700,
+            });
+
+            if (result?.parsed && typeof result.parsed === 'object') {
+                aiBrief = result.parsed;
+            }
+        } catch (_error) {
+            aiBrief = null;
+        }
+
+        const immediateActions = Array.isArray(aiBrief?.immediateActions) && aiBrief.immediateActions.length > 0
+            ? aiBrief.immediateActions.slice(0, 4)
+            : fallbackActions.slice(0, 4);
+
+        const structuralFixes = Array.isArray(aiBrief?.structuralFixes) && aiBrief.structuralFixes.length > 0
+            ? aiBrief.structuralFixes.slice(0, 4)
+            : fallbackStructural;
+
+        const riskScoreRaw = Number(aiBrief?.riskScore);
+        const riskScore = Number.isFinite(riskScoreRaw)
+            ? Math.max(0, Math.min(100, Math.round(riskScoreRaw)))
+            : fallbackRiskScore;
+
+        const summary = typeof aiBrief?.summary === 'string' && aiBrief.summary.trim().length > 0
+            ? aiBrief.summary.trim().slice(0, 180)
+            : fallbackSummary;
+
+        res.status(200).json({
+            success: true,
+            data: {
+                source: aiBrief ? 'ai+rules' : 'rules',
+                generatedAt: new Date().toISOString(),
+                summary,
+                riskScore,
+                immediateActions,
+                structuralFixes,
+                ticketWatchlist: watchlist,
+            },
         });
     } catch (error) {
         res.status(500).json({ success: false, message: 'Server Error', error: error.message });

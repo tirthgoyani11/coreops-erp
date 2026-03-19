@@ -1,4 +1,20 @@
 const prisma = require('../config/prisma');
+const aiService = require('../services/aiService');
+
+function resolveUserOfficeId(user) {
+    const oid = user.office?.id || user.officeId;
+    return typeof oid === 'object' ? oid.id : oid;
+}
+
+async function getScopedInventoryItem(id, reqUser) {
+    const item = await prisma.inventory.findUnique({ where: { id } });
+    if (!item) return null;
+    if (reqUser.role === 'SUPER_ADMIN') return item;
+
+    const userOfficeId = resolveUserOfficeId(reqUser);
+    if (!userOfficeId || item.officeId !== userOfficeId) return null;
+    return item;
+}
 
 // @desc    Get all inventory items
 // @route   GET /api/inventory
@@ -20,13 +36,6 @@ exports.getInventory = async (req, res) => {
 
         if (type) where.type = type.toUpperCase();
         if (category) where.category = category;
-
-        // Filter low stock at DB level instead of post-query
-        if (lowStock === 'true') {
-            where.currentQuantity = { lte: prisma.$queryRaw ? undefined : 0 };
-            // Prisma doesn't support field-to-field comparison directly,
-            // so we still post-filter but on the paginated set
-        }
 
         const [items, total] = await Promise.all([
             prisma.inventory.findMany({
@@ -167,6 +176,14 @@ exports.adjustStock = async (req, res) => {
     try {
         const { type, quantity, reason, notes, reference } = req.body;
 
+        if (!type || typeof type !== 'string') {
+            return res.status(400).json({ success: false, message: 'type is required' });
+        }
+
+        if (quantity === undefined || quantity === null || Number.isNaN(Number(quantity))) {
+            return res.status(400).json({ success: false, message: 'quantity must be numeric' });
+        }
+
         const result = await prisma.$transaction(async (tx) => {
             const item = await tx.inventory.findUnique({ where: { id: req.params.id } });
             if (!item) throw new Error('Item not found');
@@ -176,6 +193,16 @@ exports.adjustStock = async (req, res) => {
 
             const movementType = type.toUpperCase().replace(/[-\s]/g, '_');
 
+            if (Number.isNaN(qty)) {
+                throw new Error('Quantity must be numeric');
+            }
+
+            if (movementType === 'ADJUSTMENT') {
+                if (qty < 0) throw new Error('Adjusted stock level cannot be negative');
+            } else {
+                if (qty <= 0) throw new Error('Quantity must be greater than zero');
+            }
+
             if (movementType === 'STOCK_IN') {
                 newQuantity += qty;
             } else if (movementType === 'STOCK_OUT' || movementType === 'RETURN') {
@@ -183,6 +210,8 @@ exports.adjustStock = async (req, res) => {
                 newQuantity -= qty;
             } else if (movementType === 'ADJUSTMENT') {
                 newQuantity = qty; // Direct set
+            } else {
+                throw new Error('Invalid stock movement type');
             }
 
             await tx.inventory.update({
@@ -209,7 +238,21 @@ exports.adjustStock = async (req, res) => {
 
         res.status(200).json({ success: true, data: result });
     } catch (error) {
-        res.status(500).json({ success: false, message: 'Server Error', error: error.message });
+        const message = error?.message || 'Server Error';
+        if (message === 'Item not found') {
+            return res.status(404).json({ success: false, message });
+        }
+
+        if (
+            message.includes('Quantity must') ||
+            message.includes('Adjusted stock level') ||
+            message.includes('Insufficient stock') ||
+            message.includes('Invalid stock movement type')
+        ) {
+            return res.status(400).json({ success: false, message });
+        }
+
+        res.status(500).json({ success: false, message: 'Server Error', error: message });
     }
 };
 
@@ -579,6 +622,331 @@ exports.getConsumptionReport = async (req, res) => {
         });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
+    }
+};
+
+// @desc    Unified inventory overview for command-center UI
+// @route   GET /api/inventory/overview
+// @access  Private
+exports.getInventoryOverview = async (req, res) => {
+    try {
+        const where = { isActive: true };
+        if (req.user.role !== 'SUPER_ADMIN') {
+            const oid = req.user.office?.id || req.user.officeId;
+            where.officeId = typeof oid === 'object' ? oid.id : oid;
+        }
+
+        const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+
+        const [items, recentMovements] = await Promise.all([
+            prisma.inventory.findMany({
+                where,
+                select: {
+                    id: true,
+                    type: true,
+                    name: true,
+                    sku: true,
+                    currentQuantity: true,
+                    reorderPoint: true,
+                    reorderQuantity: true,
+                    minimumQuantity: true,
+                    unitCost: true,
+                    costPrice: true,
+                    pricingCurrency: true,
+                    updatedAt: true,
+                },
+                orderBy: { updatedAt: 'desc' },
+            }),
+            prisma.stockMovement.findMany({
+                where: {
+                    date: { gte: thirtyDaysAgo },
+                    inventory: where,
+                },
+                select: {
+                    id: true,
+                    type: true,
+                    quantity: true,
+                    date: true,
+                    inventoryId: true,
+                },
+                orderBy: { date: 'desc' },
+            }),
+        ]);
+
+        const lowStockItems = items.filter((item) => item.currentQuantity <= item.reorderPoint);
+        const outOfStockItems = items.filter((item) => item.currentQuantity === 0);
+
+        const valuationByCurrency = {};
+        let totalUnits = 0;
+        for (const item of items) {
+            const amount = (Number(item.unitCost || item.costPrice || 0) * Number(item.currentQuantity || 0));
+            const currency = String(item.pricingCurrency || 'INR').toUpperCase();
+            valuationByCurrency[currency] = Number((valuationByCurrency[currency] || 0) + amount);
+            totalUnits += Number(item.currentQuantity || 0);
+        }
+
+        const movementByType = recentMovements.reduce((acc, move) => {
+            acc[move.type] = (acc[move.type] || 0) + 1;
+            return acc;
+        }, {});
+
+        const recentConsumption = recentMovements
+            .filter((m) => ['STOCK_OUT', 'TRANSFER'].includes(m.type))
+            .reduce((sum, m) => sum + Math.abs(Number(m.quantity || 0)), 0);
+
+        const topRiskItems = lowStockItems
+            .map((item) => {
+                const gap = Number(item.reorderPoint || 0) - Number(item.currentQuantity || 0);
+                return {
+                    id: item.id,
+                    sku: item.sku,
+                    name: item.name,
+                    type: item.type,
+                    currentQuantity: item.currentQuantity,
+                    reorderPoint: item.reorderPoint,
+                    reorderQuantity: item.reorderQuantity,
+                    shortage: Math.max(0, gap),
+                    recommendedOrderQty: Math.max(Number(item.reorderQuantity || 1), Math.max(0, gap)),
+                };
+            })
+            .sort((a, b) => b.shortage - a.shortage)
+            .slice(0, 10);
+
+        res.status(200).json({
+            success: true,
+            data: {
+                summary: {
+                    totalItems: items.length,
+                    totalUnits,
+                    lowStockCount: lowStockItems.length,
+                    outOfStockCount: outOfStockItems.length,
+                    lowStockRatio: items.length ? Number((lowStockItems.length / items.length).toFixed(3)) : 0,
+                    valuationByCurrency,
+                    movementCount30Days: recentMovements.length,
+                    consumptionUnits30Days: recentConsumption,
+                    movementByType,
+                },
+                topRiskItems,
+                generatedAt: new Date().toISOString(),
+            },
+        });
+    } catch (error) {
+        res.status(500).json({ success: false, message: 'Server Error', error: error.message });
+    }
+};
+
+// @desc    AI + rule-based inventory operations brief
+// @route   GET /api/inventory/insights
+// @access  Private
+exports.getInventoryInsights = async (req, res) => {
+    try {
+        const where = { isActive: true };
+        if (req.user.role !== 'SUPER_ADMIN') {
+            const oid = req.user.office?.id || req.user.officeId;
+            where.officeId = typeof oid === 'object' ? oid.id : oid;
+        }
+
+        const items = await prisma.inventory.findMany({
+            where,
+            select: {
+                id: true,
+                name: true,
+                sku: true,
+                type: true,
+                category: true,
+                currentQuantity: true,
+                reorderPoint: true,
+                reorderQuantity: true,
+                minimumQuantity: true,
+                unitCost: true,
+                costPrice: true,
+                pricingCurrency: true,
+            },
+        });
+
+        const riskItems = items
+            .filter((i) => i.currentQuantity <= i.reorderPoint)
+            .map((i) => ({
+                id: i.id,
+                sku: i.sku,
+                name: i.name,
+                type: i.type,
+                category: i.category,
+                currentQuantity: i.currentQuantity,
+                reorderPoint: i.reorderPoint,
+                reorderQuantity: i.reorderQuantity,
+                shortage: Math.max(0, i.reorderPoint - i.currentQuantity),
+            }))
+            .sort((a, b) => b.shortage - a.shortage)
+            .slice(0, 12);
+
+        const fallback = {
+            source: 'rules',
+            headline: `Inventory has ${riskItems.length} item(s) below reorder level.`,
+            urgency: riskItems.length > 20 ? 'CRITICAL' : riskItems.length > 8 ? 'HIGH' : riskItems.length > 0 ? 'MEDIUM' : 'LOW',
+            recommendations: [
+                riskItems.length > 0
+                    ? `Issue replenishment orders for top ${Math.min(riskItems.length, 5)} at-risk SKU(s) today.`
+                    : 'No immediate low-stock risk; maintain current replenishment cadence.',
+                'Review reorder points using 30-day consumption trends every week.',
+                'Escalate any out-of-stock spare impacting maintenance SLA to procurement immediately.',
+            ],
+            topRisks: riskItems.slice(0, 6),
+            generatedAt: new Date().toISOString(),
+        };
+
+        let aiParsed = null;
+        try {
+            const prompt = `You are an ERP inventory operations analyst. Return strict JSON only.\nData:\n${JSON.stringify({
+                inventoryCount: items.length,
+                lowStockCount: riskItems.length,
+                topRiskItems: riskItems.slice(0, 8),
+            }, null, 2)}\nSchema:\n{\n  "headline": "string max 180 chars",\n  "urgency": "LOW|MEDIUM|HIGH|CRITICAL",\n  "recommendations": ["string","string","string"],\n  "topRisks": [{ "id": "string", "sku": "string", "name": "string", "shortage": number }]\n}\nRules:\n- concise, practical ERP language\n- recommendations must be executable\n- no markdown`;
+
+            const result = await aiService.generateJSON('planning', prompt, {
+                temperature: 0.2,
+                maxTokens: 500,
+            });
+            if (result?.parsed && typeof result.parsed === 'object') {
+                aiParsed = result.parsed;
+            }
+        } catch {
+            aiParsed = null;
+        }
+
+        const response = {
+            source: aiParsed ? 'ai+rules' : fallback.source,
+            headline: typeof aiParsed?.headline === 'string' && aiParsed.headline.trim()
+                ? aiParsed.headline.trim().slice(0, 180)
+                : fallback.headline,
+            urgency: ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'].includes(String(aiParsed?.urgency || ''))
+                ? String(aiParsed.urgency)
+                : fallback.urgency,
+            recommendations: Array.isArray(aiParsed?.recommendations) && aiParsed.recommendations.length
+                ? aiParsed.recommendations.slice(0, 4)
+                : fallback.recommendations,
+            topRisks: Array.isArray(aiParsed?.topRisks) && aiParsed.topRisks.length
+                ? aiParsed.topRisks.slice(0, 6)
+                : fallback.topRisks,
+            generatedAt: new Date().toISOString(),
+        };
+
+        res.status(200).json({ success: true, data: response });
+    } catch (error) {
+        res.status(500).json({ success: false, message: 'Server Error', error: error.message });
+    }
+};
+
+// @desc    One-click reorder for at-risk item
+// @route   POST /api/inventory/:id/reorder
+// @access  Private (Manager/Admin)
+exports.reorderFromRisk = async (req, res) => {
+    try {
+        const item = await getScopedInventoryItem(req.params.id, req.user);
+        if (!item) return res.status(404).json({ success: false, message: 'Item not found' });
+
+        const inputQty = Number(req.body.quantity);
+        const shortage = Math.max(0, Number(item.reorderPoint || 0) - Number(item.currentQuantity || 0));
+        const suggestedQty = Math.max(Number(item.reorderQuantity || 1), shortage || 1);
+        const qty = Number.isFinite(inputQty) && inputQty > 0 ? Math.round(inputQty) : Math.round(suggestedQty);
+
+        const updated = await prisma.$transaction(async (tx) => {
+            const next = await tx.inventory.update({
+                where: { id: item.id },
+                data: { currentQuantity: { increment: qty }, lastRestockDate: new Date() },
+            });
+
+            await tx.stockMovement.create({
+                data: {
+                    inventoryId: item.id,
+                    type: 'STOCK_IN',
+                    quantity: qty,
+                    reason: 'AUTO_REORDER_TOP_RISK',
+                    reference: `AUTO-REORDER-${new Date().toISOString().slice(0, 10)}`,
+                    performedById: req.user.id,
+                },
+            });
+
+            return next;
+        });
+
+        res.status(200).json({
+            success: true,
+            message: `Reorder applied: +${qty} units`,
+            data: {
+                id: updated.id,
+                sku: updated.sku,
+                name: updated.name,
+                quantityAdded: qty,
+                currentQuantity: updated.currentQuantity,
+                reorderPoint: updated.reorderPoint,
+            },
+        });
+    } catch (error) {
+        res.status(500).json({ success: false, message: 'Server Error', error: error.message });
+    }
+};
+
+// @desc    One-click set stock level to reorder point
+// @route   POST /api/inventory/:id/fix-reorder-point
+// @access  Private (Manager/Admin)
+exports.fixToReorderPoint = async (req, res) => {
+    try {
+        const item = await getScopedInventoryItem(req.params.id, req.user);
+        if (!item) return res.status(404).json({ success: false, message: 'Item not found' });
+
+        const target = Math.max(0, Number(item.reorderPoint || 0));
+        const prev = Number(item.currentQuantity || 0);
+
+        if (prev === target) {
+            return res.status(200).json({
+                success: true,
+                message: 'Stock already at reorder point',
+                data: {
+                    id: item.id,
+                    sku: item.sku,
+                    currentQuantity: prev,
+                    reorderPoint: target,
+                    delta: 0,
+                },
+            });
+        }
+
+        const updated = await prisma.$transaction(async (tx) => {
+            const next = await tx.inventory.update({
+                where: { id: item.id },
+                data: { currentQuantity: target },
+            });
+
+            await tx.stockMovement.create({
+                data: {
+                    inventoryId: item.id,
+                    type: 'ADJUSTMENT',
+                    quantity: target,
+                    reason: `FIX_TO_REORDER_POINT_FROM_${prev}`,
+                    reference: `AUTO-FIX-ROP-${new Date().toISOString().slice(0, 10)}`,
+                    performedById: req.user.id,
+                },
+            });
+
+            return next;
+        });
+
+        res.status(200).json({
+            success: true,
+            message: `Stock adjusted to reorder point (${target})`,
+            data: {
+                id: updated.id,
+                sku: updated.sku,
+                name: updated.name,
+                previousQuantity: prev,
+                currentQuantity: updated.currentQuantity,
+                reorderPoint: updated.reorderPoint,
+                delta: updated.currentQuantity - prev,
+            },
+        });
+    } catch (error) {
+        res.status(500).json({ success: false, message: 'Server Error', error: error.message });
     }
 };
 

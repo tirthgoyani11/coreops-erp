@@ -9,6 +9,8 @@ export function AssetOverview({ asset }: AssetOverviewProps) {
     // Warranty check
     const hasWarranty = asset.warrantyEnd && new Date(asset.warrantyEnd) > new Date();
     const assetCurrency = (asset.currency || 'INR').toUpperCase();
+    const valuation = asset.valuation || null;
+    const workflow = asset.workflow || null;
 
     return (
         <div className="space-y-6">
@@ -76,6 +78,26 @@ export function AssetOverview({ asset }: AssetOverviewProps) {
                         <DetailItem label="Vendor" value={asset.vendorName || 'N/A'} />
                         <DetailItem label="Order No." value={asset.purchaseOrderNumber || 'N/A'} />
                     </div>
+
+                    {valuation && (
+                        <div className="pt-4 border-t border-[var(--border-color)] space-y-2">
+                            <p className="text-xs text-[var(--text-secondary)] uppercase tracking-wide">Dual Currency Snapshot</p>
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-2 text-sm">
+                                <div className="rounded-lg border border-[var(--border-color)] p-2.5 bg-[var(--bg-card-hover)]/30">
+                                    <p className="text-[10px] text-[var(--text-secondary)] uppercase">Branch</p>
+                                    <p className="font-semibold text-[var(--text-primary)]">{formatCurrency(Number(valuation.officeAmount || 0), valuation.officeCurrency || assetCurrency)}</p>
+                                </div>
+                                <div className="rounded-lg border border-[var(--border-color)] p-2.5 bg-[var(--bg-card-hover)]/30">
+                                    <p className="text-[10px] text-[var(--text-secondary)] uppercase">HQ</p>
+                                    <p className="font-semibold text-[var(--text-primary)]">{formatCurrency(Number(valuation.hqAmount || 0), valuation.hqCurrency || 'INR')}</p>
+                                </div>
+                                <div className="rounded-lg border border-[var(--border-color)] p-2.5 bg-[var(--bg-card-hover)]/30">
+                                    <p className="text-[10px] text-[var(--text-secondary)] uppercase">Live FX Rate</p>
+                                    <p className="font-semibold text-[var(--text-primary)]">1 {valuation.officeCurrency} = {Number(valuation.hqRate || 1).toFixed(4)} {valuation.hqCurrency}</p>
+                                </div>
+                            </div>
+                        </div>
+                    )}
                 </div>
 
                 {/* Warranty Status */}
@@ -94,6 +116,29 @@ export function AssetOverview({ asset }: AssetOverviewProps) {
                             <p className="text-lg font-bold text-[var(--text-primary)]">
                                 {asset.warrantyEnd ? new Date(asset.warrantyEnd).toLocaleDateString() : 'No Warranty / Expired'}
                             </p>
+                        </div>
+                    </div>
+                </div>
+
+                <div className="bg-[var(--bg-card)] border border-[var(--border-color)] rounded-2xl p-6 space-y-4 hover:border-sky-400/30 transition-colors md:col-span-2">
+                    <h3 className="text-lg font-semibold text-[var(--text-primary)]">Workflow Integration</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
+                        <div className="rounded-lg border border-[var(--border-color)] p-3 bg-[var(--bg-card-hover)]/20">
+                            <p className="text-xs text-[var(--text-secondary)]">Purchase Order</p>
+                            <p className="font-semibold text-[var(--text-primary)] mt-1">{workflow?.purchaseOrder?.poNumber || asset.purchaseOrderNumber || 'Not linked'}</p>
+                            {workflow?.purchaseOrder?.id && (
+                                <a className="text-xs text-sky-400 hover:underline" href={`/purchase-orders/${workflow.purchaseOrder.id}`}>Open PO</a>
+                            )}
+                        </div>
+                        <div className="rounded-lg border border-[var(--border-color)] p-3 bg-[var(--bg-card-hover)]/20">
+                            <p className="text-xs text-[var(--text-secondary)]">Invoice</p>
+                            <p className="font-semibold text-[var(--text-primary)] mt-1">{workflow?.invoice?.invoiceNumber || asset.invoiceNumber || 'Not linked'}</p>
+                            <a className="text-xs text-sky-400 hover:underline" href="/finance/ap-aging">Open AP/AR</a>
+                        </div>
+                        <div className="rounded-lg border border-[var(--border-color)] p-3 bg-[var(--bg-card-hover)]/20">
+                            <p className="text-xs text-[var(--text-secondary)]">Maintenance</p>
+                            <p className="font-semibold text-[var(--text-primary)] mt-1">{workflow?.maintenance?.openTickets ?? 0} open / {workflow?.maintenance?.totalTickets ?? 0} total</p>
+                            <a className="text-xs text-sky-400 hover:underline" href={`/maintenance?assetId=${asset.id}`}>Open Tickets</a>
                         </div>
                     </div>
                 </div>

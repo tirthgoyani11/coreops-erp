@@ -5,7 +5,7 @@ import {
     ChevronLeft, CreditCard, Edit, QrCode,
     History, LayoutDashboard, FileText, Loader2,
     Calendar, MapPin, Tag, LogIn, LogOut, X,
-    Upload, Download, Trash2
+    Upload, Download, Trash2, Bot, Sparkles
 } from 'lucide-react';
 import api from '../lib/api';
 import { cn } from '../lib/utils';
@@ -30,6 +30,8 @@ export function AssetDetail() {
     const [users, setUsers] = useState<any[]>([]);
     const [selectedUserId, setSelectedUserId] = useState('');
     const [actionLoading, setActionLoading] = useState(false);
+    const [assetInsights, setAssetInsights] = useState<any>(null);
+    const [insightsLoading, setInsightsLoading] = useState(false);
 
     // QR modal
     const [qrModal, setQrModal] = useState(false);
@@ -60,8 +62,26 @@ export function AssetDetail() {
         }
     };
 
+    const fetchAssetInsights = async () => {
+        if (!id) return;
+        setInsightsLoading(true);
+        try {
+            const res = await api.get(`/assets/${id}/insights`);
+            setAssetInsights(res.data?.data || null);
+        } catch (error) {
+            console.error('Failed to fetch asset insights', error);
+            setAssetInsights(null);
+        } finally {
+            setInsightsLoading(false);
+        }
+    };
+
     useEffect(() => {
         if (id) fetchAsset();
+    }, [id]);
+
+    useEffect(() => {
+        if (id) fetchAssetInsights();
     }, [id]);
 
     const fetchUsers = async () => {
@@ -179,6 +199,7 @@ export function AssetDetail() {
         { id: 'overview', label: 'Overview', icon: LayoutDashboard },
         { id: 'financial', label: 'Financials', icon: CreditCard },
         { id: 'history', label: 'History & Audit', icon: History },
+        { id: 'insights', label: 'AI Insights', icon: Bot },
         { id: 'docs', label: 'Documents', icon: FileText },
     ];
 
@@ -332,6 +353,73 @@ export function AssetDetail() {
                 {activeTab === 'overview' && <AssetOverview asset={asset} />}
                 {activeTab === 'financial' && <AssetFinancials asset={asset} />}
                 {activeTab === 'history' && <AssetHistory asset={asset} />}
+                {activeTab === 'insights' && (
+                    <div className="space-y-4">
+                        <div className="flex items-center justify-between bg-[var(--bg-card)] border border-[var(--border-color)] rounded-2xl p-4">
+                            <div>
+                                <h3 className="text-lg font-semibold text-[var(--text-primary)] flex items-center gap-2">
+                                    <Sparkles size={18} className="text-[var(--primary)]" />
+                                    Asset Operations Intelligence
+                                </h3>
+                                <p className="text-sm text-[var(--text-secondary)]">AI + rules based health and workflow guidance</p>
+                            </div>
+                            <button
+                                onClick={fetchAssetInsights}
+                                disabled={insightsLoading}
+                                className="px-3 py-2 rounded-lg border border-[var(--border-color)] text-sm text-[var(--text-primary)] hover:border-[var(--primary)]/50"
+                            >
+                                {insightsLoading ? 'Refreshing...' : 'Refresh'}
+                            </button>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <div className="bg-[var(--bg-card)] border border-[var(--border-color)] rounded-2xl p-5 md:col-span-1">
+                                <p className="text-xs text-[var(--text-secondary)] uppercase tracking-wide">Health Score</p>
+                                <p className="text-3xl font-bold text-[var(--text-primary)] mt-2">{assetInsights?.healthScore ?? '--'}/100</p>
+                                <p className="text-xs text-[var(--text-secondary)] mt-2">Source: {assetInsights?.source || 'rules'}</p>
+                            </div>
+                            <div className="bg-[var(--bg-card)] border border-[var(--border-color)] rounded-2xl p-5 md:col-span-2">
+                                <p className="text-xs text-[var(--text-secondary)] uppercase tracking-wide">Executive Summary</p>
+                                <p className="text-sm text-[var(--text-primary)] mt-2">{assetInsights?.summary || 'No insight available currently.'}</p>
+                            </div>
+                        </div>
+
+                        <div className="bg-[var(--bg-card)] border border-[var(--border-color)] rounded-2xl p-5">
+                            <p className="text-xs text-[var(--text-secondary)] uppercase tracking-wide">Recommended Actions</p>
+                            <ul className="mt-3 space-y-2 text-sm text-[var(--text-primary)]">
+                                {(assetInsights?.actions || []).map((action: string, index: number) => (
+                                    <li key={index}>• {action}</li>
+                                ))}
+                            </ul>
+                        </div>
+
+                        <div className="bg-[var(--bg-card)] border border-[var(--border-color)] rounded-2xl p-5">
+                            <p className="text-xs text-[var(--text-secondary)] uppercase tracking-wide">Operational Metrics</p>
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-3 text-sm">
+                                <div>
+                                    <p className="text-[var(--text-secondary)]">Open Tickets</p>
+                                    <p className="font-semibold text-[var(--text-primary)]">{assetInsights?.metrics?.openTickets ?? 0}</p>
+                                </div>
+                                <div>
+                                    <p className="text-[var(--text-secondary)]">Service Events</p>
+                                    <p className="font-semibold text-[var(--text-primary)]">{assetInsights?.metrics?.maintenanceEvents ?? 0}</p>
+                                </div>
+                                <div>
+                                    <p className="text-[var(--text-secondary)]">Lifetime Cost</p>
+                                    <p className="font-semibold text-[var(--text-primary)]">
+                                        {assetInsights?.metrics
+                                            ? `${assetInsights.metrics.lifetimeMaintenanceCost} ${assetInsights.metrics.currency}`
+                                            : '0'}
+                                    </p>
+                                </div>
+                                <div>
+                                    <p className="text-[var(--text-secondary)]">Repair Ratio</p>
+                                    <p className="font-semibold text-[var(--text-primary)]">{assetInsights?.metrics ? `${(assetInsights.metrics.repairRatio * 100).toFixed(1)}%` : '0%'}</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                )}
                 {activeTab === 'docs' && (
                     <div className="space-y-6">
                         {/* Upload Area */}

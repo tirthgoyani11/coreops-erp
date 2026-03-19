@@ -7,7 +7,10 @@ import {
     Plus,
     Search,
     Package,
-    ArrowUpRight
+    ArrowUpRight,
+    AlertTriangle,
+    Brain,
+    Loader2,
 } from 'lucide-react';
 
 // Components
@@ -39,6 +42,32 @@ export function Inventory() {
         category: 'all',
         stockStatus: 'all' // all, low_stock, out_of_stock
     });
+    const [overview, setOverview] = useState<any>(null);
+    const [insights, setInsights] = useState<any>(null);
+    const [overviewLoading, setOverviewLoading] = useState(true);
+    const [reorderingRiskId, setReorderingRiskId] = useState<string | null>(null);
+
+    const loadInventoryIntelligence = async () => {
+        setOverviewLoading(true);
+        try {
+            const [overviewRes, insightsRes] = await Promise.all([
+                api.get('/inventory/overview'),
+                api.get('/inventory/insights'),
+            ]);
+
+            if (overviewRes.data?.success) {
+                setOverview(overviewRes.data.data);
+            }
+            if (insightsRes.data?.success) {
+                setInsights(insightsRes.data.data);
+            }
+        } catch (error) {
+            console.error('Failed to load inventory intelligence:', error);
+            toast.error('Failed to load inventory analytics');
+        } finally {
+            setOverviewLoading(false);
+        }
+    };
 
     const fetchInventory = async () => {
         setLoading(true);
@@ -75,6 +104,10 @@ export function Inventory() {
     useEffect(() => {
         fetchInventory();
     }, [activeTab, filters.stockStatus]);
+
+    useEffect(() => {
+        loadInventoryIntelligence();
+    }, []);
     // Search is client-side filtered for responsiveness on small datasets, 
     // or debounced server-side. for MVP, client-filter.
 
@@ -82,6 +115,28 @@ export function Inventory() {
         item.name?.toLowerCase().includes(filters.search.toLowerCase()) ||
         (item.sku || '').toLowerCase().includes(filters.search.toLowerCase())
     );
+
+    const valuationLabel = overview?.summary?.valuationByCurrency
+        ? Object.entries(overview.summary.valuationByCurrency)
+            .map(([currency, amount]) => `${currency} ${Number(amount || 0).toLocaleString('en-IN', { maximumFractionDigits: 2 })}`)
+            .join(' | ')
+        : '-';
+
+    const handleTopRiskReorder = async (risk: any) => {
+        setReorderingRiskId(risk.id);
+        try {
+            await api.post(`/inventory/${risk.id}/reorder`, {
+                quantity: risk.recommendedOrderQty,
+            });
+            toast.success(`Reordered ${risk.sku} (+${risk.recommendedOrderQty})`);
+            await Promise.all([fetchInventory(), loadInventoryIntelligence()]);
+        } catch (error: any) {
+            const msg = error?.response?.data?.message || 'Failed to reorder item';
+            toast.error(msg);
+        } finally {
+            setReorderingRiskId(null);
+        }
+    };
 
     return (
         <div className="space-y-6">
@@ -148,6 +203,127 @@ export function Inventory() {
                     </div>
                 </div>
             </Card>
+
+            {/* Intelligence Layer */}
+            <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
+                <Card className="p-4 xl:col-span-2 border border-[var(--border-color)] bg-[var(--bg-card)]">
+                    {overviewLoading ? (
+                        <div className="flex items-center justify-center h-36">
+                            <Loader2 className="w-6 h-6 animate-spin text-[var(--primary)]" />
+                        </div>
+                    ) : (
+                        <>
+                            <div className="flex items-center justify-between mb-4">
+                                <h3 className="text-base font-semibold text-[var(--text-primary)]">Inventory Operations Pulse</h3>
+                                <Button variant="outline" size="sm" onClick={() => { fetchInventory(); loadInventoryIntelligence(); }}>
+                                    Refresh
+                                </Button>
+                            </div>
+
+                            <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+                                <div className="rounded-lg border border-[var(--border-color)] bg-[var(--bg-overlay)] p-3">
+                                    <div className="text-xs text-[var(--text-muted)] uppercase tracking-wider">Total SKUs</div>
+                                    <div className="text-xl font-bold text-[var(--text-primary)] mt-1">{overview?.summary?.totalItems ?? 0}</div>
+                                </div>
+                                <div className="rounded-lg border border-[var(--border-color)] bg-[var(--bg-overlay)] p-3">
+                                    <div className="text-xs text-[var(--text-muted)] uppercase tracking-wider">Total Units</div>
+                                    <div className="text-xl font-bold text-[var(--text-primary)] mt-1">{overview?.summary?.totalUnits ?? 0}</div>
+                                </div>
+                                <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-3">
+                                    <div className="text-xs text-red-200 uppercase tracking-wider">Low Stock</div>
+                                    <div className="text-xl font-bold text-red-300 mt-1">{overview?.summary?.lowStockCount ?? 0}</div>
+                                </div>
+                                <div className="rounded-lg border border-orange-500/30 bg-orange-500/10 p-3">
+                                    <div className="text-xs text-orange-200 uppercase tracking-wider">Out Of Stock</div>
+                                    <div className="text-xl font-bold text-orange-300 mt-1">{overview?.summary?.outOfStockCount ?? 0}</div>
+                                </div>
+                                <div className="rounded-lg border border-[var(--primary)]/30 bg-[var(--primary)]/10 p-3">
+                                    <div className="text-xs text-[var(--primary)] uppercase tracking-wider">30d Moves</div>
+                                    <div className="text-xl font-bold text-[var(--primary)] mt-1">{overview?.summary?.movementCount30Days ?? 0}</div>
+                                </div>
+                            </div>
+
+                            <div className="mt-4 text-sm text-[var(--text-secondary)]">
+                                Valuation Snapshot: <span className="font-medium text-[var(--text-primary)]">{valuationLabel}</span>
+                            </div>
+
+                            <div className="mt-4 space-y-2">
+                                <div className="text-xs uppercase tracking-wider text-[var(--text-muted)]">Top Reorder Risks</div>
+                                {(overview?.topRiskItems || []).length === 0 ? (
+                                    <div className="text-sm text-[var(--text-secondary)]">No immediate reorder risk across current scope.</div>
+                                ) : (
+                                    <div className="space-y-2">
+                                        {(overview?.topRiskItems || []).slice(0, 5).map((risk: any) => (
+                                            <div key={risk.id} className="flex items-center justify-between rounded-lg border border-[var(--border-color)] bg-[var(--bg-overlay)] px-3 py-2 gap-3">
+                                                <div>
+                                                    <div className="text-sm font-medium text-[var(--text-primary)]">{risk.name} ({risk.sku})</div>
+                                                    <div className="text-xs text-[var(--text-muted)]">Current {risk.currentQuantity} | Reorder {risk.reorderPoint}</div>
+                                                </div>
+                                                <div className="text-right">
+                                                    <div className="flex justify-end gap-2 mb-1">
+                                                        <Button
+                                                            size="sm"
+                                                            variant="outline"
+                                                            onClick={() => handleTopRiskReorder(risk)}
+                                                            disabled={reorderingRiskId === risk.id}
+                                                        >
+                                                            {reorderingRiskId === risk.id ? 'Reordering...' : 'Reorder Now'}
+                                                        </Button>
+                                                        <Button
+                                                            size="sm"
+                                                            variant="ghost"
+                                                            onClick={() => navigate(`/inventory/${risk.id}`)}
+                                                        >
+                                                            Open
+                                                        </Button>
+                                                        <Button
+                                                            size="sm"
+                                                            variant="ghost"
+                                                            onClick={() => navigate(`/finance/exception-center?module=INVENTORY&ref=${risk.id}`)}
+                                                        >
+                                                            Exception
+                                                        </Button>
+                                                    </div>
+                                                    <div className="text-xs text-red-300">Shortage {risk.shortage}</div>
+                                                    <div className="text-xs text-[var(--text-secondary)]">Suggested {risk.recommendedOrderQty}</div>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        </>
+                    )}
+                </Card>
+
+                <Card className="p-4 border border-[var(--border-color)] bg-gradient-to-b from-[var(--bg-card)] to-[var(--bg-overlay)]">
+                    <div className="flex items-center gap-2 text-[var(--text-primary)] mb-3">
+                        <Brain className="w-4 h-4 text-[var(--primary)]" />
+                        <h3 className="text-base font-semibold">AI Inventory Brief</h3>
+                    </div>
+
+                    {overviewLoading ? (
+                        <div className="flex items-center justify-center h-36">
+                            <Loader2 className="w-6 h-6 animate-spin text-[var(--primary)]" />
+                        </div>
+                    ) : insights ? (
+                        <div className="space-y-3">
+                            <div className="inline-flex items-center gap-2 rounded-full px-2.5 py-1 text-xs border border-[var(--border-color)] bg-[var(--bg-card)] text-[var(--text-secondary)]">
+                                <AlertTriangle className="w-3 h-3" />
+                                {insights.urgency} PRIORITY
+                            </div>
+                            <p className="text-sm text-[var(--text-primary)] leading-relaxed">{insights.headline}</p>
+                            <ul className="space-y-2 text-xs text-[var(--text-secondary)]">
+                                {(insights.recommendations || []).slice(0, 3).map((rec: string, idx: number) => (
+                                    <li key={idx} className="rounded-md border border-[var(--border-color)] bg-[var(--bg-card)] px-2 py-1.5">{rec}</li>
+                                ))}
+                            </ul>
+                        </div>
+                    ) : (
+                        <div className="text-sm text-[var(--text-secondary)]">Inventory brief unavailable.</div>
+                    )}
+                </Card>
+            </div>
 
             {/* Content */}
             <div className="min-h-[500px]">

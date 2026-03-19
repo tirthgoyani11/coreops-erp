@@ -6,6 +6,7 @@ const apArController = require('../controllers/apArController');
 const bankReconController = require('../controllers/bankReconciliationController');
 const yearEndController = require('../controllers/yearEndController');
 const expenseController = require('../controllers/expenseController');
+const orchestrationController = require('../controllers/orchestrationController');
 const prisma = require('../config/prisma');
 const { asyncHandler } = require('../utils/errorHandler');
 
@@ -23,6 +24,8 @@ router.use(authorize('SUPER_ADMIN', 'ADMIN', 'MANAGER'));
 // ── AP & AR Aging Reports ──────────────────────────────
 router.get('/ap-aging', apArController.getAPAging);
 router.get('/ar-aging', apArController.getARAging);
+router.get('/exception-center', orchestrationController.getExceptionCenter);
+router.get('/cockpit', orchestrationController.getExecutiveCockpit);
 
 // ── Tax Rates ──────────────────────────────────────────
 router.get('/tax-rates', asyncHandler(async (req, res) => {
