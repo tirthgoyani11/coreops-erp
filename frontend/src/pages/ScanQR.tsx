@@ -26,9 +26,20 @@ declare global {
 
 function parseQrCode(raw: string): string {
     const value = String(raw || '').trim();
-    const pathMatch = value.match(/\/assets\/([a-zA-Z0-9-]{10,})/);
+    const decoded = (() => {
+        try {
+            return decodeURIComponent(value);
+        } catch {
+            return value;
+        }
+    })();
+
+    const uuidMatch = decoded.match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i);
+    if (uuidMatch && uuidMatch[0]) return uuidMatch[0];
+
+    const pathMatch = decoded.match(/\/assets\/([a-zA-Z0-9-]{10,})/i);
     if (pathMatch && pathMatch[1]) return pathMatch[1];
-    return value;
+    return decoded;
 }
 
 export function ScanQR() {
@@ -68,8 +79,22 @@ export function ScanQR() {
         setError('');
 
         try {
-            const res = await api.get('/assets/lookup', { params: { code: normalized } });
-            setAsset(res.data?.data?.asset || null);
+            let resolvedAsset: any | null = null;
+
+            try {
+                const lookupRes = await api.get('/assets/lookup', { params: { code: normalized } });
+                resolvedAsset = lookupRes.data?.data?.asset || null;
+            } catch {
+                // Fallback for environments where /assets/lookup is unavailable.
+                const directRes = await api.get(`/assets/${normalized}`);
+                resolvedAsset = directRes.data?.data || null;
+            }
+
+            if (!resolvedAsset) {
+                throw new Error('Asset not found for scanned code.');
+            }
+
+            setAsset(resolvedAsset);
             setRawCode(code);
             setState('resolved');
             stopScanner();
