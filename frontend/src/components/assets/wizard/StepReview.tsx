@@ -8,6 +8,7 @@ interface StepReviewProps {
 
 export function StepReview({ data, isSubmitting }: StepReviewProps) {
     const mockGUAI = `COR-XXX-${data.category?.substring(0, 4).toUpperCase() || 'XXXX'}-001`;
+    const selectedCurrency = (data.currency || 'INR').toUpperCase();
 
     return (
         <div className="space-y-6 relative">
@@ -46,7 +47,8 @@ export function StepReview({ data, isSubmitting }: StepReviewProps) {
 
             {/* Financial Section */}
             <ReviewSection icon={<DollarSign size={16} />} title="Financial">
-                <ReviewItem label="Purchase Price" value={formatCurrency(parseFloat(data.purchasePrice) || 0)} />
+                <ReviewItem label="Purchase Price" value={formatCurrency(parseFloat(data.purchasePrice) || 0, selectedCurrency)} />
+                <ReviewItem label="Currency" value={selectedCurrency} />
                 <ReviewItem label="Purchase Date" value={data.purchaseDate || 'N/A'} />
                 {data.vendorName && <ReviewItem label="Vendor" value={data.vendorName} />}
                 {data.warrantyExpiryDate && <ReviewItem label="Warranty Expires" value={data.warrantyExpiryDate} />}

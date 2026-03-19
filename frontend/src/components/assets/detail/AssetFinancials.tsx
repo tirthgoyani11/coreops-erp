@@ -7,6 +7,7 @@ import {
     Tooltip,
     ResponsiveContainer
 } from 'recharts';
+import { getCurrencySymbol } from '../../../lib/utils';
 
 interface AssetFinancialsProps {
     asset: any;
@@ -16,7 +17,8 @@ export function AssetFinancials({ asset }: AssetFinancialsProps) {
     // Read from flat Prisma fields
     const purchasePrice = asset.purchasePrice || asset.purchaseCost || 0;
     const purchaseYear = new Date(asset.purchaseDate || new Date()).getFullYear();
-    const currency = asset.currency || 'INR';
+    const currency = (asset.currency || 'INR').toUpperCase();
+    const currencySymbol = getCurrencySymbol(currency);
 
     // Use backend depreciation data if available, otherwise calculate
     const usefulLife = asset.depreciation?.usefulLife || 5;
@@ -101,7 +103,7 @@ export function AssetFinancials({ asset }: AssetFinancialsProps) {
                                 stroke="var(--text-secondary)"
                                 tick={{ fill: 'var(--text-secondary)' }}
                                 axisLine={{ stroke: 'var(--border-color)' }}
-                                tickFormatter={(value) => `${currency === 'INR' ? '₹' : '$'}${(value / 1000).toFixed(0)}k`}
+                                tickFormatter={(value) => `${currencySymbol}${(value / 1000).toFixed(0)}k`}
                             />
                             <Tooltip
                                 contentStyle={{

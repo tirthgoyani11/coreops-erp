@@ -2,6 +2,7 @@ const prisma = require('../config/prisma');
 const { asyncHandler, AppError } = require('../utils/errorHandler');
 const QRCode = require('qrcode');
 const logger = require('../utils/logger');
+const { convertCurrency } = require('../utils/currencyConverter');
 
 /**
  * Generate GUAI (Globally Unique Asset Identifier)
@@ -44,6 +45,16 @@ exports.createAsset = asyncHandler(async (req, res, next) => {
 
     if (!targetOfficeId) return next(new AppError('Office is required', 400));
 
+    const office = await prisma.office.findUnique({
+        where: { id: targetOfficeId },
+        select: { id: true, baseCurrency: true },
+    });
+
+    if (!office) return next(new AppError('Office not found', 404));
+
+    // Office is the source of truth for asset currency to keep each office on one currency system.
+    const effectiveCurrency = (office.baseCurrency || 'INR').toUpperCase();
+
     // Validate unique serial number
     if (serialNumber) {
         const existing = await prisma.asset.findFirst({ where: { serialNumber } });
@@ -64,7 +75,7 @@ exports.createAsset = asyncHandler(async (req, res, next) => {
             serialNumber,
             purchasePrice: Number(purchaseCost) || 0,
             purchaseDate: purchaseDate ? new Date(purchaseDate) : new Date(),
-            currency: currency || 'INR',
+            currency: effectiveCurrency,
             purchaseOrderNumber,
             invoiceNumber,
             warrantyStart: warrantyStartDate ? new Date(warrantyStartDate) : null,
@@ -146,7 +157,7 @@ exports.getAsset = asyncHandler(async (req, res, next) => {
     const asset = await prisma.asset.findUnique({
         where: { id: req.params.id },
         include: {
-            office: { select: { id: true, name: true, code: true, country: true } },
+            office: { select: { id: true, name: true, code: true, country: true, baseCurrency: true } },
             createdBy: { select: { id: true, name: true, email: true } },
             assignedTo: { select: { id: true, name: true, email: true } },
             maintenanceHistory: { orderBy: { date: 'desc' }, take: 20 },
@@ -162,6 +173,10 @@ exports.getAsset = asyncHandler(async (req, res, next) => {
         if (asset.officeId !== (typeof userOfficeId === 'object' ? userOfficeId.id : userOfficeId)) {
             return next(new AppError('Access denied to this asset', 403));
         }
+
+        // Keep office-scoped views consistent with office currency (legacy records may have stale codes).
+        const officeCurrency = (asset.office?.baseCurrency || 'INR').toUpperCase();
+        asset.currency = officeCurrency;
     }
 
     res.status(200).json({ success: true, data: asset });
@@ -270,22 +285,68 @@ exports.deleteAsset = asyncHandler(async (req, res, next) => {
  */
 exports.getAssetStats = asyncHandler(async (req, res, next) => {
     const where = {};
+    let displayCurrency = 'INR';
+
     if (req.user.role !== 'SUPER_ADMIN') {
         const oid = req.user.office?.id || req.user.officeId;
         where.officeId = typeof oid === 'object' ? oid.id : oid;
+
+        const officeCurrency = req.user.office?.baseCurrency;
+        if (officeCurrency) {
+            displayCurrency = officeCurrency.toUpperCase();
+        } else if (where.officeId) {
+            const office = await prisma.office.findUnique({
+                where: { id: where.officeId },
+                select: { baseCurrency: true },
+            });
+            displayCurrency = (office?.baseCurrency || 'INR').toUpperCase();
+        }
     }
 
-    const [total, active, maintenance, retired, valueAgg] = await Promise.all([
+    const [total, active, maintenance, retired, assetsForValue] = await Promise.all([
         prisma.asset.count({ where }),
         prisma.asset.count({ where: { ...where, status: 'ACTIVE' } }),
         prisma.asset.count({ where: { ...where, status: 'MAINTENANCE' } }),
         prisma.asset.count({ where: { ...where, status: { in: ['RETIRED', 'LOST', 'SOLD', 'DECOMMISSIONED'] } } }),
-        prisma.asset.aggregate({ where, _sum: { purchasePrice: true } }),
+        prisma.asset.findMany({
+            where,
+            select: { purchasePrice: true, currency: true },
+        }),
     ]);
+
+    const convertedValues = req.user.role !== 'SUPER_ADMIN'
+        // Office-scoped totals should stay in one office currency system.
+        ? assetsForValue.map((asset) => Number(asset.purchasePrice || 0))
+        : await Promise.all(
+            assetsForValue.map(async (asset) => {
+                const amount = Number(asset.purchasePrice || 0);
+                const fromCurrency = (asset.currency || 'INR').toUpperCase();
+
+                if (!amount || fromCurrency === displayCurrency) {
+                    return amount;
+                }
+
+                try {
+                    return await convertCurrency(amount, fromCurrency, displayCurrency);
+                } catch (error) {
+                    logger.warn(`Currency conversion failed (${fromCurrency} -> ${displayCurrency}), using raw value: ${amount}`);
+                    return amount;
+                }
+            })
+        );
+
+    const totalValue = convertedValues.reduce((sum, value) => sum + Number(value || 0), 0);
 
     res.status(200).json({
         success: true,
-        data: { total, active, maintenance, retired, totalValue: valueAgg._sum.purchasePrice || 0 },
+        data: {
+            total,
+            active,
+            maintenance,
+            retired,
+            totalValue: Number(totalValue.toFixed(2)),
+            currency: displayCurrency,
+        },
     });
 });
 

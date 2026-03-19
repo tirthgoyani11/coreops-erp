@@ -1,5 +1,5 @@
 import { MapPin, Building, LandPlot, User } from 'lucide-react';
-import { cn } from '../../../lib/utils';
+import { cn, getCurrencySymbol } from '../../../lib/utils';
 import { useState, useEffect } from 'react';
 import api from '../../../lib/api';
 
@@ -73,7 +73,9 @@ export function StepLocation({ data, updateData, errors }: StepLocationProps) {
                         >
                             <option value="">Select Office</option>
                             {offices.map(office => (
-                                <option key={office.id} value={office.id}>{office.name} ({office.code})</option>
+                                <option key={office.id} value={office.id}>
+                                    {office.name} ({office.code}) - {getCurrencySymbol((office.baseCurrency || 'INR').toUpperCase())} {(office.baseCurrency || 'INR').toUpperCase()}
+                                </option>
                             ))}
                             {/* Fallback if no offices loaded yet */}
                             {!offices.length && <option value="" disabled>Loading offices...</option>}

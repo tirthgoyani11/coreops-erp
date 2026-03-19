@@ -1,4 +1,5 @@
 import { MapPin, Calendar, DollarSign, Box, ShieldCheck, User } from 'lucide-react';
+import { formatCurrency } from '../../../lib/utils';
 
 interface AssetOverviewProps {
     asset: any;
@@ -7,6 +8,7 @@ interface AssetOverviewProps {
 export function AssetOverview({ asset }: AssetOverviewProps) {
     // Warranty check
     const hasWarranty = asset.warrantyEnd && new Date(asset.warrantyEnd) > new Date();
+    const assetCurrency = (asset.currency || 'INR').toUpperCase();
 
     return (
         <div className="space-y-6">
@@ -68,8 +70,9 @@ export function AssetOverview({ asset }: AssetOverviewProps) {
                         Purchase Info
                     </h3>
                     <div className="grid grid-cols-2 gap-4 text-sm">
-                        <DetailItem label="Purchase Price" value={`$${(asset.purchasePrice ?? 0).toFixed(2)}`} />
+                        <DetailItem label="Purchase Price" value={formatCurrency(asset.purchasePrice ?? 0, assetCurrency)} />
                         <DetailItem label="Purchase Date" value={asset.purchaseDate ? new Date(asset.purchaseDate).toLocaleDateString() : 'N/A'} />
+                        <DetailItem label="Currency" value={assetCurrency} />
                         <DetailItem label="Vendor" value={asset.vendorName || 'N/A'} />
                         <DetailItem label="Order No." value={asset.purchaseOrderNumber || 'N/A'} />
                     </div>

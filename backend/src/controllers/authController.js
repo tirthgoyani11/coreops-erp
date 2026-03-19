@@ -75,8 +75,17 @@ function sanitizeUser(user) {
 exports.register = asyncHandler(async (req, res, next) => {
     const { name, email, password, role, officeId } = req.body;
 
-    // Security: Prevent MANAGER from creating high-level roles
-    if (req.user.role === 'MANAGER' && ['SUPER_ADMIN', 'ADMIN', 'MANAGER'].includes(role)) {
+    const creatorRole = req.user.role;
+
+    // RBAC for user creation:
+    // SUPER_ADMIN: can create any role.
+    // ADMIN: can create any role except SUPER_ADMIN.
+    // MANAGER: can create only STAFF, TECHNICIAN, VIEWER.
+    if (creatorRole === 'ADMIN' && role === 'SUPER_ADMIN') {
+        return next(new AppError('Admins cannot create SUPER_ADMIN users', 403));
+    }
+
+    if (creatorRole === 'MANAGER' && ['SUPER_ADMIN', 'ADMIN', 'MANAGER'].includes(role)) {
         return next(new AppError('Managers can only create Staff, Technicians, or Viewers', 403));
     }
 

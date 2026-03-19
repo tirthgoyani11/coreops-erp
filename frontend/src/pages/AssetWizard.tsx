@@ -29,6 +29,7 @@ export function AssetWizard() {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [isLoading, setIsLoading] = useState(isEditMode);
     const [errors, setErrors] = useState<any>({});
+    const [officeCurrencyMap, setOfficeCurrencyMap] = useState<Record<string, string>>({});
 
     // Form State
     const [formData, setFormData] = useState({
@@ -48,8 +49,42 @@ export function AssetWizard() {
         warrantyExpiryDate: '',
         status: 'ACTIVE',
         assignedTo: '',
+        currency: '',
         customFields: [] as CustomFieldValue[]
     });
+
+    useEffect(() => {
+        const fetchOffices = async () => {
+            try {
+                const res = await api.get('/offices?limit=500');
+                const offices = Array.isArray(res.data)
+                    ? res.data
+                    : (res.data.data || []);
+
+                const nextMap: Record<string, string> = {};
+                offices.forEach((office: any) => {
+                    if (office?.id) {
+                        nextMap[office.id] = (office.baseCurrency || 'INR').toUpperCase();
+                    }
+                });
+
+                setOfficeCurrencyMap(nextMap);
+            } catch (error) {
+                console.error('Failed to load office currencies', error);
+            }
+        };
+
+        fetchOffices();
+    }, []);
+
+    useEffect(() => {
+        if (!formData.officeId) return;
+
+        const officeCurrency = officeCurrencyMap[formData.officeId];
+        if (officeCurrency && formData.currency !== officeCurrency) {
+            setFormData(prev => ({ ...prev, currency: officeCurrency }));
+        }
+    }, [formData.officeId, formData.currency, officeCurrencyMap]);
 
     // Fetch Data for Edit Mode
     useEffect(() => {
@@ -88,6 +123,7 @@ export function AssetWizard() {
                         warrantyExpiryDate: asset.warrantyEnd ? new Date(asset.warrantyEnd).toISOString().split('T')[0] : '',
                         status: asset.status || 'ACTIVE',
                         assignedTo: asset.assignedToId || asset.assignedTo?.id || '',
+                        currency: (asset.currency || '').toUpperCase(),
                         customFields: loadedCustomFields
                     });
                 } catch (error) {
@@ -151,6 +187,8 @@ export function AssetWizard() {
             // Transform data for backend Structure
             // Transform data for backend Structure
             const payload: any = {
+                currency:
+                    (formData.currency || officeCurrencyMap[formData.officeId] || 'INR').toUpperCase(),
                 name: formData.name,
                 category: formData.category,
                 manufacturer: formData.manufacturer,

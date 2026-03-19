@@ -5,12 +5,13 @@ import { Users as UsersIcon, Plus, Mail, Shield, Loader2, Search, Building2 } fr
 import api from '../lib/api';
 import { Input } from '../components/ui/Input';
 import type { Office } from '../types';
+import { useAuthStore } from '../stores/authStore';
 
 interface UserWithOffice {
     id: string;
     name: string;
     email: string;
-    role: 'SUPER_ADMIN' | 'MANAGER' | 'STAFF' | 'TECHNICIAN' | 'VIEWER';
+    role: 'SUPER_ADMIN' | 'ADMIN' | 'MANAGER' | 'STAFF' | 'TECHNICIAN' | 'VIEWER';
     officeId: Office | null;
     isActive: boolean;
 }
@@ -19,6 +20,7 @@ import type { UserRole } from '../types';
 
 export function Users() {
     const navigate = useNavigate();
+    const { user } = useAuthStore();
     const [users, setUsers] = useState<UserWithOffice[]>([]);
     const [offices, setOffices] = useState<Office[]>([]);
     const [isLoading, setIsLoading] = useState(true);
@@ -33,14 +35,35 @@ export function Users() {
     });
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [error, setError] = useState<string | null>(null);
-    const [currentUserRole, setCurrentUserRole] = useState<string>('STAFF');
+    const [currentUserRole, setCurrentUserRole] = useState<string>('');
+
+    const normalizeRole = (value: string | null | undefined) => (value || '').toUpperCase();
+
+    const getAllowedRoleOptions = () => {
+        if (currentUserRole === 'SUPER_ADMIN') {
+            return ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF', 'TECHNICIAN', 'VIEWER'];
+        }
+
+        if (currentUserRole === 'ADMIN') {
+            return ['ADMIN', 'MANAGER', 'STAFF', 'TECHNICIAN', 'VIEWER'];
+        }
+
+        if (currentUserRole === 'MANAGER') {
+            return ['STAFF', 'TECHNICIAN', 'VIEWER'];
+        }
+
+        return ['STAFF'];
+    };
+
+    const allowedRoleOptions = getAllowedRoleOptions();
 
     const fetchData = async () => {
         try {
             setIsLoading(true);
-            const [usersRes, officesRes] = await Promise.all([
+            const [usersRes, officesRes, meRes] = await Promise.all([
                 api.get('/users'),
                 api.get('/offices'),
+                api.get('/auth/me'),
             ]);
 
             if (usersRes.data.success) {
@@ -49,20 +72,34 @@ export function Users() {
             if (officesRes.data.success) {
                 setOffices(officesRes.data.data);
             }
+
+            if (meRes.data.success) {
+                setCurrentUserRole(normalizeRole(meRes.data.data?.role));
+            }
         } catch (err) {
             console.error('Failed to fetch data:', err);
+
+            const fallbackRole = normalizeRole(user?.role) || normalizeRole(JSON.parse(localStorage.getItem('user') || '{}')?.role);
+            if (fallbackRole) {
+                setCurrentUserRole(fallbackRole);
+            }
         } finally {
             setIsLoading(false);
         }
     };
 
     useEffect(() => {
-        const storedUser = localStorage.getItem('user');
-        if (storedUser) {
-            setCurrentUserRole(JSON.parse(storedUser).role);
+        const storeRole = normalizeRole(user?.role);
+        const localRole = normalizeRole(JSON.parse(localStorage.getItem('user') || '{}')?.role);
+
+        if (storeRole) {
+            setCurrentUserRole(storeRole);
+        } else if (localRole) {
+            setCurrentUserRole(localRole);
         }
+
         fetchData();
-    }, []);
+    }, [user?.role]);
 
     const handleCreate = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -244,15 +281,11 @@ export function Users() {
                                     onChange={(e) => setFormData({ ...formData, role: e.target.value as any })}
                                     className="w-full px-3 py-2 bg-[var(--bg-overlay)] border border-[var(--border-color)] rounded-lg text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--primary)]/50 focus:border-[var(--primary)] transition-all"
                                 >
-                                    {['SUPER_ADMIN', 'ADMIN'].includes(currentUserRole) && (
-                                        <>
-                                            <option value="SUPER_ADMIN">Super Admin</option>
-                                            <option value="MANAGER">Manager</option>
-                                        </>
-                                    )}
-                                    <option value="STAFF">Staff</option>
-                                    <option value="TECHNICIAN">Technician</option>
-                                    <option value="VIEWER">Viewer</option>
+                                    {allowedRoleOptions.map((role) => (
+                                        <option key={role} value={role}>
+                                            {role.replace('_', ' ')}
+                                        </option>
+                                    ))}
                                 </select>
                             </div>
                             {formData.role !== 'SUPER_ADMIN' && (

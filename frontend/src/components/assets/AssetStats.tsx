@@ -15,7 +15,8 @@ export function AssetStats({ assets, loading }: AssetStatsProps) {
         active: 0,
         maintenance: 0,
         retired: 0,
-        totalValue: 0
+        totalValue: 0,
+        currency: 'INR'
     });
 
     useEffect(() => {
@@ -29,7 +30,8 @@ export function AssetStats({ assets, loading }: AssetStatsProps) {
                     active: data.active || 0,
                     maintenance: data.maintenance || 0,
                     retired: data.retired || 0,
-                    totalValue: data.totalValue || 0
+                    totalValue: data.totalValue || 0,
+                    currency: data.currency || 'INR'
                 });
             } catch (error) {
                 console.error("Failed to fetch asset stats", error);
@@ -110,7 +112,7 @@ export function AssetStats({ assets, loading }: AssetStatsProps) {
                         <div>
                             <p className="text-sm font-medium text-[var(--text-secondary)]">{stat.label}</p>
                             <h3 className="text-2xl font-bold mt-1 text-[var(--text-primary)]">
-                                {stat.label === 'Total Value' ? formatCurrency(stat.value) : stat.value}
+                                {stat.label === 'Total Value' ? formatCurrency(stat.value, stats.currency) : stat.value}
                             </h3>
                         </div>
                         <div className={cn("p-2 rounded-xl", stat.bg, stat.color)}>
@@ -127,10 +129,10 @@ export function AssetStats({ assets, loading }: AssetStatsProps) {
 }
 
 // Helper to format currency
-function formatCurrency(amount: number) {
+function formatCurrency(amount: number, currency: string = 'INR') {
     return new Intl.NumberFormat('en-US', {
         style: 'currency',
-        currency: 'USD',
+        currency,
         minimumFractionDigits: 0,
         maximumFractionDigits: 0,
     }).format(amount);

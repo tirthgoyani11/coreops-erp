@@ -5,12 +5,26 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
 
-export function formatCurrency(amount: number) {
-  return new Intl.NumberFormat('en-IN', {
+export function formatCurrency(amount: number, currency: string = 'INR', locale: string = 'en-IN') {
+  return new Intl.NumberFormat(locale, {
     style: 'currency',
-    currency: 'INR',
+    currency: currency || 'INR',
     maximumFractionDigits: 0
   }).format(amount);
+}
+
+export function getCurrencySymbol(currency: string = 'INR', locale: string = 'en-IN') {
+  try {
+    const parts = new Intl.NumberFormat(locale, {
+      style: 'currency',
+      currency,
+      currencyDisplay: 'narrowSymbol',
+    }).formatToParts(0);
+
+    return parts.find((part) => part.type === 'currency')?.value || currency;
+  } catch {
+    return currency;
+  }
 }
 
 export function formatFileSize(bytes: number) {
