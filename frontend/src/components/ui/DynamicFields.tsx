@@ -23,7 +23,7 @@ interface DynamicFieldsProps {
   className?: string;
 }
 
-export const DynamicFields = ({ entityType, entityId, values, onChange, className = '' }: DynamicFieldsProps) => {
+export const DynamicFields = ({ entityType, entityId: _entityId, values, onChange, className = '' }: DynamicFieldsProps) => {
   const [defs, setDefs] = useState<CustomFieldDef[]>([]);
   const [loading, setLoading] = useState(true);
 

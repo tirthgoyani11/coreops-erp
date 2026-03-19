@@ -1,6 +1,6 @@
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { GripVertical, X } from 'lucide-react';
+import { GripVertical } from 'lucide-react';
 
 interface DraggableWidgetProps {
     id: string;
@@ -10,7 +10,7 @@ interface DraggableWidgetProps {
     onRemove?: () => void;
 }
 
-export function DraggableWidget({ id, isEditMode, children, className = '', onRemove }: DraggableWidgetProps) {
+export function DraggableWidget({ id, isEditMode, children, className = '', onRemove: _onRemove }: DraggableWidgetProps) {
     const {
         attributes,
         listeners,

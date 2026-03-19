@@ -111,7 +111,15 @@ export function AssetFinancials({ asset }: AssetFinancialsProps) {
                                     color: 'var(--text-primary)'
                                 }}
                                 itemStyle={{ color: 'var(--text-primary)' }}
-                                formatter={(value: number | undefined) => formatCurrency(value ?? 0)}
+                                formatter={(value) => {
+                                    const numericValue =
+                                        typeof value === 'number'
+                                            ? value
+                                            : typeof value === 'string'
+                                                ? Number(value)
+                                                : 0;
+                                    return formatCurrency(Number.isFinite(numericValue) ? numericValue : 0);
+                                }}
                             />
                             <Area
                                 type="monotone"
