@@ -6,18 +6,7 @@ const logger = require('../utils/logger');
 
 async function checkAndCreateReorders() {
     try {
-        // Find items below reorder point
-        const lowStockItems = await prisma.inventory.findMany({
-            where: {
-                isActive: true,
-                currentQuantity: { lte: prisma.raw('\"reorderPoint\"') },
-            },
-            include: {
-                office: { select: { id: true, name: true } },
-            },
-        });
-
-        // Fallback: manual check if raw query not supported
+        // Fetch active items and compute low stock using JS comparison.
         const allItems = await prisma.inventory.findMany({
             where: { isActive: true },
             include: { office: { select: { id: true, name: true } } },
