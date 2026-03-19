@@ -343,6 +343,14 @@ function App() {
                   </RoleGuard>
                 }
               />
+              <Route
+                path="/branches"
+                element={
+                  <RoleGuard allowedRoles={['SUPER_ADMIN', 'ADMIN', 'MANAGER']}>
+                    <Offices />
+                  </RoleGuard>
+                }
+              />
 
               {/* TODO: Add these routes as pages are created */}
               {/* <Route path="/financial" element={<RoleGuard allowedRoles={['SUPER_ADMIN', 'REGIONAL_MANAGER', 'BRANCH_MANAGER', 'VIEWER']}><Financial /></RoleGuard>} /> */}

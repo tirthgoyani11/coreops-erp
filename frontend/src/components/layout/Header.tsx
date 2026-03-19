@@ -32,6 +32,7 @@ const PAGE_TITLES: Record<string, string> = {
     'audit-logs': 'Audit Logs',
     'users': 'Team Members',
     'offices': 'Organizations',
+    'branches': 'Branches',
     'settings': 'Settings',
     'profile': 'My Profile',
     'access-denied': 'Access Denied'

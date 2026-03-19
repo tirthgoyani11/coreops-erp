@@ -1,22 +1,40 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { motion } from 'framer-motion';
-import { Building2, Plus, MapPin, Loader2, Search, Edit2 } from 'lucide-react';
+import { Plus, MapPin, Loader2, Search, Edit2, Building, Landmark } from 'lucide-react';
 import api from '../lib/api';
 import type { Office } from '../types';
+import { useAuthStore } from '../stores/authStore';
+import { useLocation } from 'react-router-dom';
 
 export function Offices() {
+    const { user } = useAuthStore();
+    const location = useLocation();
     const [offices, setOffices] = useState<Office[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
     const [showCreateModal, setShowCreateModal] = useState(false);
+    const [showEditModal, setShowEditModal] = useState(false);
+    const [editingOffice, setEditingOffice] = useState<Office | null>(null);
     const [formData, setFormData] = useState({
         name: '',
         code: '',
         country: '',
         currency: 'INR',
     });
+    const [editData, setEditData] = useState({
+        name: '',
+        currency: 'INR',
+        isActive: true,
+    });
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [error, setError] = useState<string | null>(null);
+
+    const isSuperAdmin = user?.role === 'SUPER_ADMIN';
+    const isBranchesPath = location.pathname === '/branches';
+    const pageTitle = isBranchesPath ? 'Branches' : 'Organizations';
+    const pageSubtitle = isBranchesPath
+        ? 'Branch directory with location and currency controls.'
+        : 'Manage organization entities and branch locations in one place.';
 
     const fetchOffices = async () => {
         try {
@@ -55,29 +73,90 @@ export function Offices() {
         }
     };
 
+    const openEditModal = (office: Office) => {
+        setEditingOffice(office);
+        setEditData({
+            name: office.name,
+            currency: office.baseCurrency || office.currency || 'INR',
+            isActive: office.isActive,
+        });
+        setShowEditModal(true);
+        setError(null);
+    };
+
+    const handleUpdate = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!editingOffice) return;
+        setIsSubmitting(true);
+        setError(null);
+
+        try {
+            const { data } = await api.patch(`/offices/${editingOffice.id}`, {
+                name: editData.name,
+                currency: editData.currency,
+                isActive: editData.isActive,
+            });
+            if (data.success) {
+                setOffices((prev) => prev.map((item) => (item.id === editingOffice.id ? data.data : item)));
+                setShowEditModal(false);
+                setEditingOffice(null);
+            }
+        } catch (err: any) {
+            setError(err.response?.data?.message || 'Failed to update office');
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
     const filteredOffices = offices.filter(
         (office) =>
             office.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
             office.code.toLowerCase().includes(searchTerm.toLowerCase())
     );
 
+    const stats = useMemo(() => {
+        const active = offices.filter((office) => office.isActive).length;
+        return {
+            total: offices.length,
+            active,
+            inactive: offices.length - active,
+        };
+    }, [offices]);
+
     return (
         <div className="space-y-6">
             {/* Header */}
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                 <div>
-                    <h1 className="text-2xl font-bold text-[var(--text-primary)]">Offices</h1>
+                    <h1 className="text-2xl font-bold text-[var(--text-primary)]">{pageTitle}</h1>
                     <p className="text-[var(--text-secondary)] text-sm mt-1">
-                        Manage all office locations
+                        {pageSubtitle}
                     </p>
                 </div>
-                <button
-                    onClick={() => setShowCreateModal(true)}
-                    className="flex items-center gap-2 px-4 py-2 bg-[var(--primary)] text-black font-medium rounded-lg hover:opacity-90 transition-opacity"
-                >
-                    <Plus className="w-4 h-4" />
-                    Add Office
-                </button>
+                {isSuperAdmin && (
+                    <button
+                        onClick={() => setShowCreateModal(true)}
+                        className="flex items-center gap-2 px-4 py-2 bg-[var(--primary)] text-black font-medium rounded-lg hover:opacity-90 transition-opacity"
+                    >
+                        <Plus className="w-4 h-4" />
+                        Add Branch
+                    </button>
+                )}
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="bg-[var(--bg-card)] border border-[var(--border-color)] rounded-xl p-4">
+                    <p className="text-xs text-[var(--text-secondary)]">Total Locations</p>
+                    <p className="text-2xl font-semibold text-[var(--text-primary)] mt-1">{stats.total}</p>
+                </div>
+                <div className="bg-[var(--bg-card)] border border-[var(--border-color)] rounded-xl p-4">
+                    <p className="text-xs text-[var(--text-secondary)]">Active</p>
+                    <p className="text-2xl font-semibold text-emerald-400 mt-1">{stats.active}</p>
+                </div>
+                <div className="bg-[var(--bg-card)] border border-[var(--border-color)] rounded-xl p-4">
+                    <p className="text-xs text-[var(--text-secondary)]">Inactive</p>
+                    <p className="text-2xl font-semibold text-amber-400 mt-1">{stats.inactive}</p>
+                </div>
             </div>
 
             {/* Search */}
@@ -85,7 +164,7 @@ export function Offices() {
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--text-secondary)]" />
                 <input
                     type="text"
-                    placeholder="Search offices..."
+                    placeholder="Search organizations or branch code..."
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
                     className="w-full sm:w-80 pl-10 pr-4 py-2 bg-[var(--bg-card)] border border-[var(--border-color)] rounded-lg text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-[var(--primary)]"
@@ -114,16 +193,22 @@ export function Offices() {
                             <div className="flex items-start justify-between">
                                 <div className="flex items-center gap-3">
                                     <div className="w-10 h-10 rounded-lg bg-[var(--primary)]/20 flex items-center justify-center">
-                                        <Building2 className="w-5 h-5 text-[var(--primary)]" />
+                                        {index === 0 ? <Landmark className="w-5 h-5 text-[var(--primary)]" /> : <Building className="w-5 h-5 text-[var(--primary)]" />}
                                     </div>
                                     <div>
                                         <h3 className="font-semibold text-[var(--text-primary)]">{office.name}</h3>
                                         <p className="text-xs text-[var(--text-secondary)] font-mono">{office.code}</p>
                                     </div>
                                 </div>
-                                <button className="opacity-0 group-hover:opacity-100 p-1.5 text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-all">
-                                    <Edit2 className="w-4 h-4" />
-                                </button>
+                                {isSuperAdmin && (
+                                    <button
+                                        onClick={() => openEditModal(office)}
+                                        className="opacity-0 group-hover:opacity-100 p-1.5 text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-all"
+                                        title="Edit"
+                                    >
+                                        <Edit2 className="w-4 h-4" />
+                                    </button>
+                                )}
                             </div>
                             <div className="mt-4 flex items-center gap-4 text-sm text-[var(--text-secondary)]">
                                 <div className="flex items-center gap-1.5">
@@ -131,7 +216,10 @@ export function Offices() {
                                     {office.country || 'Not set'}
                                 </div>
                                 <div className="px-2 py-0.5 bg-[var(--bg-overlay)] rounded text-xs font-mono">
-                                    {office.currency}
+                                    {office.baseCurrency || office.currency || 'INR'}
+                                </div>
+                                <div className={`px-2 py-0.5 rounded text-xs font-medium ${office.isActive ? 'bg-emerald-500/15 text-emerald-300' : 'bg-amber-500/15 text-amber-300'}`}>
+                                    {office.isActive ? 'Active' : 'Inactive'}
                                 </div>
                             </div>
                         </motion.div>
@@ -147,7 +235,7 @@ export function Offices() {
                         animate={{ opacity: 1, scale: 1 }}
                         className="bg-[var(--bg-card)] border border-[var(--border-color)] rounded-xl p-6 w-full max-w-md"
                     >
-                        <h2 className="text-xl font-bold text-[var(--text-primary)] mb-4">Create New Office</h2>
+                        <h2 className="text-xl font-bold text-[var(--text-primary)] mb-4">Create New Branch</h2>
 
                         {error && (
                             <div className="mb-4 p-3 bg-red-500/10 border border-red-500/20 rounded-lg text-red-400 text-sm">
@@ -215,8 +303,80 @@ export function Offices() {
                                     {isSubmitting ? (
                                         <Loader2 className="w-4 h-4 animate-spin" />
                                     ) : (
-                                        'Create Office'
+                                        'Create Branch'
                                     )}
+                                </button>
+                            </div>
+                        </form>
+                    </motion.div>
+                </div>
+            )}
+
+            {showEditModal && editingOffice && (
+                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+                    <motion.div
+                        initial={{ opacity: 0, scale: 0.95 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        className="bg-[var(--bg-card)] border border-[var(--border-color)] rounded-xl p-6 w-full max-w-md"
+                    >
+                        <h2 className="text-xl font-bold text-[var(--text-primary)] mb-4">Edit Branch</h2>
+
+                        {error && (
+                            <div className="mb-4 p-3 bg-red-500/10 border border-red-500/20 rounded-lg text-red-400 text-sm">
+                                {error}
+                            </div>
+                        )}
+
+                        <form onSubmit={handleUpdate} className="space-y-4">
+                            <div>
+                                <label className="block text-sm text-[var(--text-secondary)] mb-1.5">Branch Name</label>
+                                <input
+                                    type="text"
+                                    value={editData.name}
+                                    onChange={(e) => setEditData((prev) => ({ ...prev, name: e.target.value }))}
+                                    className="w-full px-3 py-2 bg-[var(--bg-overlay)] border border-[var(--border-color)] rounded-lg text-[var(--text-primary)] focus:outline-none focus:border-[var(--primary)]"
+                                    required
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-sm text-[var(--text-secondary)] mb-1.5">Currency</label>
+                                <select
+                                    value={editData.currency}
+                                    onChange={(e) => setEditData((prev) => ({ ...prev, currency: e.target.value }))}
+                                    className="w-full px-3 py-2 bg-[var(--bg-overlay)] border border-[var(--border-color)] rounded-lg text-[var(--text-primary)] focus:outline-none focus:border-[var(--primary)]"
+                                >
+                                    <option value="INR">INR - Indian Rupee</option>
+                                    <option value="USD">USD - US Dollar</option>
+                                    <option value="EUR">EUR - Euro</option>
+                                    <option value="GBP">GBP - British Pound</option>
+                                </select>
+                            </div>
+                            <label className="flex items-center gap-2 text-sm text-[var(--text-secondary)] cursor-pointer">
+                                <input
+                                    type="checkbox"
+                                    checked={editData.isActive}
+                                    onChange={(e) => setEditData((prev) => ({ ...prev, isActive: e.target.checked }))}
+                                    className="rounded border-[var(--border-color)]"
+                                />
+                                Active branch
+                            </label>
+                            <div className="flex gap-3 pt-2">
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        setShowEditModal(false);
+                                        setEditingOffice(null);
+                                    }}
+                                    className="flex-1 px-4 py-2 bg-[var(--bg-overlay)] text-[var(--text-primary)] rounded-lg hover:bg-[var(--bg-card-hover)] transition-colors"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    type="submit"
+                                    disabled={isSubmitting}
+                                    className="flex-1 px-4 py-2 bg-[var(--primary)] text-black font-medium rounded-lg hover:opacity-90 transition-opacity disabled:opacity-50 flex items-center justify-center gap-2"
+                                >
+                                    {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Save Changes'}
                                 </button>
                             </div>
                         </form>

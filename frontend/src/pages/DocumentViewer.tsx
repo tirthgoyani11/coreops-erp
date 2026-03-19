@@ -9,6 +9,8 @@ export default function DocumentViewer() {
     const navigate = useNavigate();
     const [doc, setDoc] = useState<any>(null);
     const [isLoading, setIsLoading] = useState(true);
+    const [fileUrl, setFileUrl] = useState<string | null>(null);
+    const [isFileLoading, setIsFileLoading] = useState(false);
 
     useEffect(() => {
         loadDocument();
@@ -26,10 +28,50 @@ export default function DocumentViewer() {
         }
     };
 
+    const loadDocumentFile = async () => {
+        if (!id) return;
+        setIsFileLoading(true);
+        try {
+            const res = await api.get(`/documents/${id}/download`, {
+                responseType: 'blob',
+            });
+            const objectUrl = URL.createObjectURL(res.data);
+            setFileUrl((prev) => {
+                if (prev) URL.revokeObjectURL(prev);
+                return objectUrl;
+            });
+        } catch (error) {
+            toast.error('Failed to load file preview');
+            setFileUrl(null);
+        } finally {
+            setIsFileLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        loadDocumentFile();
+    }, [id]);
+
+    useEffect(() => {
+        return () => {
+            if (fileUrl) URL.revokeObjectURL(fileUrl);
+        };
+    }, [fileUrl]);
+
+    const handleDownload = () => {
+        if (!fileUrl || !doc) return;
+        const link = document.createElement('a');
+        link.href = fileUrl;
+        link.download = doc.originalName || doc.name || 'document';
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+    };
+
     if (isLoading) return <div className="h-screen flex items-center justify-center"><Loader2 className="animate-spin" /></div>;
     if (!doc) return null;
 
-    const downloadUrl = doc.url;
+    const downloadUrl = fileUrl;
 
     return (
         <div className="h-[calc(100vh-64px)] flex flex-col md:flex-row">
@@ -85,7 +127,8 @@ export default function DocumentViewer() {
 
                     <div className="pt-6 border-t border-[var(--border)]">
                         <ShimmerButton 
-                            onClick={() => window.open(downloadUrl, '_blank')}
+                            onClick={handleDownload}
+                            disabled={!downloadUrl}
                             className="w-full flex items-center justify-center gap-2"
                         >
                             <Download size={16} /> Download File
@@ -96,23 +139,27 @@ export default function DocumentViewer() {
 
             {/* Main Content - Preview */}
             <div className="flex-1 bg-[var(--muted)]/30 flex items-center justify-center p-4">
-                {doc.mimeType === 'application/pdf' ? (
+                {isFileLoading ? (
+                    <div className="text-center">
+                        <Loader2 className="animate-spin mx-auto mb-3" />
+                        <p className="text-sm text-[var(--muted-foreground)]">Loading preview...</p>
+                    </div>
+                ) : downloadUrl && doc.mimeType === 'application/pdf' ? (
                     <iframe src={downloadUrl} className="w-full h-full rounded-lg shadow-sm border border-[var(--border)]" title="PDF Preview" />
-                ) : doc.mimeType?.startsWith('image/') ? (
+                ) : downloadUrl && doc.mimeType?.startsWith('image/') ? (
                     <img src={downloadUrl} alt={doc.name} className="max-w-full max-h-full rounded-lg shadow-sm object-contain" />
                 ) : (
                     <div className="text-center p-12 bg-[var(--card)] rounded-xl border border-[var(--border)] shadow-sm">
                         <FileText size={64} className="mx-auto text-[var(--muted-foreground)] mb-4" />
                         <h3 className="text-lg font-semibold">Preview not available</h3>
                         <p className="text-[var(--muted-foreground)] mb-6">This file type cannot be previewed directly.</p>
-                        <a
-                            href={downloadUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center gap-2 text-[var(--primary)] hover:underline"
+                        <button
+                            onClick={handleDownload}
+                            disabled={!downloadUrl}
+                            className="inline-flex items-center gap-2 text-[var(--primary)] hover:underline disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                             <ExternalLink size={16} /> Download to view
-                        </a>
+                        </button>
                     </div>
                 )}
             </div>

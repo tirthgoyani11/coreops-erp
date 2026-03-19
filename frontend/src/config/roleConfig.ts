@@ -267,8 +267,7 @@ export const NAV_ITEMS: NavItem[] = [
         icon: Shield,
         roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF', 'VIEWER'],
         subItems: [
-            { label: 'Organizations', path: '/offices', roles: ['SUPER_ADMIN', 'ADMIN'] },
-            { label: 'Branches', path: '/branches', roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER'] },
+            { label: 'Organization & Branches', path: '/offices', roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER'] },
             { label: 'Users', path: '/users', roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF'] },
             { label: 'Audit Logs', path: '/audit-logs', roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF', 'VIEWER'] },
             { label: 'Settings', path: '/settings', roles: ['SUPER_ADMIN'] }
