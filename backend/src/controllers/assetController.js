@@ -168,7 +168,7 @@ exports.getAsset = asyncHandler(async (req, res, next) => {
     if (!asset) return next(new AppError('Asset not found', 404));
 
     // Office isolation
-    if (req.user.role !== 'SUPER_ADMIN') {
+    if (!['SUPER_ADMIN', 'ADMIN'].includes(req.user.role)) {
         const userOfficeId = req.user.office?.id || req.user.officeId;
         if (asset.officeId !== (typeof userOfficeId === 'object' ? userOfficeId.id : userOfficeId)) {
             return next(new AppError('Access denied to this asset', 403));
@@ -242,7 +242,7 @@ exports.lookupAsset = asyncHandler(async (req, res, next) => {
 
     if (!asset) return next(new AppError('Asset not found for provided code', 404));
 
-    if (req.user.role !== 'SUPER_ADMIN') {
+    if (!['SUPER_ADMIN', 'ADMIN'].includes(req.user.role)) {
         const userOfficeId = req.user.office?.id || req.user.officeId;
         const resolvedUserOfficeId = typeof userOfficeId === 'object' ? userOfficeId.id : userOfficeId;
         if (asset.officeId !== resolvedUserOfficeId) {
