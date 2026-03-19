@@ -78,11 +78,18 @@ const { convertCurrency } = require('../utils/currencyConverter');
 exports.compareQuotations = asyncHandler(async (req, res, next) => {
     const rfq = await prisma.rFQ.findUnique({
         where: { id: req.params.id },
-        include: { items: true, quotations: true, office: { select: { baseCurrency: true } } },
+        include: { items: true, quotations: true },
     });
     if (!rfq) return next(new AppError('RFQ not found', 404));
 
-    const baseCurrency = rfq.office?.baseCurrency || 'INR';
+    let baseCurrency = 'INR';
+    if (rfq.officeId) {
+        const office = await prisma.office.findUnique({
+            where: { id: rfq.officeId },
+            select: { baseCurrency: true },
+        });
+        baseCurrency = office?.baseCurrency || 'INR';
+    }
 
     // Get vendor details
     const vendorIds = rfq.quotations.map(q => q.vendorId);
@@ -95,7 +102,12 @@ exports.compareQuotations = asyncHandler(async (req, res, next) => {
     // Convert all quotations to the base currency in parallel
     const quotesWithBaseAmount = await Promise.all(rfq.quotations.map(async (q) => {
         const quoteCurrency = q.currency || 'INR';
-        const baseAmount = await convertCurrency(q.totalAmount, quoteCurrency, baseCurrency);
+        let baseAmount = Number(q.totalAmount || 0);
+        try {
+            baseAmount = await convertCurrency(Number(q.totalAmount || 0), quoteCurrency, baseCurrency);
+        } catch (conversionError) {
+            logger.warn(`Currency conversion fallback for RFQ ${rfq.rfqNumber}, quote ${q.id}: ${conversionError.message}`);
+        }
         return { ...q, baseAmount, baseCurrency };
     }));
 
@@ -203,7 +215,7 @@ exports.submitQuotationPublic = asyncHandler(async (req, res, next) => {
         return next(new AppError('Vendor code and total amount are required', 400));
     }
 
-    const rfq = await prisma.rFQ.findUnique({ where: { id: req.params.id } });
+    const rfq = await prisma.rFQ.findUnique({ where: { id: req.params.id }, include: { items: true } });
     if (!rfq) return next(new AppError('RFQ not found', 404));
     if (rfq.status === 'AWARDED' || rfq.status === 'CLOSED') {
         return next(new AppError(`This RFQ is ${rfq.status.toLowerCase()} and no longer accepting bids`, 400));

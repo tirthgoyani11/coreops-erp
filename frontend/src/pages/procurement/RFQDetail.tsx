@@ -95,10 +95,19 @@ export function RFQDetail() {
 
                 // If there are quotes, also fetch comparison
                 if (Array.isArray(data.quotations) && data.quotations.length > 0) {
-                    const compRes = await api.get(`/procurement-ext/rfq/${id}/compare`);
-                    if (compRes.data.success) {
-                        setComparison(Array.isArray(compRes.data.data?.comparison) ? compRes.data.data.comparison : []);
+                    try {
+                        const compRes = await api.get(`/procurement-ext/rfq/${id}/compare`);
+                        if (compRes.data.success) {
+                            setComparison(Array.isArray(compRes.data.data?.comparison) ? compRes.data.data.comparison : []);
+                        } else {
+                            setComparison([]);
+                        }
+                    } catch (comparisonError) {
+                        console.warn('RFQ comparison unavailable, showing details without ranking.', comparisonError);
+                        setComparison([]);
                     }
+                } else {
+                    setComparison([]);
                 }
             }
         } catch (error) {
