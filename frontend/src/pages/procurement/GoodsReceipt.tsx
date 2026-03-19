@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { PackageCheck, Plus, Search, Loader2, CheckCircle2, AlertCircle, ShoppingCart, ShieldAlert } from 'lucide-react';
+import { PackageCheck, Plus, Search, Loader2, CheckCircle2, AlertCircle, ShoppingCart, ShieldAlert, Sparkles, Clock3, CircleDollarSign } from 'lucide-react';
 import api from '../../lib/api';
 
 interface POItem {
@@ -191,6 +191,22 @@ export function GoodsReceipt() {
         grn.purchaseOrder.poNumber.toLowerCase().includes(searchTerm.toLowerCase())
     );
 
+    const pendingReceiptsCount = pendingPOs.length;
+    const totalAcceptedQty = grns.reduce((sum, grn) => {
+        const accepted = grn.items.reduce((inner, item) => inner + Number(item.quantityAccepted || 0), 0);
+        return sum + accepted;
+    }, 0);
+    const qualityRejectQty = grns.reduce((sum, grn) => {
+        const rejected = grn.items.reduce((inner, item) => inner + Number(item.quantityRejected || 0), 0);
+        return sum + rejected;
+    }, 0);
+
+    const orchestratorSignal = pendingReceiptsCount > 6
+        ? 'Receipt backlog is rising. Prioritize aged ORDERED and PARTIALLY_RECEIVED purchase orders first.'
+        : qualityRejectQty > 0
+            ? 'Quality rejections detected in recent GRNs. Trigger supplier corrective action workflow.'
+            : 'Receiving operations are stable. Keep inspection discipline for sensitive line items.';
+
     return (
         <div className="space-y-6 max-w-7xl mx-auto">
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
@@ -210,6 +226,39 @@ export function GoodsReceipt() {
                     <Plus className="w-4 h-4" />
                     New GRN
                 </button>
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                <div className="bg-[var(--bg-card)] border border-[var(--border-color)] rounded-xl p-5">
+                    <div className="text-xs uppercase tracking-[0.2em] text-[var(--text-muted)]">Pending Receipts</div>
+                    <div className="text-2xl font-bold text-[var(--text-primary)] mt-2 flex items-center gap-2"><Clock3 className="w-5 h-5 text-amber-300" /> {pendingReceiptsCount}</div>
+                    <div className="text-xs text-[var(--text-secondary)] mt-2">POs still awaiting full inward completion</div>
+                </div>
+                <div className="bg-[var(--bg-card)] border border-[var(--border-color)] rounded-xl p-5">
+                    <div className="text-xs uppercase tracking-[0.2em] text-[var(--text-muted)]">GRNs Recorded</div>
+                    <div className="text-2xl font-bold text-[var(--text-primary)] mt-2">{grns.length}</div>
+                    <div className="text-xs text-[var(--text-secondary)] mt-2">Total receipts logged in this view</div>
+                </div>
+                <div className="bg-[var(--bg-card)] border border-[var(--border-color)] rounded-xl p-5">
+                    <div className="text-xs uppercase tracking-[0.2em] text-[var(--text-muted)]">Accepted Units</div>
+                    <div className="text-2xl font-bold text-emerald-300 mt-2">{totalAcceptedQty.toLocaleString()}</div>
+                    <div className="text-xs text-[var(--text-secondary)] mt-2">Inventory-ready quantity from GRN postings</div>
+                </div>
+                <div className="bg-[var(--bg-card)] border border-[var(--border-color)] rounded-xl p-5">
+                    <div className="text-xs uppercase tracking-[0.2em] text-[var(--text-muted)]">Rejected Units</div>
+                    <div className="text-2xl font-bold text-rose-300 mt-2 flex items-center gap-2"><CircleDollarSign className="w-5 h-5" /> {qualityRejectQty.toLocaleString()}</div>
+                    <div className="text-xs text-[var(--text-secondary)] mt-2">Requires quality and vendor recovery review</div>
+                </div>
+            </div>
+
+            <div className="bg-[radial-gradient(circle_at_top_right,rgba(185,255,102,0.12),transparent_45%),var(--bg-card)] border border-[var(--border-color)] rounded-xl p-5">
+                <div className="flex items-start justify-between gap-3">
+                    <div>
+                        <div className="text-xs uppercase tracking-[0.2em] text-[var(--text-muted)]">Receiving Orchestrator</div>
+                        <p className="text-[var(--text-primary)] mt-2">{orchestratorSignal}</p>
+                    </div>
+                    <Sparkles className="w-5 h-5 text-[var(--primary)]" />
+                </div>
             </div>
 
             {isCreating && (

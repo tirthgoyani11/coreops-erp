@@ -1,6 +1,18 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Calculator, TrendingUp, Search, Loader2, ArrowUpDown, FileText, Download } from 'lucide-react';
+import {
+    Calculator,
+    TrendingUp,
+    Search,
+    Loader2,
+    ArrowUpDown,
+    FileText,
+    Download,
+    Brain,
+    AlertTriangle,
+    Sparkles,
+    Scale,
+} from 'lucide-react';
 import api from '../lib/api';
 
 type ValuationMethod = 'FIFO' | 'LIFO' | 'WAC';
@@ -25,11 +37,20 @@ interface ValuationReport {
     items: ValuationItem[];
 }
 
+interface InventoryInsights {
+    headline: string;
+    urgency: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
+    recommendations: string[];
+}
+
 export function InventoryValuation() {
     const [method, setMethod] = useState<ValuationMethod>('WAC');
     const [report, setReport] = useState<ValuationReport | null>(null);
+    const [methodReports, setMethodReports] = useState<Partial<Record<ValuationMethod, ValuationReport>>>({});
+    const [insights, setInsights] = useState<InventoryInsights | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
+    const [stressPct, setStressPct] = useState(0);
     const [sortConfig, setSortConfig] = useState<{ key: keyof ValuationItem; direction: 'asc' | 'desc' } | null>(null);
 
     const fetchReport = async (selectedMethod: ValuationMethod) => {
@@ -49,6 +70,25 @@ export function InventoryValuation() {
     useEffect(() => {
         fetchReport(method);
     }, [method]);
+
+    useEffect(() => {
+        void Promise.allSettled([
+            api.get('/inventory-ext/valuation/report?method=FIFO'),
+            api.get('/inventory-ext/valuation/report?method=LIFO'),
+            api.get('/inventory-ext/valuation/report?method=WAC'),
+            api.get('/inventory/insights'),
+        ]).then(([fifoRes, lifoRes, wacRes, insightRes]) => {
+            const next: Partial<Record<ValuationMethod, ValuationReport>> = {};
+            if (fifoRes.status === 'fulfilled' && fifoRes.value.data?.success) next.FIFO = fifoRes.value.data.data;
+            if (lifoRes.status === 'fulfilled' && lifoRes.value.data?.success) next.LIFO = lifoRes.value.data.data;
+            if (wacRes.status === 'fulfilled' && wacRes.value.data?.success) next.WAC = wacRes.value.data.data;
+            setMethodReports(next);
+
+            if (insightRes.status === 'fulfilled' && insightRes.value.data?.success) {
+                setInsights(insightRes.value.data.data);
+            }
+        });
+    }, []);
 
     const formatCurrency = (amount: number) => {
         return new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(amount);
@@ -91,6 +131,44 @@ export function InventoryValuation() {
         return items;
     };
 
+    const stressedValue = report ? report.totalValue * (1 - stressPct / 100) : 0;
+
+    const exportCsv = () => {
+        if (!report) return;
+
+        const rows = [
+            ['Method', report.method],
+            ['Total Value', String(report.totalValue)],
+            ['Total Quantity', String(report.totalQuantity)],
+            ['Item Count', String(report.itemCount)],
+            [],
+            ['Item Name', 'SKU', 'Category', 'Office', 'Qty Valued', 'Avg Unit Cost', 'Total Value'],
+            ...filteredAndSortedItems().map((item) => [
+                item.name,
+                item.sku,
+                item.category,
+                item.office || '',
+                String(item.totalQuantity),
+                String(item.avgCostPerUnit),
+                String(item.totalValue),
+            ]),
+        ];
+
+        const csv = rows
+            .map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(','))
+            .join('\n');
+
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `inventory-valuation-${report.method}-${new Date().toISOString().slice(0, 10)}.csv`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+    };
+
     return (
         <div className="space-y-6 max-w-7xl mx-auto">
             {/* Header */}
@@ -120,10 +198,70 @@ export function InventoryValuation() {
                             </button>
                         ))}
                     </div>
-                    <button className="flex items-center gap-2 px-4 py-2 bg-[var(--bg-card)] border border-[var(--border-color)] text-[var(--text-primary)] rounded-lg hover:border-[var(--primary)] transition-colors">
+                    <button onClick={exportCsv} className="flex items-center gap-2 px-4 py-2 bg-[var(--bg-card)] border border-[var(--border-color)] text-[var(--text-primary)] rounded-lg hover:border-[var(--primary)] transition-colors">
                         <Download className="w-4 h-4" />
                         <span className="hidden sm:inline">Export CSV</span>
                     </button>
+                </div>
+            </div>
+
+            <div className="rounded-xl border border-[var(--border-color)] bg-[var(--bg-card)] p-4">
+                <div className="flex items-start justify-between gap-3">
+                    <div>
+                        <div className="text-xs uppercase tracking-wide text-[var(--text-secondary)] flex items-center gap-2">
+                            <Brain className="w-4 h-4 text-[var(--primary)]" />
+                            Central AI Orchestrator - Valuation Brief
+                        </div>
+                        <div className="mt-1 font-semibold text-[var(--text-primary)]">
+                            {insights?.headline || 'Valuation integrity is stable. Reconcile quantity mismatches before period close.'}
+                        </div>
+                    </div>
+                    <span className="text-xs px-2 py-1 rounded-full border border-[var(--border-color)] text-[var(--text-secondary)]">
+                        {insights?.urgency || 'LOW'}
+                    </span>
+                </div>
+                <div className="mt-3 grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
+                    {(insights?.recommendations?.slice(0, 3) || [
+                        'Use consistent valuation method per reporting period.',
+                        'Resolve stock quantity variance before finance close.',
+                        'Escalate high-value anomalies to exception center.',
+                    ]).map((rec) => (
+                        <div key={rec} className="rounded-lg border border-[var(--border-color)] bg-[var(--bg-overlay)] p-3 flex items-start gap-2">
+                            <Sparkles className="w-4 h-4 text-[var(--primary)] mt-0.5" />
+                            <span className="text-[var(--text-secondary)]">{rec}</span>
+                        </div>
+                    ))}
+                </div>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
+                {(['FIFO', 'LIFO', 'WAC'] as ValuationMethod[]).map((m) => (
+                    <div
+                        key={m}
+                        className={`rounded-xl border p-4 ${method === m ? 'border-[var(--primary)] bg-[var(--primary)]/5' : 'border-[var(--border-color)] bg-[var(--bg-card)]'}`}
+                    >
+                        <div className="text-xs uppercase tracking-wide text-[var(--text-secondary)]">{m} Value</div>
+                        <div className="mt-1 text-xl font-bold text-[var(--text-primary)]">
+                            {formatCurrency(methodReports[m]?.totalValue || 0)}
+                        </div>
+                    </div>
+                ))}
+                <div className="rounded-xl border border-[var(--border-color)] bg-[var(--bg-card)] p-4">
+                    <div className="text-xs uppercase tracking-wide text-[var(--text-secondary)] flex items-center gap-2">
+                        <Scale className="w-3 h-3" />
+                        Stress Test
+                    </div>
+                    <div className="mt-1 text-xl font-bold text-[var(--text-primary)]">{formatCurrency(stressedValue)}</div>
+                    <div className="mt-2 text-xs text-[var(--text-secondary)]">Haircut: {stressPct}%</div>
+                    <input
+                        type="range"
+                        min={0}
+                        max={25}
+                        step={1}
+                        value={stressPct}
+                        onChange={(e) => setStressPct(Number(e.target.value))}
+                        className="w-full mt-2"
+                    />
                 </div>
             </div>
 
@@ -241,7 +379,10 @@ export function InventoryValuation() {
                                         <td className="p-4 text-right">
                                             <div className="font-medium text-[var(--text-primary)]">{item.totalQuantity}</div>
                                             {item.totalQuantity !== item.currentQuantity && (
-                                                <div className="text-[10px] text-orange-400 mt-0.5">Sys: {item.currentQuantity}</div>
+                                                <div className="text-[10px] text-orange-400 mt-0.5 inline-flex items-center gap-1">
+                                                    <AlertTriangle className="w-3 h-3" />
+                                                    Sys: {item.currentQuantity}
+                                                </div>
                                             )}
                                         </td>
                                         <td className="p-4 text-right text-[var(--text-secondary)] font-mono text-sm">

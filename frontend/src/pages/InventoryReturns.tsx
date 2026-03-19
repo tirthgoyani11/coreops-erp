@@ -1,7 +1,21 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { RotateCcw, Search, Loader2, Package, ArrowLeft, Building2, CheckCircle2 } from 'lucide-react';
+import {
+    RotateCcw,
+    Search,
+    Loader2,
+    Package,
+    ArrowLeft,
+    Building2,
+    CheckCircle2,
+    Brain,
+    TriangleAlert,
+    Sparkles,
+    CircleDollarSign,
+    ClipboardCheck,
+} from 'lucide-react';
 import api from '../lib/api';
+import { Link } from 'react-router-dom';
 
 interface InventoryItem {
     id: string;
@@ -10,6 +24,8 @@ interface InventoryItem {
     category: string;
     currentQuantity: number;
     unit: string;
+    unitCost?: number;
+    costPrice?: number;
     officeId: string;
     office?: { name: string };
 }
@@ -20,11 +36,19 @@ interface Vendor {
     vendorCode: string;
 }
 
+interface InventoryInsights {
+    source: string;
+    headline: string;
+    urgency: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
+    recommendations: string[];
+}
+
 export function InventoryReturns() {
     const [items, setItems] = useState<InventoryItem[]>([]);
     const [vendors, setVendors] = useState<Vendor[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [insights, setInsights] = useState<InventoryInsights | null>(null);
 
     // Form state
     const [selectedItem, setSelectedItem] = useState<InventoryItem | null>(null);
@@ -35,6 +59,7 @@ export function InventoryReturns() {
     // UI state
     const [searchTerm, setSearchTerm] = useState('');
     const [successMessage, setSuccessMessage] = useState('');
+    const [returnCode, setReturnCode] = useState<'DAMAGED' | 'EXCESS' | 'WRONG_SPEC' | 'WARRANTY_RECALL'>('DAMAGED');
 
     useEffect(() => {
         fetchData();
@@ -47,6 +72,12 @@ export function InventoryReturns() {
                 api.get('/inventory'),
                 api.get('/vendors')
             ]);
+
+            void api.get('/inventory/insights')
+                .then((res) => {
+                    if (res.data?.success) setInsights(res.data.data);
+                })
+                .catch(() => undefined);
 
             if (itemsRes.data.success) {
                 setItems(itemsRes.data.data);
@@ -77,7 +108,7 @@ export function InventoryReturns() {
         }
 
         const vendorName = vendors.find(v => v.id === selectedVendor)?.name || 'Unknown Vendor';
-        const formattedReason = `Return to Vendor (${vendorName}): ${reason}`;
+        const formattedReason = `Return to Vendor (${vendorName}) [${returnCode}]: ${reason}`;
 
         try {
             setIsSubmitting(true);
@@ -115,6 +146,21 @@ export function InventoryReturns() {
             item.category.toLowerCase().includes(searchTerm.toLowerCase()))
     );
 
+    const numericQuantity = Number.parseInt(quantity || '0', 10);
+    const safeQty = Number.isFinite(numericQuantity) ? numericQuantity : 0;
+    const estimatedUnitValue = selectedItem ? Number(selectedItem.unitCost || selectedItem.costPrice || 0) : 0;
+    const estimatedRecovery = safeQty * estimatedUnitValue;
+    const postReturnBalance = selectedItem ? Math.max(0, selectedItem.currentQuantity - safeQty) : 0;
+
+    const returnRiskLevel = safeQty >= 50 ? 'HIGH' : safeQty >= 20 ? 'MEDIUM' : 'LOW';
+
+    const reasonPresets = [
+        'Damaged on arrival',
+        'Wrong item specification',
+        'Over-procured quantity',
+        'Quality non-conformance',
+    ];
+
     return (
         <div className="space-y-6 max-w-6xl mx-auto">
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
@@ -126,6 +172,42 @@ export function InventoryReturns() {
                     <p className="text-[var(--text-secondary)] mt-1">
                         Process inventory returns for defective or excess items.
                     </p>
+                </div>
+                <Link
+                    to="/finance/exception-center?module=inventory_returns"
+                    className="inline-flex items-center gap-2 px-3 py-2 text-sm rounded-lg border border-[var(--border-color)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:border-[var(--primary)] transition-colors"
+                >
+                    <TriangleAlert className="w-4 h-4" />
+                    Return Exceptions
+                </Link>
+            </div>
+
+            <div className="rounded-xl border border-[var(--border-color)] bg-[var(--bg-card)] p-4">
+                <div className="flex items-start justify-between gap-3">
+                    <div>
+                        <div className="text-xs uppercase tracking-wide text-[var(--text-secondary)] flex items-center gap-2">
+                            <Brain className="w-4 h-4 text-[var(--primary)]" />
+                            Central AI Orchestrator - Returns Mission
+                        </div>
+                        <div className="mt-1 font-semibold text-[var(--text-primary)]">
+                            {insights?.headline || 'Protect margin by prioritizing high-value returns and documenting recoverable claims.'}
+                        </div>
+                    </div>
+                    <span className="text-xs px-2 py-1 rounded-full border border-[var(--border-color)] text-[var(--text-secondary)]">
+                        {insights?.urgency || 'LOW'}
+                    </span>
+                </div>
+                <div className="mt-3 grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
+                    {(insights?.recommendations?.slice(0, 3) || [
+                        'Attach traceable reason codes for every vendor return.',
+                        'Escalate repeated defects by vendor in exception workflow.',
+                        'Track recovery value versus purchase value each week.',
+                    ]).map((rec) => (
+                        <div key={rec} className="rounded-lg border border-[var(--border-color)] bg-[var(--bg-overlay)] p-3 flex items-start gap-2">
+                            <Sparkles className="w-4 h-4 text-[var(--primary)] mt-0.5" />
+                            <span className="text-[var(--text-secondary)]">{rec}</span>
+                        </div>
+                    ))}
                 </div>
             </div>
 
@@ -273,10 +355,38 @@ export function InventoryReturns() {
                                         </div>
                                     </div>
 
+                                    <div>
+                                        <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">
+                                            Return Code
+                                        </label>
+                                        <select
+                                            value={returnCode}
+                                            onChange={(e) => setReturnCode(e.target.value as 'DAMAGED' | 'EXCESS' | 'WRONG_SPEC' | 'WARRANTY_RECALL')}
+                                            className="w-full p-3 bg-[var(--bg-overlay)] border border-[var(--border-color)] rounded-xl text-[var(--text-primary)] focus:outline-none focus:border-[var(--primary)]"
+                                        >
+                                            <option value="DAMAGED">Damaged</option>
+                                            <option value="EXCESS">Excess Stock</option>
+                                            <option value="WRONG_SPEC">Wrong Specification</option>
+                                            <option value="WARRANTY_RECALL">Warranty Recall</option>
+                                        </select>
+                                    </div>
+
                                     <div className="md:col-span-2">
                                         <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">
                                             Reason for Return <span className="text-red-400">*</span>
                                         </label>
+                                        <div className="mb-2 flex flex-wrap gap-2">
+                                            {reasonPresets.map((preset) => (
+                                                <button
+                                                    key={preset}
+                                                    type="button"
+                                                    onClick={() => setReason(preset)}
+                                                    className="px-2.5 py-1 text-xs rounded-full border border-[var(--border-color)] text-[var(--text-secondary)] hover:border-[var(--primary)]"
+                                                >
+                                                    {preset}
+                                                </button>
+                                            ))}
+                                        </div>
                                         <textarea
                                             required
                                             rows={4}
@@ -285,6 +395,34 @@ export function InventoryReturns() {
                                             className="w-full p-4 bg-[var(--bg-overlay)] border border-[var(--border-color)] rounded-xl text-[var(--text-primary)] focus:outline-none focus:border-[var(--primary)] resize-none"
                                             placeholder="Example: Defective batch, overstock, wrong item received..."
                                         />
+                                    </div>
+
+                                    <div className="md:col-span-2 rounded-xl border border-[var(--border-color)] bg-[var(--bg-overlay)] p-4">
+                                        <div className="text-sm font-semibold text-[var(--text-primary)] flex items-center gap-2 mb-3">
+                                            <ClipboardCheck className="w-4 h-4 text-[var(--primary)]" />
+                                            Return Decision Engine
+                                        </div>
+                                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
+                                            <div className="rounded-lg border border-[var(--border-color)] p-3">
+                                                <div className="text-[var(--text-secondary)]">Estimated Recovery</div>
+                                                <div className="mt-1 font-bold text-[var(--text-primary)] flex items-center gap-1">
+                                                    <CircleDollarSign className="w-4 h-4 text-emerald-400" />
+                                                    ₹ {estimatedRecovery.toLocaleString('en-IN')}
+                                                </div>
+                                            </div>
+                                            <div className="rounded-lg border border-[var(--border-color)] p-3">
+                                                <div className="text-[var(--text-secondary)]">Post-Return Balance</div>
+                                                <div className="mt-1 font-bold text-[var(--text-primary)]">
+                                                    {postReturnBalance} {selectedItem.unit}
+                                                </div>
+                                            </div>
+                                            <div className="rounded-lg border border-[var(--border-color)] p-3">
+                                                <div className="text-[var(--text-secondary)]">Workflow Risk</div>
+                                                <div className={`mt-1 inline-flex px-2 py-1 text-xs rounded-full border ${returnRiskLevel === 'HIGH' ? 'text-red-300 border-red-500/40 bg-red-500/10' : returnRiskLevel === 'MEDIUM' ? 'text-yellow-300 border-yellow-500/40 bg-yellow-500/10' : 'text-emerald-300 border-emerald-500/40 bg-emerald-500/10'}`}>
+                                                    {returnRiskLevel}
+                                                </div>
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
 

@@ -33,11 +33,20 @@ exports.createVendor = async (req, res) => {
 // @access  Private
 exports.getVendors = async (req, res) => {
     try {
-        const { search } = req.query;
-        const where = { isBlacklisted: false };
+        const { search, includeBlacklisted } = req.query;
+        const where = {};
+
+        if (String(includeBlacklisted) !== 'true') {
+            where.isBlacklisted = false;
+        }
 
         if (search) {
-            where.name = { contains: search, mode: 'insensitive' };
+            where.OR = [
+                { name: { contains: search, mode: 'insensitive' } },
+                { vendorCode: { contains: search, mode: 'insensitive' } },
+                { contactPerson: { contains: search, mode: 'insensitive' } },
+                { email: { contains: search, mode: 'insensitive' } },
+            ];
         }
 
         const vendors = await prisma.vendor.findMany({
@@ -156,7 +165,20 @@ exports.updateVendor = async (req, res) => {
         const exists = await prisma.vendor.findUnique({ where: { id: req.params.id } });
         if (!exists) return res.status(404).json({ success: false, message: 'Vendor not found' });
 
-        const { name, vendorCode, contactPerson, email, phone, address, gstNumber, panNumber, bankDetails, notes } = req.body;
+        const {
+            name,
+            vendorCode,
+            contactPerson,
+            email,
+            phone,
+            address,
+            gstNumber,
+            panNumber,
+            bankDetails,
+            notes,
+            isActive,
+            isBlacklisted,
+        } = req.body;
 
         const vendor = await prisma.vendor.update({
             where: { id: req.params.id },
@@ -171,6 +193,8 @@ exports.updateVendor = async (req, res) => {
                 ...(panNumber !== undefined && { panNumber }),
                 ...(bankDetails !== undefined && { bankDetails }),
                 ...(notes !== undefined && { notes }),
+                ...(isActive !== undefined && { isActive: Boolean(isActive) }),
+                ...(isBlacklisted !== undefined && { isBlacklisted: Boolean(isBlacklisted) }),
             },
         });
 
@@ -190,7 +214,10 @@ exports.deleteVendor = async (req, res) => {
 
         await prisma.vendor.update({
             where: { id: req.params.id },
-            data: { isBlacklisted: true },
+            data: {
+                isBlacklisted: true,
+                isActive: false,
+            },
         });
 
         res.status(200).json({ success: true, data: {} });
