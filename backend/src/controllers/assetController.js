@@ -183,6 +183,72 @@ exports.getAsset = asyncHandler(async (req, res, next) => {
 });
 
 /**
+ * @desc    Lookup asset by QR/barcode text (id, guai, serial number, URL)
+ * @route   GET /api/assets/lookup?code=...
+ * @access  ALL authenticated
+ */
+exports.lookupAsset = asyncHandler(async (req, res, next) => {
+    const rawCode = String(req.query.code || '').trim();
+    if (!rawCode) return next(new AppError('code query parameter is required', 400));
+
+    let parsed = rawCode;
+    const urlMatch = rawCode.match(/\/assets\/([a-zA-Z0-9-]{10,})/);
+    if (urlMatch && urlMatch[1]) parsed = urlMatch[1];
+
+    const whereOr = [
+        { id: parsed },
+        { guai: parsed },
+        { serialNumber: parsed },
+    ];
+
+    const asset = await prisma.asset.findFirst({
+        where: { OR: whereOr },
+        include: {
+            office: { select: { id: true, name: true, code: true, baseCurrency: true } },
+            assignedTo: { select: { id: true, name: true, role: true } },
+            maintenanceHistory: { orderBy: { date: 'desc' }, take: 10 },
+            maintenanceTickets: {
+                orderBy: { createdAt: 'desc' },
+                take: 10,
+                include: {
+                    assignedTo: { select: { id: true, name: true } },
+                    requestedBy: { select: { id: true, name: true } },
+                },
+            },
+        },
+    });
+
+    if (!asset) return next(new AppError('Asset not found for provided code', 404));
+
+    if (req.user.role !== 'SUPER_ADMIN') {
+        const userOfficeId = req.user.office?.id || req.user.officeId;
+        const resolvedUserOfficeId = typeof userOfficeId === 'object' ? userOfficeId.id : userOfficeId;
+        if (asset.officeId !== resolvedUserOfficeId) {
+            return next(new AppError('Access denied to this asset', 403));
+        }
+    }
+
+    const activeTicket = (asset.maintenanceTickets || []).find(
+        (t) => !['COMPLETED', 'CLOSED', 'CANCELLED', 'REJECTED'].includes(String(t.status || '').toUpperCase())
+    );
+
+    res.status(200).json({
+        success: true,
+        data: {
+            asset,
+            scanCode: rawCode,
+            normalizedCode: parsed,
+            actions: {
+                canViewHistory: true,
+                canCreateMaintenance: true,
+                canReportIssue: true,
+                activeTicketId: activeTicket?.id || null,
+            },
+        },
+    });
+});
+
+/**
  * @desc    Update asset
  * @route   PATCH /api/assets/:id
  * @access  MANAGER, SUPER_ADMIN

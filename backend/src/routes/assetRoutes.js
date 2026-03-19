@@ -9,6 +9,7 @@ const {
     getAssetStats,
     deleteMultipleAssets,
     exportAssets,
+    lookupAsset,
     checkoutAsset,
     checkinAsset,
     getUsers,
@@ -29,6 +30,7 @@ router.get('/stats', getAssetStats);
 // Export & Users (Must be before /:id to avoid conflict)
 router.get('/export', filterByOffice, exportAssets);
 router.get('/users', getUsers);
+router.get('/lookup', lookupAsset);
 
 // Bulk Operations
 router.post('/bulk-delete', authorize('MANAGER', 'SUPER_ADMIN'), deleteMultipleAssets);

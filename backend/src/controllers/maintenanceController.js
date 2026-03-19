@@ -20,6 +20,27 @@ function runAlgorithm(estimatedCost, purchasePrice, condition, age) {
     return { decision, confidence, repairScore: Math.round(repairScore * 100), costRatio: Math.round(costRatio * 100), factors: { costRatio, conditionScore: cs, ageScore: Math.round(ageScore * 100) / 100 }, autoApprove };
 }
 
+function parseEnumList(input, allowed = []) {
+    if (!input) return undefined;
+    const normalized = String(input)
+        .split(',')
+        .map((s) => s.trim().toUpperCase())
+        .filter(Boolean)
+        .map((s) => s.replace(/\s+/g, '_'));
+
+    const mapped = normalized
+        .map((s) => {
+            if (s === 'OPEN') return 'REQUESTED';
+            if (s === 'PENDING_APPROVAL') return 'PENDING';
+            if (s === 'DONE') return 'COMPLETED';
+            return s;
+        })
+        .filter((s) => allowed.length === 0 || allowed.includes(s));
+
+    if (mapped.length === 0) return undefined;
+    return mapped.length === 1 ? mapped[0] : { in: mapped };
+}
+
 // @desc    Create ticket
 // @route   POST /api/maintenance
 exports.createTicket = async (req, res) => {
@@ -90,7 +111,7 @@ exports.createTicket = async (req, res) => {
 // @route   GET /api/maintenance
 exports.getTickets = async (req, res) => {
     try {
-        const { status, priority, technician, assetId, view, start, end, approvalStatus, limit } = req.query;
+        const { status, priority, technician, assignedTo, assetId, view, start, end, approvalStatus, limit } = req.query;
         const where = {};
 
         if (req.user.role !== 'SUPER_ADMIN') {
@@ -98,11 +119,23 @@ exports.getTickets = async (req, res) => {
             where.officeId = typeof oid === 'object' ? oid.id : oid;
         }
 
-        if (status) where.status = status;
-        if (priority) where.priority = priority;
-        if (technician) where.assignedToId = technician;
+        const statusFilter = parseEnumList(status, ['REQUESTED', 'PENDING', 'IN_PROGRESS', 'PENDING_PARTS', 'APPROVED', 'REJECTED', 'COMPLETED', 'CLOSED', 'CANCELLED']);
+        const priorityFilter = parseEnumList(priority, ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL']);
+        const approvalFilter = parseEnumList(approvalStatus, ['PENDING', 'AUTO_APPROVED', 'APPROVED', 'REJECTED', 'ESCALATED']);
+
+        if (statusFilter) where.status = statusFilter;
+        if (priorityFilter) where.priority = priorityFilter;
+        if (approvalFilter) where.approvalStatus = approvalFilter;
+
+        const assignedToFilter = assignedTo || technician;
+        if (assignedToFilter) {
+            if (String(assignedToFilter).toLowerCase() === 'me') {
+                where.assignedToId = req.user.id;
+            } else {
+                where.assignedToId = assignedToFilter;
+            }
+        }
         if (assetId) where.assetId = assetId;
-        if (approvalStatus) where.approvalStatus = approvalStatus;
 
         if (view === 'calendar' && start && end) {
             where.reportedDate = { gte: new Date(start), lte: new Date(end) };
@@ -121,6 +154,80 @@ exports.getTickets = async (req, res) => {
         });
 
         res.status(200).json({ success: true, count: tickets.length, data: tickets });
+    } catch (error) {
+        res.status(500).json({ success: false, message: 'Server Error', error: error.message });
+    }
+};
+
+// @desc    Technician dashboard summary
+// @route   GET /api/maintenance/technician/dashboard
+exports.getTechnicianDashboard = async (req, res) => {
+    try {
+        const dayStart = new Date();
+        dayStart.setHours(0, 0, 0, 0);
+
+        const officeFilter = req.user.role === 'SUPER_ADMIN'
+            ? {}
+            : {
+                officeId: (typeof (req.user.office?.id || req.user.officeId) === 'object')
+                    ? (req.user.office?.id || req.user.officeId).id
+                    : (req.user.office?.id || req.user.officeId),
+            };
+
+        const [assignedOpen, completedToday, pendingAssignments, myRecent, unreadNotifications] = await Promise.all([
+            prisma.maintenanceTicket.count({
+                where: {
+                    ...officeFilter,
+                    assignedToId: req.user.id,
+                    status: { in: ['REQUESTED', 'PENDING', 'IN_PROGRESS', 'PENDING_PARTS', 'APPROVED'] },
+                },
+            }),
+            prisma.maintenanceTicket.count({
+                where: {
+                    ...officeFilter,
+                    assignedToId: req.user.id,
+                    status: { in: ['COMPLETED', 'CLOSED'] },
+                    completedDate: { gte: dayStart },
+                },
+            }),
+            prisma.maintenanceTicket.count({
+                where: {
+                    ...officeFilter,
+                    OR: [
+                        { assignedToId: req.user.id, status: 'REQUESTED' },
+                        { assignedToId: null, status: { in: ['REQUESTED', 'PENDING'] } },
+                    ],
+                },
+            }),
+            prisma.maintenanceTicket.findMany({
+                where: {
+                    ...officeFilter,
+                    assignedToId: req.user.id,
+                },
+                include: {
+                    asset: { select: { id: true, name: true, guai: true, status: true } },
+                },
+                orderBy: { createdAt: 'desc' },
+                take: 12,
+            }),
+            prisma.notification.count({
+                where: {
+                    recipientId: req.user.id,
+                    isRead: false,
+                },
+            }),
+        ]);
+
+        res.status(200).json({
+            success: true,
+            data: {
+                assignedOpen,
+                completedToday,
+                pendingAssignments,
+                unreadNotifications,
+                recentWorkOrders: myRecent,
+            },
+        });
     } catch (error) {
         res.status(500).json({ success: false, message: 'Server Error', error: error.message });
     }
@@ -289,7 +396,18 @@ exports.rejectTicket = async (req, res) => {
 // @route   POST /api/maintenance/:id/worklog
 exports.addWorkLog = async (req, res) => {
     try {
-        const { startTime, endTime, notes } = req.body;
+        const {
+            startTime,
+            endTime,
+            notes,
+            maintenanceType,
+            issueType,
+            attachments,
+            location,
+            voiceText,
+            timeSpentMinutes,
+            partsUsed,
+        } = req.body;
 
         const ticket = await prisma.maintenanceTicket.findUnique({ where: { id: req.params.id } });
         if (!ticket) return res.status(404).json({ success: false, message: 'Ticket not found' });
@@ -299,6 +417,23 @@ exports.addWorkLog = async (req, res) => {
             hoursWorked = (new Date(endTime) - new Date(startTime)) / (1000 * 60 * 60);
         }
 
+        const metadata = {
+            maintenanceType: maintenanceType || null,
+            issueType: issueType || null,
+            attachments: Array.isArray(attachments) ? attachments : [],
+            location: location && typeof location === 'object' ? {
+                latitude: Number(location.latitude) || null,
+                longitude: Number(location.longitude) || null,
+                accuracy: Number(location.accuracy) || null,
+                capturedAt: new Date().toISOString(),
+            } : null,
+            voiceText: voiceText || null,
+            timeSpentMinutes: Number(timeSpentMinutes) || null,
+            partsUsed: Array.isArray(partsUsed) ? partsUsed : [],
+        };
+
+        const metaNotes = `${notes || ''}${Object.values(metadata).some(Boolean) ? `\n\n[META] ${JSON.stringify(metadata)}` : ''}`;
+
         await prisma.workLog.create({
             data: {
                 ticketId: req.params.id,
@@ -306,7 +441,7 @@ exports.addWorkLog = async (req, res) => {
                 startTime: startTime ? new Date(startTime) : null,
                 endTime: endTime ? new Date(endTime) : null,
                 hoursWorked,
-                notes,
+                notes: metaNotes,
             },
         });
 
@@ -314,6 +449,112 @@ exports.addWorkLog = async (req, res) => {
             where: { id: req.params.id },
             include: { workLogs: { include: { technician: { select: { id: true, name: true } } } } },
         });
+
+        res.status(200).json({ success: true, data: updated });
+    } catch (error) {
+        res.status(500).json({ success: false, message: 'Server Error', error: error.message });
+    }
+};
+
+// @desc    Update work order status (technician-friendly transitions)
+// @route   PATCH /api/maintenance/:id/status
+exports.updateWorkOrderStatus = async (req, res) => {
+    try {
+        const {
+            status,
+            action,
+            completionNotes,
+            proofImages,
+            signature,
+            location,
+        } = req.body;
+
+        const ticket = await prisma.maintenanceTicket.findUnique({ where: { id: req.params.id } });
+        if (!ticket) return res.status(404).json({ success: false, message: 'Ticket not found' });
+
+        const isTechnician = req.user.role === 'TECHNICIAN';
+        if (isTechnician && ticket.assignedToId && ticket.assignedToId !== req.user.id) {
+            return res.status(403).json({ success: false, message: 'This work order is assigned to another technician' });
+        }
+
+        const updateData = {};
+        const normalizedAction = String(action || '').toUpperCase();
+        const normalizedStatus = String(status || '').toUpperCase();
+
+        if (normalizedAction === 'ACCEPT') {
+            updateData.assignedToId = ticket.assignedToId || req.user.id;
+            updateData.assignedDate = ticket.assignedDate || new Date();
+            updateData.status = 'IN_PROGRESS';
+            updateData.firstResponseAt = ticket.firstResponseAt || new Date();
+        } else if (normalizedAction === 'REJECT') {
+            updateData.status = 'REQUESTED';
+            if (ticket.assignedToId === req.user.id) {
+                updateData.assignedToId = null;
+            }
+        }
+
+        if (normalizedStatus) {
+            const allowed = ['REQUESTED', 'PENDING', 'IN_PROGRESS', 'PENDING_PARTS', 'APPROVED', 'REJECTED', 'COMPLETED', 'CLOSED', 'CANCELLED'];
+            if (!allowed.includes(normalizedStatus)) {
+                return res.status(400).json({ success: false, message: 'Invalid status transition' });
+            }
+            updateData.status = normalizedStatus;
+        }
+
+        const attachmentList = [];
+        if (Array.isArray(ticket.attachments)) attachmentList.push(...ticket.attachments);
+        if (Array.isArray(proofImages)) attachmentList.push(...proofImages.filter(Boolean));
+        if (signature) attachmentList.push(signature);
+
+        if (attachmentList.length > 0) {
+            updateData.attachments = Array.from(new Set(attachmentList));
+        }
+
+        if (updateData.status === 'COMPLETED' || updateData.status === 'CLOSED') {
+            updateData.completedDate = new Date();
+            if (completionNotes) updateData.resolution = completionNotes;
+        }
+
+        const updated = await prisma.maintenanceTicket.update({
+            where: { id: req.params.id },
+            data: updateData,
+            include: {
+                asset: { select: { id: true, name: true, guai: true } },
+                assignedTo: { select: { id: true, name: true } },
+            },
+        });
+
+        if (location && typeof location === 'object') {
+            const locationNote = `[LOCATION] ${JSON.stringify({
+                latitude: Number(location.latitude) || null,
+                longitude: Number(location.longitude) || null,
+                accuracy: Number(location.accuracy) || null,
+                capturedAt: new Date().toISOString(),
+            })}`;
+
+            await prisma.workLog.create({
+                data: {
+                    ticketId: req.params.id,
+                    technicianId: req.user.id,
+                    startTime: null,
+                    endTime: null,
+                    hoursWorked: null,
+                    notes: `${completionNotes || 'Work order status updated'}\n${locationNote}`,
+                },
+            });
+        }
+
+        if (updated.status === 'COMPLETED' || updated.status === 'CLOSED') {
+            await prisma.asset.update({ where: { id: updated.assetId }, data: { status: 'ACTIVE' } });
+            await prisma.assetMaintenanceHistory.create({
+                data: {
+                    assetId: updated.assetId,
+                    type: ticket.issueType || 'OTHER',
+                    cost: updated.actualCost || updated.estimatedCost || 0,
+                    notes: completionNotes || 'Completed by technician',
+                },
+            });
+        }
 
         res.status(200).json({ success: true, data: updated });
     } catch (error) {

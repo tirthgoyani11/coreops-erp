@@ -5,11 +5,13 @@ const {
     getTickets,
     getTicket,
     updateTicket,
+    updateWorkOrderStatus,
     approveTicket,
     rejectTicket,
     addWorkLog,
     consumePart,
     getStats,
+    getTechnicianDashboard,
     getDigitalTwinPreview,
     checkAnomaly
 } = require('../controllers/maintenanceController');
@@ -30,6 +32,9 @@ router.route('/')
 router.route('/stats')
     .get(getStats);
 
+router.route('/technician/dashboard')
+    .get(authorize('SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF', 'TECHNICIAN'), getTechnicianDashboard);
+
 // Predictive AI — MUST be before /:id to avoid Express param collision
 router.get('/fleet-risk', authorize('SUPER_ADMIN', 'ADMIN', 'MANAGER'), predictiveService.getFleetRisk);
 router.get('/predictions/:id', authorize('SUPER_ADMIN', 'ADMIN', 'MANAGER'), predictiveService.getAssetPredictions);
@@ -40,6 +45,7 @@ router.route('/:id')
 
 router.patch('/:id/approve', authorize('SUPER_ADMIN', 'ADMIN', 'MANAGER'), approveTicket);
 router.patch('/:id/reject', authorize('SUPER_ADMIN', 'ADMIN', 'MANAGER'), rejectTicket);
+router.patch('/:id/status', authorize('SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF', 'TECHNICIAN'), updateWorkOrderStatus);
 
 router.route('/:id/worklog')
     .post(addWorkLog);

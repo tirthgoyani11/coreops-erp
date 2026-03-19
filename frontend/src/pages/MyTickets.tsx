@@ -20,8 +20,8 @@ export function MyTickets() {
         setLoading(true);
         try {
             let statusQuery = '';
-            if (filter === 'open') statusQuery = '&status=open,in_progress,pending_approval';
-            if (filter === 'closed') statusQuery = '&status=completed,rejected';
+            if (filter === 'open') statusQuery = '&status=requested,pending,in_progress,pending_parts,approved';
+            if (filter === 'closed') statusQuery = '&status=completed,closed,rejected,cancelled';
 
             const res = await api.get(`/maintenance?assignedTo=me${statusQuery}`);
             setTickets(res.data.data);
@@ -85,11 +85,11 @@ export function MyTickets() {
                                 <div className="space-y-1">
                                     <div className="flex items-center gap-2">
                                         <span className="font-mono text-xs text-gray-500">{ticket.ticketNumber}</span>
-                                        <Badge variant={ticket.priority === 'critical' ? 'destructive' : 'secondary'} className="text-[10px] px-1 py-0 h-5">
+                                        <Badge variant={ticket.priority === 'CRITICAL' ? 'destructive' : 'secondary'} className="text-[10px] px-1 py-0 h-5">
                                             {ticket.priority}
                                         </Badge>
                                     </div>
-                                    <h3 className="font-semibold">{ticket.title}</h3>
+                                    <h3 className="font-semibold">{ticket.issueDescription}</h3>
                                     <p className="text-sm text-gray-500">{ticket.asset?.name}</p>
                                 </div>
                                 <div className="text-right">

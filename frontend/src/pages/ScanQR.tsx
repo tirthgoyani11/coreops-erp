@@ -1,97 +1,266 @@
-import { useState, useEffect } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { QrCode, ArrowLeft, Loader2, Camera } from 'lucide-react';
-import { motion } from 'framer-motion';
+import {
+    AlertTriangle,
+    ArrowLeft,
+    Camera,
+    CheckCircle2,
+    Loader2,
+    QrCode,
+    RefreshCcw,
+    Search,
+} from 'lucide-react';
+import api, { getErrorMessage } from '../lib/api';
+
+type ScannerState = 'idle' | 'starting' | 'scanning' | 'resolved' | 'unsupported' | 'error';
+
+interface BarcodeDetectorCompat {
+    detect: (source: ImageBitmapSource) => Promise<Array<{ rawValue?: string }>>;
+}
+
+declare global {
+    interface Window {
+        BarcodeDetector?: new (options?: { formats?: string[] }) => BarcodeDetectorCompat;
+    }
+}
+
+function parseQrCode(raw: string): string {
+    const value = String(raw || '').trim();
+    const pathMatch = value.match(/\/assets\/([a-zA-Z0-9-]{10,})/);
+    if (pathMatch && pathMatch[1]) return pathMatch[1];
+    return value;
+}
 
 export function ScanQR() {
     const navigate = useNavigate();
-    const [scanning, setScanning] = useState(true);
-    const [scannedData, setScannedData] = useState<string | null>(null);
 
-    // Simulate scanning process
-    useEffect(() => {
-        const timer = setTimeout(() => {
-            setScanning(false);
-        }, 2000); // Simulate camera init delay
-        return () => clearTimeout(timer);
-    }, []);
+    const videoRef = useRef<HTMLVideoElement | null>(null);
+    const streamRef = useRef<MediaStream | null>(null);
+    const detectorRef = useRef<BarcodeDetectorCompat | null>(null);
+    const timerRef = useRef<number | null>(null);
 
-    const handleSimulateScan = () => {
-        setScanning(true);
-        setTimeout(() => {
-            const mockAssetId = 'asset-123'; // In real app, this comes from QR
-            setScannedData(mockAssetId);
-            setScanning(false);
-            // Navigate to asset or maintenance creation
-            // specific logic could go here
-            setTimeout(() => {
-                navigate(`/assets/${mockAssetId}`);
-            }, 1000);
-        }, 1500);
+    const [state, setState] = useState<ScannerState>('idle');
+    const [error, setError] = useState<string>('');
+    const [rawCode, setRawCode] = useState('');
+    const [manualCode, setManualCode] = useState('');
+    const [asset, setAsset] = useState<any | null>(null);
+    const [resolving, setResolving] = useState(false);
+
+    const stopScanner = () => {
+        if (timerRef.current) {
+            window.clearInterval(timerRef.current);
+            timerRef.current = null;
+        }
+
+        if (streamRef.current) {
+            streamRef.current.getTracks().forEach((track) => track.stop());
+            streamRef.current = null;
+        }
+
+        if (videoRef.current) {
+            videoRef.current.srcObject = null;
+        }
     };
 
+    const resolveCodeToAsset = async (code: string) => {
+        const normalized = parseQrCode(code);
+        setResolving(true);
+        setError('');
+
+        try {
+            const res = await api.get('/assets/lookup', { params: { code: normalized } });
+            setAsset(res.data?.data?.asset || null);
+            setRawCode(code);
+            setState('resolved');
+            stopScanner();
+        } catch (err) {
+            setError(getErrorMessage(err));
+            setState('error');
+        } finally {
+            setResolving(false);
+        }
+    };
+
+    const startScanner = async () => {
+        setError('');
+        setAsset(null);
+        setRawCode('');
+        setState('starting');
+
+        if (!window.BarcodeDetector) {
+            setState('unsupported');
+            setError('This device/browser does not support native QR scanning. Use manual code input below.');
+            return;
+        }
+
+        try {
+            detectorRef.current = new window.BarcodeDetector({ formats: ['qr_code'] });
+
+            const stream = await navigator.mediaDevices.getUserMedia({
+                video: {
+                    facingMode: { ideal: 'environment' },
+                    width: { ideal: 1280 },
+                    height: { ideal: 720 },
+                },
+                audio: false,
+            });
+
+            streamRef.current = stream;
+            if (videoRef.current) {
+                videoRef.current.srcObject = stream;
+                await videoRef.current.play();
+            }
+
+            setState('scanning');
+
+            timerRef.current = window.setInterval(async () => {
+                if (!videoRef.current || !detectorRef.current || resolving) return;
+                if (videoRef.current.readyState < 2) return;
+
+                try {
+                    const detections = await detectorRef.current.detect(videoRef.current);
+                    if (detections.length > 0 && detections[0].rawValue) {
+                        await resolveCodeToAsset(detections[0].rawValue);
+                    }
+                } catch {
+                    // Keep scanning on intermittent detection failures.
+                }
+            }, 350);
+        } catch (err: any) {
+            setError(err?.message || 'Unable to start camera scanner.');
+            setState('error');
+            stopScanner();
+        }
+    };
+
+    useEffect(() => {
+        startScanner();
+        return () => stopScanner();
+    }, []);
+
+    const submitManual = async () => {
+        if (!manualCode.trim()) return;
+        await resolveCodeToAsset(manualCode.trim());
+    };
+
+    const statusLabel = (() => {
+        if (state === 'starting') return 'Starting camera...';
+        if (state === 'scanning') return 'Point camera at asset QR code';
+        if (state === 'resolved') return 'Asset resolved successfully';
+        if (state === 'unsupported') return 'Scanner unsupported on this device';
+        if (state === 'error') return 'Scanner error';
+        return 'Ready';
+    })();
+
     return (
-        <div className="min-h-screen bg-black p-4 flex flex-col items-center justify-center relative">
-            <button
-                onClick={() => navigate(-1)}
-                className="absolute top-4 left-4 p-2 bg-white/10 rounded-full text-white"
-            >
-                <ArrowLeft className="w-6 h-6" />
-            </button>
-
-            <div className="w-full max-w-sm aspect-[3/4] bg-zinc-900 rounded-3xl overflow-hidden relative border border-white/10 shadow-2xl">
-                {/* Camera Viewfinder Simulation */}
-                <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
-                    {scanning ? (
-                        <div className="flex flex-col items-center gap-4">
-                            <Loader2 className="w-12 h-12 text-[var(--primary)] animate-spin" />
-                            <p className="text-white font-medium animate-pulse">Initializing Camera...</p>
-                        </div>
-                    ) : (
-                        <div className="text-center space-y-6 p-6">
-                            <div className="w-64 h-64 border-2 border-[var(--primary)] rounded-lg relative mx-auto">
-                                <div className="absolute inset-0 bg-[var(--primary)]/10 animate-pulse" />
-                                <div className="absolute top-0 left-0 w-4 h-4 border-t-4 border-l-4 border-[var(--primary)] -mt-1 -ml-1" />
-                                <div className="absolute top-0 right-0 w-4 h-4 border-t-4 border-r-4 border-[var(--primary)] -mt-1 -mr-1" />
-                                <div className="absolute bottom-0 left-0 w-4 h-4 border-b-4 border-l-4 border-[var(--primary)] -mb-1 -ml-1" />
-                                <div className="absolute bottom-0 right-0 w-4 h-4 border-b-4 border-r-4 border-[var(--primary)] -mb-1 -mr-1" />
-                            </div>
-
-                            <div>
-                                <h2 className="text-xl font-bold text-white mb-2">Scan Asset QR</h2>
-                                <p className="text-[var(--text-muted)] text-sm">Align the QR code within the frame to scan.</p>
-                            </div>
-
-                            <button
-                                onClick={handleSimulateScan}
-                                className="w-full py-4 bg-[var(--primary)] text-black font-bold rounded-xl flex items-center justify-center gap-2 hover:opacity-90 transition-opacity"
-                            >
-                                <Camera className="w-5 h-5" />
-                                Simulate Scan
-                            </button>
-                        </div>
-                    )}
+        <div className="min-h-screen bg-[var(--bg-background)] p-4 md:p-6">
+            <div className="max-w-4xl mx-auto space-y-5">
+                <div className="flex items-center justify-between gap-3">
+                    <button
+                        onClick={() => navigate(-1)}
+                        className="inline-flex items-center gap-2 px-3 py-2 rounded-xl border border-[var(--border-color)] bg-[var(--bg-card)] hover:bg-[var(--bg-card-hover)]"
+                    >
+                        <ArrowLeft className="w-4 h-4" />
+                        Back
+                    </button>
+                    <button
+                        onClick={startScanner}
+                        className="inline-flex items-center gap-2 px-3 py-2 rounded-xl border border-[var(--border-color)] bg-[var(--bg-card)] hover:bg-[var(--bg-card-hover)]"
+                    >
+                        <RefreshCcw className="w-4 h-4" />
+                        Restart Scanner
+                    </button>
                 </div>
 
-                {scannedData && (
-                    <motion.div
-                        initial={{ y: 100 }}
-                        animate={{ y: 0 }}
-                        className="absolute bottom-0 left-0 right-0 bg-white p-6 rounded-t-3xl text-black"
-                    >
-                        <div className="flex items-center gap-4 mb-4">
-                            <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center text-green-600">
-                                <QrCode className="w-6 h-6" />
-                            </div>
-                            <div>
-                                <h3 className="font-bold text-lg">Asset Found!</h3>
-                                <p className="text-sm text-[var(--text-secondary)]">ID: {scannedData}</p>
-                            </div>
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
+                    <div className="lg:col-span-7 rounded-2xl border border-[var(--border-color)] bg-black overflow-hidden relative min-h-[360px]">
+                        <video ref={videoRef} className="w-full h-full object-cover min-h-[360px]" playsInline muted />
+
+                        <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
+                            <div className="w-56 h-56 border-2 border-[var(--primary)] rounded-xl shadow-[0_0_0_9999px_rgba(0,0,0,0.35)]" />
                         </div>
-                        <p className="text-xs text-[var(--text-muted)] text-center">Redirecting to details...</p>
-                    </motion.div>
-                )}
+
+                        <div className="absolute top-3 left-3 right-3 flex items-center justify-between text-xs">
+                            <span className="px-2 py-1 rounded-full bg-black/65 text-white inline-flex items-center gap-1">
+                                {state === 'scanning' ? <Camera className="w-3 h-3" /> : <QrCode className="w-3 h-3" />}
+                                {statusLabel}
+                            </span>
+                            {resolving && (
+                                <span className="px-2 py-1 rounded-full bg-black/65 text-white inline-flex items-center gap-1">
+                                    <Loader2 className="w-3 h-3 animate-spin" />
+                                    Resolving asset
+                                </span>
+                            )}
+                        </div>
+                    </div>
+
+                    <div className="lg:col-span-5 rounded-2xl border border-[var(--border-color)] bg-[var(--bg-card)] p-4 space-y-3">
+                        <h2 className="text-lg font-semibold text-[var(--text-primary)]">Manual / Fallback Lookup</h2>
+                        <p className="text-sm text-[var(--text-secondary)]">
+                            Paste scanned value, GUAI, serial number, or asset URL.
+                        </p>
+
+                        <div className="flex gap-2">
+                            <input
+                                value={manualCode}
+                                onChange={(e) => setManualCode(e.target.value)}
+                                placeholder="IN-HQ-000123 or https://.../assets/{id}"
+                                className="flex-1 rounded-xl border border-[var(--border-color)] bg-[var(--bg-overlay)] px-3 py-2 text-sm"
+                            />
+                            <button
+                                onClick={submitManual}
+                                disabled={resolving}
+                                className="px-3 py-2 rounded-xl bg-[var(--primary)] text-black font-semibold"
+                            >
+                                <Search className="w-4 h-4" />
+                            </button>
+                        </div>
+
+                        {error && (
+                            <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 p-3 text-sm text-rose-300 inline-flex gap-2">
+                                <AlertTriangle className="w-4 h-4 mt-0.5" />
+                                <span>{error}</span>
+                            </div>
+                        )}
+
+                        {asset && (
+                            <div className="rounded-xl border border-emerald-500/25 bg-emerald-500/10 p-3 space-y-2">
+                                <div className="inline-flex items-center gap-2 text-emerald-300 text-sm font-semibold">
+                                    <CheckCircle2 className="w-4 h-4" />
+                                    Asset Found
+                                </div>
+                                <p className="text-[var(--text-primary)] font-semibold">{asset.name}</p>
+                                <p className="text-xs text-[var(--text-secondary)]">ID: {asset.guai || asset.id}</p>
+                                <p className="text-xs text-[var(--text-secondary)]">Status: {asset.status}</p>
+                                <p className="text-xs text-[var(--text-secondary)]">Scanned: {rawCode}</p>
+
+                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1">
+                                    <button
+                                        onClick={() => navigate(`/assets/${asset.id}`)}
+                                        className="px-2 py-2 rounded-lg border border-[var(--border-color)] text-xs hover:bg-[var(--bg-overlay)]"
+                                    >
+                                        View History
+                                    </button>
+                                    <button
+                                        onClick={() => navigate(`/maintenance?assetId=${asset.id}`)}
+                                        className="px-2 py-2 rounded-lg border border-[var(--border-color)] text-xs hover:bg-[var(--bg-overlay)]"
+                                    >
+                                        Log Maintenance
+                                    </button>
+                                    <button
+                                        onClick={() => navigate(`/maintenance?assetId=${asset.id}&mode=report`)}
+                                        className="px-2 py-2 rounded-lg border border-[var(--border-color)] text-xs hover:bg-[var(--bg-overlay)]"
+                                    >
+                                        Report Issue
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                </div>
             </div>
         </div>
     );
 }
+
+export default ScanQR;
