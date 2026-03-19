@@ -174,7 +174,7 @@ exports.getTechnicianDashboard = async (req, res) => {
                     : (req.user.office?.id || req.user.officeId),
             };
 
-        const [assignedOpen, completedToday, pendingAssignments, myRecent, unreadNotifications] = await Promise.all([
+        const [assignedOpen, completedToday, pendingAssignments, myRecent, workOrderOptions, unreadNotifications] = await Promise.all([
             prisma.maintenanceTicket.count({
                 where: {
                     ...officeFilter,
@@ -210,6 +210,30 @@ exports.getTechnicianDashboard = async (req, res) => {
                 orderBy: { createdAt: 'desc' },
                 take: 12,
             }),
+            prisma.maintenanceTicket.findMany({
+                where: {
+                    ...officeFilter,
+                    OR: [
+                        {
+                            assignedToId: req.user.id,
+                            status: { in: ['REQUESTED', 'PENDING', 'IN_PROGRESS', 'PENDING_PARTS', 'APPROVED'] },
+                        },
+                        {
+                            assignedToId: null,
+                            status: { in: ['REQUESTED', 'PENDING'] },
+                        },
+                    ],
+                },
+                include: {
+                    asset: { select: { id: true, name: true, guai: true, status: true } },
+                    assignedTo: { select: { id: true, name: true } },
+                },
+                orderBy: [
+                    { priority: 'desc' },
+                    { createdAt: 'desc' },
+                ],
+                take: 30,
+            }),
             prisma.notification.count({
                 where: {
                     recipientId: req.user.id,
@@ -226,6 +250,7 @@ exports.getTechnicianDashboard = async (req, res) => {
                 pendingAssignments,
                 unreadNotifications,
                 recentWorkOrders: myRecent,
+                workOrderOptions,
             },
         });
     } catch (error) {

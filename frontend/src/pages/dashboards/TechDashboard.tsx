@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
     AlertTriangle,
@@ -47,6 +47,7 @@ interface TechnicianDashboardResponse {
     pendingAssignments: number;
     unreadNotifications: number;
     recentWorkOrders: WorkOrder[];
+    workOrderOptions?: WorkOrder[];
 }
 
 interface NotificationItem {
@@ -97,6 +98,7 @@ export function TechDashboard() {
     const [loading, setLoading] = useState(true);
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [success, setSuccess] = useState<string | null>(null);
     const [isOnline, setIsOnline] = useState(navigator.onLine);
     const [syncingQueue, setSyncingQueue] = useState(false);
 
@@ -106,6 +108,7 @@ export function TechDashboard() {
         pendingAssignments: 0,
         unreadNotifications: 0,
         recentWorkOrders: [],
+        workOrderOptions: [],
     });
     const [notifications, setNotifications] = useState<NotificationItem[]>([]);
 
@@ -118,11 +121,23 @@ export function TechDashboard() {
     const [timeSpentMinutes, setTimeSpentMinutes] = useState<number>(30);
     const [proofImages, setProofImages] = useState('');
     const [voiceEnabled, setVoiceEnabled] = useState(false);
+    const [voiceTranscript, setVoiceTranscript] = useState('');
     const [location, setLocation] = useState<{ latitude: number; longitude: number; accuracy?: number } | null>(null);
+    const recognitionRef = useRef<any>(null);
 
     const queueCount = useMemo(() => loadQueue().length, [syncingQueue, isOnline, busy]);
 
-    const workOrders = summary.recentWorkOrders || [];
+    const workOrders = useMemo(() => {
+        const merged = [
+            ...(summary.workOrderOptions || []),
+            ...(summary.recentWorkOrders || []),
+        ];
+        const uniqueById = new Map<string, WorkOrder>();
+        for (const w of merged) {
+            if (w?.id) uniqueById.set(w.id, w);
+        }
+        return Array.from(uniqueById.values());
+    }, [summary.workOrderOptions, summary.recentWorkOrders]);
 
     const fetchTechnicianModule = async () => {
         try {
@@ -138,6 +153,7 @@ export function TechDashboard() {
                 pendingAssignments: 0,
                 unreadNotifications: 0,
                 recentWorkOrders: [],
+                workOrderOptions: [],
             });
 
             setNotifications(notifRes.data?.data || []);
@@ -200,7 +216,33 @@ export function TechDashboard() {
         };
     }, []);
 
-    const startVoiceInput = () => {
+    useEffect(() => {
+        if (!selectedWorkOrder && workOrders.length > 0) {
+            setSelectedWorkOrder(workOrders[0]);
+        }
+    }, [workOrders, selectedWorkOrder]);
+
+    useEffect(() => {
+        return () => {
+            try {
+                recognitionRef.current?.stop?.();
+            } catch {
+                // ignore cleanup failures
+            }
+        };
+    }, []);
+
+    const toggleVoiceInput = () => {
+        if (voiceEnabled && recognitionRef.current) {
+            try {
+                recognitionRef.current.stop();
+            } catch {
+                // ignore stop failures
+            }
+            setVoiceEnabled(false);
+            return;
+        }
+
         const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
         if (!SpeechRecognition) {
             setError('Voice input is not supported on this device/browser.');
@@ -209,16 +251,35 @@ export function TechDashboard() {
 
         const recognition = new SpeechRecognition();
         recognition.lang = 'en-US';
-        recognition.interimResults = false;
+        recognition.interimResults = true;
+        recognition.continuous = true;
         recognition.maxAlternatives = 1;
 
         setVoiceEnabled(true);
+        setSuccess(null);
+
         recognition.onresult = (event: any) => {
-            const transcript = event.results?.[0]?.[0]?.transcript || '';
-            setWorklogNotes((prev) => `${prev}${prev ? ' ' : ''}${transcript}`);
+            let finalText = '';
+            for (let i = event.resultIndex; i < event.results.length; i += 1) {
+                const result = event.results[i];
+                if (result.isFinal) {
+                    finalText += `${result[0]?.transcript || ''} `;
+                }
+            }
+            const clean = finalText.trim();
+            if (!clean) return;
+
+            setVoiceTranscript((prev) => `${prev}${prev ? ' ' : ''}${clean}`.trim());
+            setWorklogNotes((prev) => `${prev}${prev ? ' ' : ''}${clean}`.trim());
         };
-        recognition.onerror = () => setVoiceEnabled(false);
+
+        recognition.onerror = () => {
+            setVoiceEnabled(false);
+            setError('Voice recognition failed. Please retry or type notes manually.');
+        };
         recognition.onend = () => setVoiceEnabled(false);
+
+        recognitionRef.current = recognition;
         recognition.start();
     };
 
@@ -245,6 +306,7 @@ export function TechDashboard() {
         if (!scanCode.trim()) return;
 
         setBusy(true);
+        setSuccess(null);
         try {
             const res = await api.get('/assets/lookup', { params: { code: scanCode.trim() } });
             setScannedAsset(res.data?.data?.asset || null);
@@ -258,12 +320,15 @@ export function TechDashboard() {
 
     const updateWorkOrderStatus = async (ticketId: string, body: Record<string, any>) => {
         setBusy(true);
+        setSuccess(null);
         try {
             if (!navigator.onLine) {
                 queueOperation({ type: 'status', payload: { ticketId, body }, createdAt: new Date().toISOString() });
+                setSuccess('Status update queued offline and will sync automatically.');
                 return;
             }
             await api.patch(`/maintenance/${ticketId}/status`, body);
+            setSuccess('Work order status updated successfully.');
             await fetchTechnicianModule();
         } catch (err) {
             setError(getErrorMessage(err));
@@ -273,13 +338,23 @@ export function TechDashboard() {
     };
 
     const submitWorklog = async () => {
-        if (!selectedWorkOrder) return;
+        if (!selectedWorkOrder) {
+            setError('Please select a work order before submitting a log.');
+            return;
+        }
+
+        const trimmedNotes = worklogNotes.trim();
+        if (!trimmedNotes) {
+            setError('Please add maintenance notes or record a voice note before submitting.');
+            return;
+        }
 
         const body = {
-            notes: worklogNotes,
+            notes: trimmedNotes,
             maintenanceType,
             timeSpentMinutes,
             location,
+            voiceText: voiceTranscript || null,
             attachments: proofImages
                 .split(',')
                 .map((s) => s.trim())
@@ -287,6 +362,7 @@ export function TechDashboard() {
         };
 
         setBusy(true);
+        setSuccess(null);
         try {
             if (!navigator.onLine) {
                 queueOperation({
@@ -294,11 +370,14 @@ export function TechDashboard() {
                     payload: { ticketId: selectedWorkOrder.id, body },
                     createdAt: new Date().toISOString(),
                 });
+                setSuccess('Work log queued offline and will sync automatically.');
             } else {
                 await api.post(`/maintenance/${selectedWorkOrder.id}/worklog`, body);
+                setSuccess('Maintenance log submitted successfully.');
             }
 
             setWorklogNotes('');
+            setVoiceTranscript('');
             setProofImages('');
             await fetchTechnicianModule();
         } catch (err) {
@@ -341,6 +420,12 @@ export function TechDashboard() {
             {error && (
                 <div className="p-3 rounded-xl border border-rose-500/30 bg-rose-500/10 text-rose-300 text-sm">
                     {error}
+                </div>
+            )}
+
+            {success && (
+                <div className="p-3 rounded-xl border border-emerald-500/30 bg-emerald-500/10 text-emerald-300 text-sm">
+                    {success}
                 </div>
             )}
 
@@ -450,13 +535,32 @@ export function TechDashboard() {
                         <div className="text-xs text-[var(--text-secondary)]">{selectedWorkOrder ? selectedWorkOrder.ticketNumber : 'Select a work order'}</div>
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                        <select
+                            value={selectedWorkOrder?.id || ''}
+                            onChange={(e) => {
+                                const selected = workOrders.find((w) => w.id === e.target.value) || null;
+                                setSelectedWorkOrder(selected);
+                            }}
+                            className="rounded-xl border border-[var(--border-color)] bg-[var(--bg-overlay)] px-3 py-2 text-sm"
+                        >
+                            <option value="">Select work order</option>
+                            {workOrders.map((w) => (
+                                <option key={w.id} value={w.id}>
+                                    {w.ticketNumber} - {w.asset?.name || 'Unknown Asset'} ({w.status})
+                                </option>
+                            ))}
+                        </select>
+
                         <select value={maintenanceType} onChange={(e) => setMaintenanceType(e.target.value)} className="rounded-xl border border-[var(--border-color)] bg-[var(--bg-overlay)] px-3 py-2 text-sm">
                             <option value="PREVENTIVE">Preventive</option>
                             <option value="CORRECTIVE">Corrective</option>
                             <option value="INSPECTION">Inspection</option>
                             <option value="REPLACEMENT">Replacement</option>
                         </select>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                         <input type="number" min={1} value={timeSpentMinutes} onChange={(e) => setTimeSpentMinutes(Number(e.target.value || 0))} className="rounded-xl border border-[var(--border-color)] bg-[var(--bg-overlay)] px-3 py-2 text-sm" placeholder="Time spent (min)" />
                         <input value={proofImages} onChange={(e) => setProofImages(e.target.value)} className="rounded-xl border border-[var(--border-color)] bg-[var(--bg-overlay)] px-3 py-2 text-sm" placeholder="Proof image URLs (comma separated)" />
                     </div>
@@ -471,9 +575,9 @@ export function TechDashboard() {
 
                     <div className="flex flex-wrap items-center gap-2">
                         <button onClick={captureLocation} className="px-3 py-2 rounded-lg border border-[var(--border-color)] text-xs inline-flex items-center gap-1"><MapPin className="w-3 h-3" /> Capture Location</button>
-                        <button onClick={startVoiceInput} className="px-3 py-2 rounded-lg border border-[var(--border-color)] text-xs inline-flex items-center gap-1">
+                        <button onClick={toggleVoiceInput} className="px-3 py-2 rounded-lg border border-[var(--border-color)] text-xs inline-flex items-center gap-1">
                             {voiceEnabled ? <MicOff className="w-3 h-3" /> : <Mic className="w-3 h-3" />}
-                            {voiceEnabled ? 'Listening...' : 'Voice Note'}
+                            {voiceEnabled ? 'Stop Voice' : 'Voice Note'}
                         </button>
                         <button
                             onClick={submitWorklog}
@@ -486,6 +590,12 @@ export function TechDashboard() {
                         {location && (
                             <span className="text-xs text-emerald-300 border border-emerald-500/30 bg-emerald-500/10 px-2 py-1 rounded-full">
                                 GPS: {location.latitude.toFixed(4)}, {location.longitude.toFixed(4)}
+                            </span>
+                        )}
+
+                        {voiceTranscript && (
+                            <span className="text-xs text-blue-300 border border-blue-500/30 bg-blue-500/10 px-2 py-1 rounded-full">
+                                Voice captured
                             </span>
                         )}
                     </div>
