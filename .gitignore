@@ -5,6 +5,7 @@ node_modules/
 
 # Build outputs
 dist/
+dist-ssr/
 build/
 out/
 
@@ -41,14 +42,17 @@ coverage/
 !.vscode/extensions.json
 !.vscode/settings.json
 .idea/
-*.swp
-*.swo
+*.sw?
 *~
 .project
 .classpath
 .settings/
 *.sublime-workspace
 *.sublime-project
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
 
 # OS files
 .DS_Store
