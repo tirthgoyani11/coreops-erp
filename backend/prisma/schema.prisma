@@ -378,6 +378,7 @@ model User {
   role                  UserRole            @default(STAFF)
   officeId              String?
   office                Office?             @relation(fields: [officeId], references: [id])
+  preferences           Json?               // Layout config: [{id: "slas", x:0, y:0, w:6, h:4}, ...]
   // Permissions (flattened)
   canApproveTickets     Boolean             @default(false)
   canManageAssets       Boolean             @default(false)
@@ -424,6 +425,7 @@ model User {
   createdJournalEntries JournalEntry[]      @relation("JournalEntryCreator")
   expenseClaims         ExpenseClaim[]      @relation("ExpenseEmployee")
   uploadedDocuments     Document[]
+  kpiAlerts             KpiAlert[]
 
   @@index([role, officeId])
   @@index([officeId])
@@ -1451,4 +1453,22 @@ model CustomFieldValue {
 
   @@unique([fieldDefId, entityId])
   @@index([entityId])
+}
+
+// ==========================================
+// DASHBOARD PERSONALIZATION (PHASE 5)
+// ==========================================
+
+model KpiAlert {
+  id          String   @id @default(uuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  metricName  String   // e.g., 'MAINTENANCE_SLA', 'OPEN_TICKETS'
+  condition   String   // '>', '<', '=', '>=', '<='
+  threshold   Float    // e.g., 95 (for 95%)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([userId])
 }

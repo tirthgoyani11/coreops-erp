@@ -176,3 +176,113 @@ exports.updateUser = async (req, res, next) => {
         next(error);
     }
 };
+
+// ==========================================
+// DASHBOARD PERSONALIZATION
+// ==========================================
+
+// @desc    Update current user's dashboard preferences
+// @route   PUT /api/users/me/dashboard
+// @access  Private (Self)
+exports.updateDashboardPreferences = async (req, res) => {
+    try {
+        const userId = req.user.id;
+        const { preferences } = req.body;
+
+        const updatedUser = await prisma.user.update({
+            where: { id: userId },
+            data: { preferences }
+        });
+
+        res.status(200).json({ success: true, data: updatedUser.preferences });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+};
+
+// @desc    Get current user's KPI alerts
+// @route   GET /api/users/me/alerts
+// @access  Private (Self)
+exports.getAlerts = async (req, res) => {
+    try {
+        const userId = req.user.id;
+        const alerts = await prisma.kpiAlert.findMany({
+            where: { userId }
+        });
+
+        res.status(200).json({ success: true, count: alerts.length, data: alerts });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+};
+
+// @desc    Create a KPI alert for current user
+// @route   POST /api/users/me/alerts
+// @access  Private (Self)
+exports.createAlert = async (req, res) => {
+    try {
+        const userId = req.user.id;
+        const { metricName, condition, threshold, isActive } = req.body;
+
+        if (!metricName || !condition || threshold === undefined) {
+             return res.status(400).json({ success: false, message: 'Please provide metricName, condition, and threshold' });
+        }
+
+        const alert = await prisma.kpiAlert.create({
+            data: {
+                userId,
+                metricName,
+                condition,
+                threshold,
+                isActive: isActive !== undefined ? isActive : true
+            }
+        });
+
+        res.status(201).json({ success: true, data: alert });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+};
+
+// @desc    Update a KPI alert for current user
+// @route   PUT /api/users/me/alerts/:id
+// @access  Private (Self)
+exports.updateAlert = async (req, res) => {
+    try {
+        const userId = req.user.id;
+        const alertId = req.params.id;
+
+        const alert = await prisma.kpiAlert.findUnique({ where: { id: alertId } });
+        if (!alert) return res.status(404).json({ success: false, message: 'Alert not found' });
+        if (alert.userId !== userId) return res.status(403).json({ success: false, message: 'Unauthorized' });
+
+        const updated = await prisma.kpiAlert.update({
+            where: { id: alertId },
+            data: req.body
+        });
+
+        res.status(200).json({ success: true, data: updated });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+};
+
+// @desc    Delete a KPI alert for current user
+// @route   DELETE /api/users/me/alerts/:id
+// @access  Private (Self)
+exports.deleteAlert = async (req, res) => {
+    try {
+        const userId = req.user.id;
+        const alertId = req.params.id;
+
+        const alert = await prisma.kpiAlert.findUnique({ where: { id: alertId } });
+        if (!alert) return res.status(404).json({ success: false, message: 'Alert not found' });
+        if (alert.userId !== userId) return res.status(403).json({ success: false, message: 'Unauthorized' });
+
+        await prisma.kpiAlert.delete({ where: { id: alertId } });
+
+        res.status(200).json({ success: true, data: {} });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+};
