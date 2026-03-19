@@ -62,6 +62,18 @@ function extractUrl(raw: string): string | null {
     return null;
 }
 
+function getSameOriginAssetPath(rawUrl: string): string | null {
+    try {
+        const u = new URL(rawUrl);
+        const current = window.location.origin;
+        if (u.origin !== current) return null;
+        if (!u.pathname.startsWith('/assets/')) return null;
+        return `${u.pathname}${u.search || ''}`;
+    } catch {
+        return null;
+    }
+}
+
 export function ScanQR() {
     const navigate = useNavigate();
 
@@ -123,6 +135,14 @@ export function ScanQR() {
         } catch (err: any) {
             const status = err?.response?.status;
             const maybeUrl = extractUrl(code);
+            const sameOriginAssetPath = maybeUrl ? getSameOriginAssetPath(maybeUrl) : null;
+
+            if ((status === 404 || status === 403) && sameOriginAssetPath) {
+                // Fallback to direct route navigation for same-environment URLs.
+                navigate(sameOriginAssetPath);
+                return;
+            }
+
             if ((status === 404 || status === 403) && maybeUrl) {
                 setExternalAssetUrl(maybeUrl);
                 setError('Asset not found in current environment. This QR may belong to another deployment.');
