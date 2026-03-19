@@ -142,6 +142,8 @@ async function execute(intent, entities, context) {
         // v4 — List & Dashboard handlers
         LIST_ASSETS: listAssets,
         LIST_VENDORS: listVendors,
+        LIST_REQUISITIONS: listRequisitions,
+        LIST_RFQS: listRFQs,
         LIST_PURCHASE_ORDERS: listPurchaseOrders,
         LIST_TICKETS: listTickets,
         LIST_INVENTORY: listInventory,
@@ -197,7 +199,7 @@ async function fetchContextData(intent, entities, context) {
                 const isSuperAdmin = context.role === 'SUPER_ADMIN';
                 const officeFilter = (!isSuperAdmin && context.officeId) ? { officeId: context.officeId } : {};
 
-                const [transactions, budgets, inventory, pos, assets, tickets] = await Promise.all([
+                const [transactions, budgets, inventory, pos, requisitions, rfqs, assets, tickets] = await Promise.all([
                     // Last 50 transactions
                     prisma.transaction.findMany({ where: officeFilter, take: 50, orderBy: { date: 'desc' }, select: { type: true, category: true, amount: true, description: true, date: true } }),
                     // This month's budgets
@@ -210,6 +212,10 @@ async function fetchContextData(intent, entities, context) {
                     }),
                     // Recent POs
                     prisma.purchaseOrder.findMany({ where: officeFilter, take: 20, orderBy: { createdAt: 'desc' }, select: { poNumber: true, status: true, totalAmount: true } }),
+                    // Recent Purchase Requisitions
+                    prisma.purchaseRequisition.findMany({ where: officeFilter, take: 20, orderBy: { createdAt: 'desc' }, select: { prNumber: true, status: true, totalEstimate: true } }),
+                    // Recent RFQs
+                    prisma.rFQ.findMany({ where: officeFilter, take: 20, orderBy: { createdAt: 'desc' }, select: { rfqNumber: true, status: true, title: true } }),
                     // Asset summary
                     prisma.asset.findMany({ where: officeFilter, take: 50, select: { name: true, status: true, category: true } }),
                     // Active Maintenance Tickets
@@ -222,6 +228,8 @@ async function fetchContextData(intent, entities, context) {
                         current_budgets: budgets,
                         inventory_items: inventory,
                         recent_purchase_orders: pos,
+                        recent_purchase_requisitions: requisitions,
+                        recent_rfqs: rfqs,
                         assets_overview: assets,
                         active_maintenance_tickets: tickets
                     }
@@ -829,6 +837,39 @@ function normalizePurchaseOrderStatusFilter(status) {
     return map[value] || null;
 }
 
+function normalizeRequisitionStatusFilter(status) {
+    if (!status) return null;
+    const value = String(status).trim().toUpperCase().replace(/\s+/g, '_');
+
+    const map = {
+        DRAFT: 'DRAFT',
+        SUBMITTED: 'SUBMITTED',
+        PENDING: 'SUBMITTED',
+        PENDING_APPROVAL: 'SUBMITTED',
+        APPROVED: 'APPROVED',
+        REJECTED: 'REJECTED',
+        CONVERTED: 'CONVERTED',
+    };
+
+    return map[value] || null;
+}
+
+function normalizeRFQStatusFilter(status) {
+    if (!status) return null;
+    const value = String(status).trim().toUpperCase().replace(/\s+/g, '_');
+
+    const map = {
+        DRAFT: 'DRAFT',
+        OPEN: 'DRAFT',
+        SENT: 'SENT',
+        ACTIVE: 'SENT',
+        CLOSED: 'CLOSED',
+        AWARDED: 'AWARDED',
+    };
+
+    return map[value] || null;
+}
+
 function normalizeTicketStatusFilter(status) {
     if (!status) return { not: 'COMPLETED' };
     const value = String(status).trim().toUpperCase().replace(/\s+/g, '_');
@@ -901,6 +942,86 @@ async function listVendors(entities, context) {
     }
 
     return { success: true, message: msg, data: vendors };
+}
+
+async function listRequisitions(entities, context) {
+    const where = {};
+    if (context.officeId) where.officeId = context.officeId;
+    const statusFilter = normalizeRequisitionStatusFilter(entities.status);
+    if (statusFilter) where.status = statusFilter;
+
+    const requisitions = await prisma.purchaseRequisition.findMany({
+        where,
+        take: parseInt(entities.limit) || 15,
+        orderBy: { createdAt: 'desc' },
+        select: {
+            prNumber: true,
+            status: true,
+            priority: true,
+            totalEstimate: true,
+            requiredByDate: true,
+            _count: { select: { items: true } },
+        },
+    });
+
+    if (requisitions.length === 0) {
+        return { success: true, message: '📭 No purchase requisitions found.' };
+    }
+
+    const statusIcon = {
+        DRAFT: '📝',
+        SUBMITTED: '⏳',
+        APPROVED: '✅',
+        REJECTED: '❌',
+        CONVERTED: '🔁',
+    };
+
+    let msg = `🧾 **Purchase Requisitions** (${requisitions.length} found)\n\n`;
+    msg += `| PR # | Priority | Items | Estimate | Status |\n|------|----------|-------|----------|--------|\n`;
+    for (const pr of requisitions) {
+        msg += `| **${pr.prNumber}** | ${pr.priority || 'MEDIUM'} | ${pr._count.items} | ₹${(pr.totalEstimate || 0).toLocaleString('en-IN')} | ${statusIcon[pr.status] || ''} ${pr.status} |\n`;
+    }
+
+    return { success: true, message: msg, data: requisitions };
+}
+
+async function listRFQs(entities, context) {
+    const where = {};
+    if (context.officeId) where.officeId = context.officeId;
+    const statusFilter = normalizeRFQStatusFilter(entities.status);
+    if (statusFilter) where.status = statusFilter;
+
+    const rfqs = await prisma.rFQ.findMany({
+        where,
+        take: parseInt(entities.limit) || 15,
+        orderBy: { createdAt: 'desc' },
+        select: {
+            rfqNumber: true,
+            title: true,
+            status: true,
+            requiredByDate: true,
+            _count: { select: { quotations: true, items: true } },
+        },
+    });
+
+    if (rfqs.length === 0) {
+        return { success: true, message: '📭 No RFQs found.' };
+    }
+
+    const statusIcon = {
+        DRAFT: '📝',
+        SENT: '📨',
+        CLOSED: '📁',
+        AWARDED: '🏆',
+    };
+
+    let msg = `📨 **RFQs** (${rfqs.length} found)\n\n`;
+    msg += `| RFQ # | Title | Items | Quotes | Status |\n|-------|-------|-------|--------|--------|\n`;
+    for (const rfq of rfqs) {
+        msg += `| **${rfq.rfqNumber}** | ${rfq.title} | ${rfq._count.items} | ${rfq._count.quotations} | ${statusIcon[rfq.status] || ''} ${rfq.status} |\n`;
+    }
+
+    return { success: true, message: msg, data: rfqs };
 }
 
 async function listPurchaseOrders(entities, context) {

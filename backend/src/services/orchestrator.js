@@ -39,6 +39,8 @@ const INTENT_PATTERNS = [
     { intent: 'FORECAST_BUDGET', keywords: ['forecast', 'predict budget', 'budget forecast', 'spending forecast'] },
     { intent: 'LIST_ASSETS', keywords: ['list asset', 'show asset', 'all asset', 'my asset', 'view asset'] },
     { intent: 'LIST_VENDORS', keywords: ['list vendor', 'show vendor', 'all vendor', 'my vendor', 'view vendor'] },
+    { intent: 'LIST_REQUISITIONS', keywords: ['purchase requisition', 'requisition list', 'list requisition', 'show requisition', 'pending requisition', 'submitted requisition', 'pr list'] },
+    { intent: 'LIST_RFQS', keywords: ['rfq list', 'list rfq', 'show rfq', 'request for quotation', 'request for quote', 'sent rfq', 'awarded rfq', 'rfq bids', 'rfq quotes', 'quotation list', 'vendor bids', 'vendor quotations'] },
     { intent: 'LIST_PURCHASE_ORDERS', keywords: ['list po', 'show po', 'pending po', 'all po', 'purchase order', 'list purchase', 'show purchase', 'pending purchase'] },
     { intent: 'LIST_TICKETS', keywords: ['list ticket', 'show ticket', 'open ticket', 'all ticket', 'active ticket', 'pending ticket', 'my ticket'] },
     { intent: 'LIST_INVENTORY', keywords: ['list inventory', 'show inventory', 'stock list', 'all inventory', 'inventory list', 'warehouse stock'] },
@@ -90,7 +92,7 @@ const INTENT_SYSTEM_PROMPT = `You are OpsPilot, the AI intent classifier for Cor
 Given a user command, output ONLY valid JSON with this exact schema:
 {"intent":"INTENT_NAME","entities":{...},"confidence":0.0-1.0}
 
-Valid intents: CREATE_ASSET, CREATE_TRANSACTION, REFILL_INVENTORY, APPROVE_PURCHASE, REJECT_PURCHASE, CLOSE_MAINTENANCE, CREATE_TICKET, UPDATE_ASSET, GET_LOW_STOCK, SET_BUDGET, MATCH_INVOICE, PROCESS_BILL, LIST_ASSETS, LIST_VENDORS, LIST_PURCHASE_ORDERS, LIST_TICKETS, LIST_INVENTORY, LIST_TRANSACTIONS, DASHBOARD_SUMMARY, CREATE_VENDOR, CREATE_PURCHASE_ORDER, CREATE_INVENTORY, VIEW_PROFIT_LOSS, VIEW_CASH_FLOW, VIEW_BALANCE_SHEET, LIST_GL_ACCOUNTS, CREATE_GL_ACCOUNT, VIEW_AUDIT_LOGS, LIST_NOTIFICATIONS, SEND_NOTIFICATION, LIST_OFFICES, CREATE_OFFICE, LIST_USERS, VIEW_ANALYTICS, LIST_DOCUMENTS, VIEW_PROFILE, UPDATE_TICKET, QUERY_DATA, DETECT_ANOMALY, FORECAST_BUDGET, GENERAL
+Valid intents: CREATE_ASSET, CREATE_TRANSACTION, REFILL_INVENTORY, APPROVE_PURCHASE, REJECT_PURCHASE, CLOSE_MAINTENANCE, CREATE_TICKET, UPDATE_ASSET, GET_LOW_STOCK, SET_BUDGET, MATCH_INVOICE, PROCESS_BILL, LIST_ASSETS, LIST_VENDORS, LIST_REQUISITIONS, LIST_RFQS, LIST_PURCHASE_ORDERS, LIST_TICKETS, LIST_INVENTORY, LIST_TRANSACTIONS, DASHBOARD_SUMMARY, CREATE_VENDOR, CREATE_PURCHASE_ORDER, CREATE_INVENTORY, VIEW_PROFIT_LOSS, VIEW_CASH_FLOW, VIEW_BALANCE_SHEET, LIST_GL_ACCOUNTS, CREATE_GL_ACCOUNT, VIEW_AUDIT_LOGS, LIST_NOTIFICATIONS, SEND_NOTIFICATION, LIST_OFFICES, CREATE_OFFICE, LIST_USERS, VIEW_ANALYTICS, LIST_DOCUMENTS, VIEW_PROFILE, UPDATE_TICKET, QUERY_DATA, DETECT_ANOMALY, FORECAST_BUDGET, GENERAL
 
 Entity schemas per intent:
 - CREATE_ASSET: { assetName, assetCategory (LAPTOP|COMPUTER|PHONE|PRINTER|SERVER|NETWORK|FURNITURE|VEHICLE|EQUIPMENT|MACHINERY|OTHER), amount, manufacturer, model, description, serialNumber, condition (GOOD|FAIR|POOR|NEW), warrantyMonths, vendorName, assignedTo }
@@ -100,7 +102,7 @@ Entity schemas per intent:
 - APPROVE_PURCHASE / REJECT_PURCHASE: { poNumber }
 - CLOSE_MAINTENANCE: { ticketId, assetId }
 - CREATE_TICKET: { assetId, description, priority (LOW|MEDIUM|HIGH|CRITICAL) }
-- LIST_ASSETS / LIST_VENDORS / LIST_PURCHASE_ORDERS / LIST_TICKETS / LIST_INVENTORY / LIST_TRANSACTIONS: { limit, status }
+- LIST_ASSETS / LIST_VENDORS / LIST_REQUISITIONS / LIST_RFQS / LIST_PURCHASE_ORDERS / LIST_TICKETS / LIST_INVENTORY / LIST_TRANSACTIONS: { limit, status }
 - DASHBOARD_SUMMARY: {}
 - CREATE_VENDOR: { vendorName, contactPerson, email, phone, address, gstNumber }
 - CREATE_PURCHASE_ORDER: { vendorName, amount, description }
@@ -169,6 +171,33 @@ Capabilities you can EXECUTE (not just describe):
 • 👤 View your profile & account info
 
 When listing capabilities, show them as actionable commands the user can try.`;
+
+function detectProcurementListIntent(message) {
+    const text = ` ${String(message || '').toLowerCase()} `;
+
+    const requisitionTerms = ['purchase requisition', 'purchase requisitions', 'requisition', 'requisitions', ' pr '];
+    const rfqTerms = ['rfq', 'rfqs', 'request for quotation', 'request for quote', 'quotation request', 'rfq bid', 'rfq bids', 'rfq quote', 'rfq quotes', 'vendor bid', 'vendor bids', 'quotation', 'quotations', 'quote', 'quotes'];
+    const poTerms = ['purchase order', 'purchase orders', ' po ', ' pos '];
+
+    const hasAny = (terms) => terms.some((term) => text.includes(term));
+    const hasRequisition = hasAny(requisitionTerms);
+    const hasRFQ = hasAny(rfqTerms);
+    const hasPO = hasAny(poTerms);
+
+    if (hasRequisition && !hasPO && !hasRFQ) {
+        return { intent: 'LIST_REQUISITIONS', confidence: 0.97, source: 'rule-disambiguation' };
+    }
+
+    if (hasRFQ && !hasPO && !hasRequisition) {
+        return { intent: 'LIST_RFQS', confidence: 0.97, source: 'rule-disambiguation' };
+    }
+
+    if (hasPO && !hasRequisition && !hasRFQ) {
+        return { intent: 'LIST_PURCHASE_ORDERS', confidence: 0.94, source: 'rule-disambiguation' };
+    }
+
+    return null;
+}
 
 function buildRoleAwareIntentPrompt(context = {}) {
     const role = context.role || 'UNKNOWN';
@@ -453,10 +482,15 @@ async function processCommand(userMessage, context = {}) {
         }
 
         // ── Step 1: Intent classification ──
-        let classification = ENABLE_LOCAL_INTENT_CLASSIFIER ? classifyLocally(userMessage) : null;
+        const procurementIntent = detectProcurementListIntent(userMessage);
+        let classification = procurementIntent || (ENABLE_LOCAL_INTENT_CLASSIFIER ? classifyLocally(userMessage) : null);
         let entities = {};
 
-        if (classification) {
+        if (procurementIntent) {
+            modelsUsed.push({ model: 'procurement-entity-router', source: 'rule' });
+            entities = extractEntities(userMessage, classification.intent);
+            logger.info(`[Orchestrator] Procurement entity hit: ${classification.intent} (${classification.confidence})`);
+        } else if (classification) {
             modelsUsed.push({ model: 'local-classifier', source: 'local' });
             entities = extractEntities(userMessage, classification.intent);
             logger.info(`[Orchestrator] Local hit: ${classification.intent} (${classification.confidence})`);
@@ -501,7 +535,7 @@ async function processCommand(userMessage, context = {}) {
             'CREATE_ASSET', 'UPDATE_ASSET', 'CREATE_TRANSACTION', 'REFILL_INVENTORY',
             'APPROVE_PURCHASE', 'REJECT_PURCHASE', 'CLOSE_MAINTENANCE', 'CREATE_TICKET',
             'GET_LOW_STOCK', 'GET_ASSET_STATS', 'SET_BUDGET', 'MATCH_INVOICE', 'PROCESS_BILL',
-            'LIST_ASSETS', 'LIST_VENDORS', 'LIST_PURCHASE_ORDERS', 'LIST_TICKETS',
+            'LIST_ASSETS', 'LIST_VENDORS', 'LIST_REQUISITIONS', 'LIST_RFQS', 'LIST_PURCHASE_ORDERS', 'LIST_TICKETS',
             'LIST_INVENTORY', 'LIST_TRANSACTIONS', 'DASHBOARD_SUMMARY',
             // v5: full system coverage
             'CREATE_VENDOR', 'CREATE_PURCHASE_ORDER', 'CREATE_INVENTORY',
@@ -562,7 +596,7 @@ async function processCommand(userMessage, context = {}) {
             'QUERY_DATA', 'CREATE_TRANSACTION', 'DETECT_ANOMALY', 'EXTRACT_DOCUMENT', 'PREDICT_MAINTENANCE',
             'MATCH_INVOICE', 'FORECAST_BUDGET', 'CREATE_ASSET', 'REFILL_INVENTORY', 'GENERAL',
             'CREATE_TICKET', 'UPDATE_ASSET', 'GET_LOW_STOCK', 'GET_ASSET_STATS', 'SET_BUDGET',
-            'LIST_ASSETS', 'LIST_VENDORS', 'LIST_PURCHASE_ORDERS', 'LIST_TICKETS', 'LIST_INVENTORY',
+            'LIST_ASSETS', 'LIST_VENDORS', 'LIST_REQUISITIONS', 'LIST_RFQS', 'LIST_PURCHASE_ORDERS', 'LIST_TICKETS', 'LIST_INVENTORY',
             'LIST_TRANSACTIONS', 'DASHBOARD_SUMMARY', 'CREATE_VENDOR', 'CREATE_PURCHASE_ORDER',
             'CREATE_INVENTORY', 'VIEW_PROFIT_LOSS', 'VIEW_CASH_FLOW', 'VIEW_BALANCE_SHEET',
             'LIST_GL_ACCOUNTS', 'CREATE_GL_ACCOUNT', 'VIEW_AUDIT_LOGS', 'LIST_NOTIFICATIONS',
@@ -599,6 +633,8 @@ async function processCommand(userMessage, context = {}) {
             LIST_INVENTORY:         ['⚠️ Show low stock only', '📦 Refill critical stock', '➕ Add inventory item'],
             GET_LOW_STOCK:          ['📦 Refill lowest stock', '📋 Create purchase order', '📊 Show all inventory'],
             REFILL_INVENTORY:       ['📋 View new PO', '📦 Check stock levels', '✅ Approve pending POs'],
+            LIST_REQUISITIONS:      ['✅ Show submitted requisitions', '🔁 Convert approved PR to PO', '📋 List pending POs'],
+            LIST_RFQS:              ['📨 Show sent RFQs', '🏆 Show awarded RFQs', '📋 Create PO from RFQ winner'],
             LIST_PURCHASE_ORDERS:   ['✅ Approve a PO', '➕ Create new PO', '📦 Check inventory'],
             APPROVE_PURCHASE:       ['📦 Check inventory levels', '📋 List all POs', '💰 View cash flow'],
             CREATE_PURCHASE_ORDER:  ['✅ Approve this PO', '🏢 List vendors', '📦 Check inventory'],

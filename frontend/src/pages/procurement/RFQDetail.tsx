@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { ArrowLeft, Loader2, Building2, CheckCircle, Scale, DollarSign, Calendar, Upload, Award } from 'lucide-react';
+import { ArrowLeft, Loader2, Building2, CheckCircle, Scale, DollarSign, Calendar, Upload, Award, Link2 } from 'lucide-react';
 import api from '../../lib/api';
 
 interface RFQItem {
@@ -71,6 +71,8 @@ export function RFQDetail() {
 
     // Awarding
     const [isAwarding, setIsAwarding] = useState<string | null>(null);
+    const [linkCopied, setLinkCopied] = useState(false);
+    const [selectedVendorCode, setSelectedVendorCode] = useState('');
 
     useEffect(() => {
         if (id) {
@@ -82,15 +84,20 @@ export function RFQDetail() {
     const fetchRFQ = async () => {
         try {
             setIsLoading(true);
-            const res = await api.get(`/rfq/${id}`);
+            const res = await api.get(`/procurement-ext/rfq/${id}`);
             if (res.data.success) {
-                setRfq(res.data.data);
+                const data = res.data.data || {};
+                setRfq({
+                    ...data,
+                    items: Array.isArray(data.items) ? data.items : [],
+                    quotations: Array.isArray(data.quotations) ? data.quotations : [],
+                });
 
                 // If there are quotes, also fetch comparison
-                if (res.data.data.quotations?.length > 0) {
-                    const compRes = await api.get(`/rfq/${id}/compare`);
+                if (Array.isArray(data.quotations) && data.quotations.length > 0) {
+                    const compRes = await api.get(`/procurement-ext/rfq/${id}/compare`);
                     if (compRes.data.success) {
-                        setComparison(compRes.data.data.comparison);
+                        setComparison(Array.isArray(compRes.data.data?.comparison) ? compRes.data.data.comparison : []);
                     }
                 }
             }
@@ -116,7 +123,7 @@ export function RFQDetail() {
         e.preventDefault();
         try {
             setIsSubmittingQuote(true);
-            const res = await api.post(`/rfq/${id}/quotation`, {
+            const res = await api.post(`/procurement-ext/rfq/${id}/quotation`, {
                 ...newQuote,
                 totalAmount: parseFloat(newQuote.totalAmount)
             });
@@ -138,7 +145,7 @@ export function RFQDetail() {
 
         try {
             setIsAwarding(quotationId);
-            const res = await api.post(`/rfq/${id}/award`, { quotationId });
+            const res = await api.post(`/procurement-ext/rfq/${id}/award`, { quotationId });
             if (res.data.success) {
                 alert(`Success: ${res.data.message}`);
                 fetchRFQ();
@@ -147,6 +154,21 @@ export function RFQDetail() {
             alert(error.response?.data?.message || 'Failed to award RFQ');
         } finally {
             setIsAwarding(null);
+        }
+    };
+
+    const handleCopyVendorBidLink = async () => {
+        if (!rfq?.id) return;
+        const baseUrl = `${window.location.origin}/vendor/rfq/${rfq.id}/bid`;
+        const url = selectedVendorCode
+            ? `${baseUrl}?vendorCode=${encodeURIComponent(selectedVendorCode)}`
+            : baseUrl;
+        try {
+            await navigator.clipboard.writeText(url);
+            setLinkCopied(true);
+            setTimeout(() => setLinkCopied(false), 1800);
+        } catch {
+            alert(`Copy failed. Share this link manually:\n${url}`);
         }
     };
 
@@ -189,12 +211,33 @@ export function RFQDetail() {
                         <p className="font-mono text-[var(--primary)]">{rfq.rfqNumber}</p>
                     </div>
                     {rfq.status !== 'AWARDED' && (
-                        <button
-                            onClick={() => setIsAddingQuote(true)}
-                            className="flex items-center gap-2 px-4 py-2 bg-[var(--bg-overlay)] border border-[var(--border-color)] hover:border-[var(--primary)] text-[var(--text-primary)] rounded-lg transition-colors"
-                        >
-                            <Upload className="w-4 h-4" /> Record Quotation
-                        </button>
+                        <div className="flex flex-wrap items-center gap-2">
+                            <select
+                                value={selectedVendorCode}
+                                onChange={(e) => setSelectedVendorCode(e.target.value)}
+                                className="px-3 py-2 bg-[var(--bg-overlay)] border border-[var(--border-color)] text-[var(--text-primary)] rounded-lg text-sm"
+                                title="Optional: choose a vendor to prefill vendor code in link"
+                            >
+                                <option value="">Copy Generic Link</option>
+                                {vendors.map((v) => (
+                                    <option key={v.id} value={v.vendorCode}>
+                                        {v.name} ({v.vendorCode})
+                                    </option>
+                                ))}
+                            </select>
+                            <button
+                                onClick={handleCopyVendorBidLink}
+                                className="flex items-center gap-2 px-4 py-2 bg-[var(--bg-overlay)] border border-[var(--border-color)] hover:border-[var(--primary)] text-[var(--text-primary)] rounded-lg transition-colors"
+                            >
+                                <Link2 className="w-4 h-4" /> {linkCopied ? 'Link Copied' : 'Copy Vendor Bid Link'}
+                            </button>
+                            <button
+                                onClick={() => setIsAddingQuote(true)}
+                                className="flex items-center gap-2 px-4 py-2 bg-[var(--bg-overlay)] border border-[var(--border-color)] hover:border-[var(--primary)] text-[var(--text-primary)] rounded-lg transition-colors"
+                            >
+                                <Upload className="w-4 h-4" /> Record Quotation
+                            </button>
+                        </div>
                     )}
                 </div>
 

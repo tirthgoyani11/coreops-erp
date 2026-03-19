@@ -56,6 +56,7 @@ const AssetMap = lazy(() => import('./pages/AssetMap').then(m => ({ default: m.A
 const PurchaseRequisitions = lazy(() => import('./pages/procurement/PurchaseRequisitions').then(m => ({ default: m.PurchaseRequisitions })));
 const RFQList = lazy(() => import('./pages/procurement/RFQList').then(m => ({ default: m.RFQList })));
 const RFQDetail = lazy(() => import('./pages/procurement/RFQDetail').then(m => ({ default: m.RFQDetail })));
+const VendorRFQBidPortal = lazy(() => import('./pages/procurement/VendorRFQBidPortal').then(m => ({ default: m.VendorRFQBidPortal })));
 const GoodsReceipt = lazy(() => import('./pages/procurement/GoodsReceipt').then(m => ({ default: m.GoodsReceipt })));
 const VendorList = lazy(() => import('./pages/procurement/VendorList').then(m => ({ default: m.VendorList })));
 const VendorForm = lazy(() => import('./pages/procurement/VendorForm').then(m => ({ default: m.VendorForm })));
@@ -131,6 +132,7 @@ function App() {
             <Route path="/register/:inviteToken" element={<Register />} />
             <Route path="/setup" element={<SetupWizard />} />
             <Route path="/access-denied" element={<AccessDenied />} />
+            <Route path="/vendor/rfq/:id/bid" element={<VendorRFQBidPortal />} />
 
             {/* Protected Routes inside MainLayout */}
             <Route element={<MainLayout />}>

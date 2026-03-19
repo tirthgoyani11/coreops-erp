@@ -52,7 +52,7 @@ exports.submitQuotation = asyncHandler(async (req, res, next) => {
     const { vendorId, totalAmount, items, validUntil, currency } = req.body;
     if (!vendorId || !totalAmount) return next(new AppError('Vendor and total amount required', 400));
 
-    const rfq = await prisma.rFQ.findUnique({ where: { id: req.params.id } });
+    const rfq = await prisma.rFQ.findUnique({ where: { id: req.params.id }, include: { items: true } });
     if (!rfq) return next(new AppError('RFQ not found', 404));
     if (rfq.status === 'AWARDED') return next(new AppError('RFQ already awarded', 400));
 
@@ -163,4 +163,143 @@ exports.awardRFQ = asyncHandler(async (req, res, next) => {
     });
 
     res.status(200).json({ success: true, message: `RFQ awarded. PO ${poNumber} created.`, data: { rfq: { status: 'AWARDED' }, po } });
+});
+
+// ── Public Vendor RFQ Detail (Portal) ─────────────────
+exports.getRFQPublicDetail = asyncHandler(async (req, res, next) => {
+    const rfq = await prisma.rFQ.findUnique({
+        where: { id: req.params.id },
+        include: {
+            items: true,
+            _count: { select: { quotations: true } },
+        },
+    });
+
+    if (!rfq) return next(new AppError('RFQ not found', 404));
+    if (rfq.status === 'AWARDED' || rfq.status === 'CLOSED') {
+        return next(new AppError(`This RFQ is ${rfq.status.toLowerCase()} and no longer accepting bids`, 400));
+    }
+
+    const data = {
+        id: rfq.id,
+        rfqNumber: rfq.rfqNumber,
+        title: rfq.title,
+        description: rfq.description,
+        status: rfq.status,
+        requiredByDate: rfq.requiredByDate,
+        createdAt: rfq.createdAt,
+        items: rfq.items,
+        quotesReceived: rfq._count.quotations,
+    };
+
+    res.status(200).json({ success: true, data });
+});
+
+// ── Public Vendor Quotation Submit (Portal) ───────────
+exports.submitQuotationPublic = asyncHandler(async (req, res, next) => {
+    const { vendorCode, email, totalAmount, currency, validUntil, items } = req.body;
+
+    if (!vendorCode || !totalAmount) {
+        return next(new AppError('Vendor code and total amount are required', 400));
+    }
+
+    const rfq = await prisma.rFQ.findUnique({ where: { id: req.params.id } });
+    if (!rfq) return next(new AppError('RFQ not found', 404));
+    if (rfq.status === 'AWARDED' || rfq.status === 'CLOSED') {
+        return next(new AppError(`This RFQ is ${rfq.status.toLowerCase()} and no longer accepting bids`, 400));
+    }
+
+    const vendor = await prisma.vendor.findUnique({
+        where: { vendorCode: String(vendorCode).trim() },
+        select: { id: true, email: true, name: true, isBlacklisted: true },
+    });
+
+    if (!vendor) return next(new AppError('Vendor not found for this vendor code', 404));
+    if (vendor.isBlacklisted) return next(new AppError('This vendor is currently blacklisted', 403));
+
+    if (vendor.email && email && String(vendor.email).toLowerCase() !== String(email).toLowerCase()) {
+        return next(new AppError('Vendor email does not match the registered vendor record', 400));
+    }
+
+    let parsedAmount = Number(totalAmount);
+
+    let normalizedItems = null;
+    if (Array.isArray(items) && items.length > 0) {
+        const rfqItemMap = new Map(rfq.items.map((i) => [i.id, i]));
+        normalizedItems = items.map((line) => {
+            const rfqItemId = String(line.rfqItemId || '').trim();
+            const rfqItem = rfqItemMap.get(rfqItemId);
+            if (!rfqItem) {
+                throw new AppError('Invalid RFQ item in bid payload', 400);
+            }
+
+            const unitPrice = Number(line.unitPrice);
+            if (!Number.isFinite(unitPrice) || unitPrice < 0) {
+                throw new AppError('Unit price must be a valid non-negative number', 400);
+            }
+
+            const quantity = Number(line.quantity || rfqItem.quantity || 0);
+            const totalPrice = unitPrice * quantity;
+
+            return {
+                rfqItemId,
+                description: line.description || rfqItem.description,
+                quantity,
+                unit: line.unit || rfqItem.unit || 'pieces',
+                unitPrice,
+                totalPrice,
+            };
+        });
+
+        parsedAmount = normalizedItems.reduce((sum, line) => sum + line.totalPrice, 0);
+    }
+
+    if (!Number.isFinite(parsedAmount) || parsedAmount <= 0) {
+        return next(new AppError('Total amount must be a positive number', 400));
+    }
+
+    const existing = await prisma.vendorQuotation.findFirst({
+        where: { rfqId: req.params.id, vendorId: vendor.id },
+        select: { id: true },
+    });
+
+    let quotation;
+    if (existing) {
+        quotation = await prisma.vendorQuotation.update({
+            where: { id: existing.id },
+            data: {
+                totalAmount: parsedAmount,
+                currency: currency || 'INR',
+                validUntil: validUntil ? new Date(validUntil) : null,
+                items: normalizedItems || items || null,
+                status: 'SUBMITTED',
+                submittedAt: new Date(),
+            },
+        });
+    } else {
+        quotation = await prisma.vendorQuotation.create({
+            data: {
+                rfqId: req.params.id,
+                vendorId: vendor.id,
+                totalAmount: parsedAmount,
+                currency: currency || 'INR',
+                validUntil: validUntil ? new Date(validUntil) : null,
+                items: normalizedItems || items || null,
+                attachments: [],
+                status: 'SUBMITTED',
+            },
+        });
+    }
+
+    if (rfq.status === 'DRAFT') {
+        await prisma.rFQ.update({ where: { id: req.params.id }, data: { status: 'SENT' } });
+    }
+
+    res.status(existing ? 200 : 201).json({
+        success: true,
+        message: existing
+            ? `Quotation updated successfully for ${vendor.name}`
+            : `Quotation submitted successfully for ${vendor.name}`,
+        data: quotation,
+    });
 });
