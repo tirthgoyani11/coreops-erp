@@ -42,6 +42,20 @@ function parseQrCode(raw: string): string {
     return decoded;
 }
 
+function extractUrl(raw: string): string | null {
+    const value = String(raw || '').trim();
+    const decoded = (() => {
+        try {
+            return decodeURIComponent(value);
+        } catch {
+            return value;
+        }
+    })();
+
+    if (/^https?:\/\//i.test(decoded)) return decoded;
+    return null;
+}
+
 export function ScanQR() {
     const navigate = useNavigate();
 
@@ -55,6 +69,7 @@ export function ScanQR() {
     const [rawCode, setRawCode] = useState('');
     const [manualCode, setManualCode] = useState('');
     const [asset, setAsset] = useState<any | null>(null);
+    const [externalAssetUrl, setExternalAssetUrl] = useState<string | null>(null);
     const [resolving, setResolving] = useState(false);
 
     const stopScanner = () => {
@@ -77,6 +92,7 @@ export function ScanQR() {
         const normalized = parseQrCode(code);
         setResolving(true);
         setError('');
+        setExternalAssetUrl(null);
 
         try {
             let resolvedAsset: any | null = null;
@@ -98,8 +114,15 @@ export function ScanQR() {
             setRawCode(code);
             setState('resolved');
             stopScanner();
-        } catch (err) {
-            setError(getErrorMessage(err));
+        } catch (err: any) {
+            const status = err?.response?.status;
+            const maybeUrl = extractUrl(code);
+            if (status === 404 && maybeUrl) {
+                setExternalAssetUrl(maybeUrl);
+                setError('Asset not found in current environment. This QR may belong to another deployment.');
+            } else {
+                setError(getErrorMessage(err));
+            }
             setState('error');
         } finally {
             setResolving(false);
@@ -279,6 +302,20 @@ export function ScanQR() {
                                         Report Issue
                                     </button>
                                 </div>
+                            </div>
+                        )}
+
+                        {!asset && externalAssetUrl && (
+                            <div className="rounded-xl border border-amber-500/25 bg-amber-500/10 p-3 space-y-2">
+                                <p className="text-xs text-amber-200">This QR points to another environment URL.</p>
+                                <a
+                                    href={externalAssetUrl}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="inline-flex items-center gap-2 text-xs px-3 py-2 rounded-lg border border-amber-500/40 text-amber-200 hover:bg-amber-500/20"
+                                >
+                                    Open Asset Link
+                                </a>
                             </div>
                         )}
                     </div>
