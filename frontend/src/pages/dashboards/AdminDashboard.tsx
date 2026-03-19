@@ -19,10 +19,10 @@ import { RecentActivity } from '../../components/dashboard/RecentActivity';
 import { DraggableWidget } from '../../components/dashboards/DraggableWidget';
 import { KpiAlertsModal } from '../../components/dashboards/KpiAlertsModal';
 import { DndContext, closestCenter } from '@dnd-kit/core';
-import { SortableContext, rectSortingStrategy } from '@dnd-kit/sortable';
+import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import api from '../../lib/api';
 import { formatCurrency } from '../../lib/utils';
-import { Plus } from 'lucide-react';
+
 
 // ... (skipping unchanged ApprovalItem and typeConfig definitions down to line 75) ...
 interface ApprovalItem {
@@ -181,13 +181,6 @@ export const AdminDashboard = memo(function AdminDashboard() {
         }
     };
 
-    const addToLayout = (id: string) => {
-        if (!layout.includes(id)) setLayout([...layout, id]);
-    };
-    
-    const removeFromLayout = (id: string) => {
-        setLayout(layout.filter(wId => wId !== id));
-    };
 
     const WIDGETS: Record<string, { span: string, label: string, element: React.JSX.Element }> = {
         'stat-assets': { span: 'col-span-1 sm:col-span-2 lg:col-span-3', label: 'Total Assets', element: <StatCard title="Total Assets" value={stats.totalAssets} icon={Package} color="primary" loading={loading} /> },
@@ -304,7 +297,7 @@ export const AdminDashboard = memo(function AdminDashboard() {
                     <div className="space-y-6 flex flex-col">
                         {layout.map((id) => (
                             <DraggableWidget key={id} id={id} isEditMode={isEditMode}>
-                                {WIDGETS[id]}
+                                {WIDGETS[id]?.element}
                             </DraggableWidget>
                         ))}
                     </div>
