@@ -47,6 +47,9 @@ exports.createTicket = async (req, res) => {
     try {
         const { assetId, issueDescription, priority, issueType, estimatedCost, images } = req.body;
 
+        const normalizedPriority = String(priority || 'MEDIUM').toUpperCase();
+        const normalizedIssueType = String(issueType || 'OTHER').toUpperCase();
+
         // Input validation
         if (!assetId || typeof assetId !== 'string') {
             return res.status(400).json({ success: false, message: 'assetId is required' });
@@ -55,9 +58,15 @@ exports.createTicket = async (req, res) => {
             return res.status(400).json({ success: false, message: 'issueDescription is required (min 5 characters)' });
         }
         const VALID_PRIORITIES = ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'];
-        if (priority && !VALID_PRIORITIES.includes(priority.toUpperCase())) {
+        if (!VALID_PRIORITIES.includes(normalizedPriority)) {
             return res.status(400).json({ success: false, message: `priority must be one of: ${VALID_PRIORITIES.join(', ')}` });
         }
+
+        const VALID_ISSUE_TYPES = ['HARDWARE_FAILURE', 'SOFTWARE_ISSUE', 'PREVENTIVE', 'UPGRADE', 'OTHER'];
+        if (!VALID_ISSUE_TYPES.includes(normalizedIssueType)) {
+            return res.status(400).json({ success: false, message: `issueType must be one of: ${VALID_ISSUE_TYPES.join(', ')}` });
+        }
+
         if (estimatedCost != null && (isNaN(estimatedCost) || Number(estimatedCost) < 0)) {
             return res.status(400).json({ success: false, message: 'estimatedCost must be a non-negative number' });
         }
@@ -87,8 +96,8 @@ exports.createTicket = async (req, res) => {
                 assetId,
                 officeId: resolvedOfficeId || asset.officeId,
                 issueDescription,
-                priority: priority || 'MEDIUM',
-                issueType: issueType || 'OTHER',
+                priority: normalizedPriority,
+                issueType: normalizedIssueType,
                 estimatedCost: estimatedCost || 0,
                 requestedById: req.user.id,
                 attachments: images || [],
@@ -103,6 +112,14 @@ exports.createTicket = async (req, res) => {
 
         res.status(201).json({ success: true, data: ticket });
     } catch (error) {
+        if (error?.code === 'P2003') {
+            return res.status(400).json({ success: false, message: 'Invalid relation data while creating ticket. Please verify selected asset/office.' });
+        }
+
+        if (error?.code === 'P2009' || error?.code === 'P2022') {
+            return res.status(400).json({ success: false, message: 'Invalid ticket field value. Please check issue type and priority.' });
+        }
+
         res.status(500).json({ success: false, message: 'Server Error', error: error.message });
     }
 };
