@@ -9,22 +9,23 @@ import {
     CheckCircle2,
     FileText,
     Receipt,
-    BellRing
+    BellRing,
+    Wallet,
+    Activity,
+    Building2,
+    ArrowUpRight,
+    ArrowDownRight,
 } from 'lucide-react';
 import { StatCard } from '../../components/dashboard/StatCard';
 import { DashboardChart } from '../../components/dashboard/DashboardChart';
 import { QuickActions } from '../../components/dashboard/QuickActions';
 import { Skeleton } from '../../components/ui/Skeleton';
 import { RecentActivity } from '../../components/dashboard/RecentActivity';
-import { DraggableWidget } from '../../components/dashboards/DraggableWidget';
 import { KpiAlertsModal } from '../../components/dashboards/KpiAlertsModal';
-import { DndContext, closestCenter } from '@dnd-kit/core';
-import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import api from '../../lib/api';
 import { formatCurrency } from '../../lib/utils';
+import { useAuthStore } from '../../stores/authStore';
 
-
-// ... (skipping unchanged ApprovalItem and typeConfig definitions down to line 75) ...
 interface ApprovalItem {
     id: string;
     type: 'MAINTENANCE' | 'PURCHASE_ORDER' | 'EXPENSE_CLAIM';
@@ -40,7 +41,7 @@ interface ApprovalItem {
 const typeConfig: Record<string, { label: string; color: string; icon: any }> = {
     MAINTENANCE: { label: 'Maintenance', color: 'bg-orange-500/10 text-orange-400 border-orange-500/20', icon: Wrench },
     PURCHASE_ORDER: { label: 'Purchase Order', color: 'bg-blue-500/10 text-blue-400 border-blue-500/20', icon: FileText },
-    EXPENSE_CLAIM: { label: 'Expense', color: 'bg-purple-500/10 text-purple-400 border-purple-500/20', icon: Receipt },
+    EXPENSE_CLAIM: { label: 'Expense', color: 'bg-fuchsia-500/10 text-fuchsia-400 border-fuchsia-500/20', icon: Receipt },
 };
 
 interface DashboardStats {
@@ -57,7 +58,21 @@ interface DashboardStats {
     monthlyExpense: number;
 }
 
+function getPriorityClass(priority: string) {
+    const p = String(priority || '').toUpperCase();
+    if (p === 'CRITICAL' || p === 'HIGH') {
+        return 'bg-rose-500/10 text-rose-400 border-rose-500/20';
+    }
+    if (p === 'MEDIUM') {
+        return 'bg-amber-500/10 text-amber-400 border-amber-500/20';
+    }
+    return 'bg-zinc-500/10 text-zinc-300 border-zinc-500/20';
+}
+
 export const AdminDashboard = memo(function AdminDashboard() {
+    const { user } = useAuthStore();
+    const isSuperAdmin = user?.role === 'SUPER_ADMIN';
+
     const [stats, setStats] = useState<DashboardStats>({
         totalAssets: 0,
         activeAssets: 0,
@@ -73,41 +88,23 @@ export const AdminDashboard = memo(function AdminDashboard() {
     });
     const [approvals, setApprovals] = useState<ApprovalItem[]>([]);
     const [loading, setLoading] = useState(true);
-
     const [assetCategoryData, setAssetCategoryData] = useState<{ name: string; value: number }[]>([]);
     const [maintenanceTrendData, setMaintenanceTrendData] = useState<{ name: string; value: number }[]>([]);
     const [inventoryData, setInventoryData] = useState<{ name: string; value: number }[]>([]);
-    const [isEditMode, setIsEditMode] = useState(false);
     const [isAlertsModalOpen, setIsAlertsModalOpen] = useState(false);
-    
-    // New granular layout
-    const defaultLayout = [
-        'stat-assets', 'stat-tickets', 'stat-approvals', 'stat-value',
-        'stat-inventory', 'stat-lowstock', 'stat-vendors', 'stat-activeassets',
-        'chart-assets', 'chart-maintenance', 'chart-inventory',
-        'activity-log', 'approval-queue', 'quick-actions'
-    ];
-    const [layout, setLayout] = useState(defaultLayout);
 
     useEffect(() => {
         const fetchDashboardData = async () => {
             try {
                 setLoading(true);
 
-                const [dashboardRes, categoryRes, trendsRes, inventoryRes, approvalsRes, userRes] = await Promise.allSettled([
+                const [dashboardRes, categoryRes, trendsRes, inventoryRes, approvalsRes] = await Promise.allSettled([
                     api.get('/analytics/dashboard'),
                     api.get('/analytics/assets/by-category'),
                     api.get('/analytics/maintenance/trends?months=6'),
                     api.get('/analytics/inventory/status'),
                     api.get('/analytics/pending-approvals?limit=8'),
-                    api.get('/users/me')
                 ]);
-
-                if (userRes.status === 'fulfilled' && userRes.value.data?.data?.preferences) {
-                    if (Array.isArray(userRes.value.data.data.preferences)) {
-                         setLayout(userRes.value.data.data.preferences);
-                    }
-                }
 
                 if (dashboardRes.status === 'fulfilled' && dashboardRes.value.data?.data) {
                     const d = dashboardRes.value.data.data;
@@ -153,156 +150,195 @@ export const AdminDashboard = memo(function AdminDashboard() {
         };
 
         fetchDashboardData();
-
         const interval = setInterval(fetchDashboardData, 5 * 60 * 1000);
         return () => clearInterval(interval);
     }, []);
 
-    const handleDragEnd = (event: any) => {
-        const { active, over } = event;
-        if (active && over && active.id !== over.id) {
-            setLayout((items) => {
-                const oldIndex = items.indexOf(active.id);
-                const newIndex = items.indexOf(over.id);
-                const newLayout = [...items];
-                newLayout.splice(oldIndex, 1);
-                newLayout.splice(newIndex, 0, active.id);
-                return newLayout;
-            });
-        }
-    };
-
-    const saveLayout = async () => {
-        try {
-            await api.put('/users/me/dashboard', { preferences: layout });
-            setIsEditMode(false);
-        } catch (error) {
-            console.error('Failed to save layout:', error);
-        }
-    };
-
-
-    const WIDGETS: Record<string, { span: string, label: string, element: React.JSX.Element }> = {
-        'stat-assets': { span: 'col-span-1 sm:col-span-2 lg:col-span-3', label: 'Total Assets', element: <StatCard title="Total Assets" value={stats.totalAssets} icon={Package} color="primary" loading={loading} /> },
-        'stat-tickets': { span: 'col-span-1 sm:col-span-2 lg:col-span-3', label: 'Active Tickets', element: <StatCard title="Active Tickets" value={stats.activeTickets} icon={Wrench} color="blue" loading={loading} /> },
-        'stat-approvals': { span: 'col-span-1 sm:col-span-2 lg:col-span-3', label: 'Pending Approvals', element: <StatCard title="Pending Approvals" value={stats.pendingApprovals} icon={ClipboardCheck} color="orange" loading={loading} /> },
-        'stat-value': { span: 'col-span-1 sm:col-span-2 lg:col-span-3', label: 'Asset Book Value', element: <StatCard title="Asset Book Value" value={formatCurrency(stats.totalAssetValue)} subtitle={`Cost: ${formatCurrency(stats.totalAssetPurchaseValue)}`} icon={DollarSign} color="green" loading={loading} /> },
-
-        'stat-inventory': { span: 'col-span-1 sm:col-span-2 lg:col-span-3 h-full', label: 'Total Inventory', element: (
-            loading ? <Skeleton variant="card" className="h-full" /> : 
-            <div className="bg-[var(--bg-card)] border border-[var(--border-color)] rounded-2xl p-4 h-full flex flex-col justify-center min-h-[90px]">
-                <p className="text-xs text-[var(--text-secondary)] mb-1">Inventory Items</p>
-                <p className="text-xl font-bold text-[var(--text-primary)]">{stats.totalInventory}</p>
-            </div>
-        )},
-        'stat-lowstock': { span: 'col-span-1 sm:col-span-2 lg:col-span-3 h-full', label: 'Low Stock', element: (
-            loading ? <Skeleton variant="card" className="h-full" /> : 
-            <div className="bg-[var(--bg-card)] border border-[var(--border-color)] rounded-2xl p-4 h-full flex flex-col justify-center min-h-[90px]">
-                <div className="flex items-center gap-1 mb-1">
-                    <AlertTriangle className="w-3 h-3 text-amber-400" />
-                    <p className="text-xs text-[var(--text-secondary)]">Low Stock</p>
-                </div>
-                <p className="text-xl font-bold text-amber-400">{stats.lowStock}</p>
-            </div>
-        )},
-        'stat-vendors': { span: 'col-span-1 sm:col-span-2 lg:col-span-3 h-full', label: 'Total Vendors', element: (
-             loading ? <Skeleton variant="card" className="h-full" /> : 
-            <div className="bg-[var(--bg-card)] border border-[var(--border-color)] rounded-2xl p-4 h-full flex flex-col justify-center min-h-[90px]">
-                <p className="text-xs text-[var(--text-secondary)] mb-1">Vendors</p>
-                <p className="text-xl font-bold text-[var(--text-primary)]">{stats.totalVendors}</p>
-            </div>
-        )},
-        'stat-activeassets': { span: 'col-span-1 sm:col-span-2 lg:col-span-3 h-full', label: 'Active Assets', element: (
-             loading ? <Skeleton variant="card" className="h-full" /> : 
-            <div className="bg-[var(--bg-card)] border border-[var(--border-color)] rounded-2xl p-4 h-full flex flex-col justify-center min-h-[90px]">
-                <p className="text-xs text-[var(--text-secondary)] mb-1">Active Assets</p>
-                <p className="text-xl font-bold text-emerald-400">{stats.activeAssets}</p>
-            </div>
-        )},
-
-        'chart-assets': { span: 'col-span-1 lg:col-span-4 max-h-[400px]', label: 'Assets Chart', element: <DashboardChart type="pie" data={assetCategoryData} title="Assets by Category" loading={loading} /> },
-        'chart-maintenance': { span: 'col-span-1 lg:col-span-4 max-h-[400px]', label: 'Maintenance Trend Chart', element: <DashboardChart type="area" data={maintenanceTrendData} title="Monthly Maintenance Costs" loading={loading} /> },
-        'chart-inventory': { span: 'col-span-1 lg:col-span-4 max-h-[400px]', label: 'Inventory Chart', element: <DashboardChart type="bar" data={inventoryData} title="Inventory by Type" loading={loading} /> },
-
-        'activity-log': { span: 'col-span-1 lg:col-span-8', label: 'Activity Log', element: <div className="text-white h-full"><RecentActivity /></div> },
-        'approval-queue': { span: 'col-span-1 lg:col-span-4', label: 'Approval Queue', element: (
-            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="bg-[var(--bg-card)] border border-[var(--border-color)] rounded-2xl p-6 h-full flex flex-col">
-                 <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-[var(--text-primary)] font-medium">Approval Queue</h3>
-                    <span className="text-xs text-[var(--text-secondary)]">
-                        {approvals.length} pending
-                    </span>
-                </div>
-                <div className="space-y-3 flex-1 overflow-y-auto pr-1 custom-scrollbar">
-                    {approvals.length === 0 ? (
-                        <div className="text-center py-6 text-[var(--text-secondary)] my-auto h-full flex flex-col justify-center">
-                            <CheckCircle2 className="w-8 h-8 mx-auto mb-2 opacity-50" />
-                            <p className="text-sm">No pending approvals</p>
-                        </div>
-                    ) : (
-                        approvals.slice(0, 5).map((item) => {
-                            const cfg = typeConfig[item.type] || typeConfig.MAINTENANCE;
-                            const TypeIcon = cfg.icon;
-                            return (
-                                <div key={item.id} className="p-3 rounded-xl bg-[var(--bg-overlay)] border border-[var(--border-color)]">
-                                    <div className="flex items-center gap-2 mb-1 flex-wrap">
-                                        <span className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border ${cfg.color}`}>
-                                            <TypeIcon className="w-3 h-3" />
-                                            {cfg.label}
-                                        </span>
-                                        <span className="text-xs font-mono text-[var(--primary)]">#{item.number}</span>
-                                    </div>
-                                    <p className="text-sm text-[var(--text-primary)] font-medium truncate">{item.title}</p>
-                                </div>
-                            );
-                        })
-                    )}
-                </div>
-            </motion.div>
-        )},
-        'quick-actions': { span: 'col-span-1 lg:col-span-12', label: 'Quick Actions', element: <QuickActions /> },
-    };
+    const netCashFlow = stats.monthlyIncome - stats.monthlyExpense;
+    const utilization = stats.totalAssets > 0 ? Math.round((stats.activeAssets / stats.totalAssets) * 100) : 0;
 
     return (
-        <div className="p-6 lg:p-8 space-y-6 max-w-[1600px] mx-auto pb-24">
-            <div className="flex items-center justify-between">
+        <div className="p-6 lg:p-8 space-y-6 max-w-[1700px] mx-auto pb-24">
+            <div className="flex items-start justify-between gap-4 flex-wrap">
                 <div>
-                    <h1 className="text-2xl lg:text-3xl font-bold text-[var(--text-primary)]">Admin Dashboard</h1>
-                    <p className="text-[var(--text-secondary)] mt-1">Enterprise overview and system metrics</p>
+                    <h1 className="text-2xl lg:text-3xl font-bold text-[var(--text-primary)]">
+                        {isSuperAdmin ? 'Super Admin Command Center' : 'Admin Operations Dashboard'}
+                    </h1>
+                    <p className="text-[var(--text-secondary)] mt-1">
+                        Enterprise performance, risk signals, approvals, and operational throughput in one view.
+                    </p>
                 </div>
-                <div className="flex items-center gap-4 text-xs">
-                    <button onClick={() => setIsAlertsModalOpen(true)} className="px-4 py-2 border border-[var(--border-color)] hover:bg-[var(--bg-card-hover)] text-[var(--text-primary)] rounded-lg font-medium transition-colors flex items-center gap-2">
+                <div className="flex items-center gap-3 text-xs">
+                    <button
+                        onClick={() => setIsAlertsModalOpen(true)}
+                        className="px-4 py-2 border border-[var(--border-color)] hover:bg-[var(--bg-card-hover)] text-[var(--text-primary)] rounded-lg font-medium transition-colors flex items-center gap-2"
+                    >
                         <BellRing className="w-4 h-4" />
-                        Alerts
+                        KPI Alerts
                     </button>
-                    {isEditMode ? (
-                        <>
-                            <button onClick={saveLayout} className="px-4 py-2 bg-[var(--primary)] text-black rounded-lg font-bold">Save Layout</button>
-                            <button onClick={() => setIsEditMode(false)} className="px-4 py-2 bg-[var(--bg-card-hover)] text-[var(--text-primary)] rounded-lg font-medium">Cancel</button>
-                        </>
-                    ) : (
-                        <button onClick={() => setIsEditMode(true)} className="px-4 py-2 border border-[var(--border-color)] hover:bg-[var(--bg-card-hover)] text-[var(--text-primary)] rounded-lg font-medium transition-colors">
-                            Customize Layout
-                        </button>
-                    )}
-                    <div className="flex items-center gap-2 ml-4">
+                    <div className="flex items-center gap-2">
                         <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
                         <span className="text-[var(--text-secondary)]">Live</span>
                     </div>
                 </div>
             </div>
 
-            <DndContext collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-                <SortableContext items={layout} strategy={verticalListSortingStrategy}>
-                    <div className="space-y-6 flex flex-col">
-                        {layout.map((id) => (
-                            <DraggableWidget key={id} id={id} isEditMode={isEditMode}>
-                                {WIDGETS[id]?.element}
-                            </DraggableWidget>
-                        ))}
+            <div className="grid grid-cols-1 xl:grid-cols-12 gap-6">
+                <motion.section
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="xl:col-span-8 rounded-2xl border border-emerald-500/20 bg-gradient-to-br from-emerald-500/15 via-emerald-400/5 to-transparent p-6"
+                >
+                    {loading ? (
+                        <Skeleton variant="card" className="h-[220px]" />
+                    ) : (
+                        <>
+                            <div className="flex items-center justify-between mb-5">
+                                <div className="flex items-center gap-3">
+                                    <div className="w-11 h-11 rounded-xl bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center">
+                                        <Wallet className="w-5 h-5 text-emerald-400" />
+                                    </div>
+                                    <div>
+                                        <p className="text-[var(--text-secondary)] text-sm">Monthly Financial Posture</p>
+                                        <h2 className="text-xl font-semibold text-[var(--text-primary)]">Cashflow Spotlight</h2>
+                                    </div>
+                                </div>
+                                <div className={`text-sm px-3 py-1 rounded-full border ${netCashFlow >= 0 ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30' : 'bg-rose-500/10 text-rose-400 border-rose-500/30'}`}>
+                                    {netCashFlow >= 0 ? 'Positive Flow' : 'Negative Flow'}
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                <div className="rounded-xl bg-[var(--bg-card)]/80 border border-[var(--border-color)] p-4">
+                                    <p className="text-xs text-[var(--text-secondary)] mb-1">Income (Month)</p>
+                                    <p className="text-2xl font-bold text-emerald-400">{formatCurrency(stats.monthlyIncome)}</p>
+                                    <p className="text-xs text-[var(--text-secondary)] mt-1 flex items-center gap-1"><ArrowUpRight className="w-3 h-3" /> Revenue inflow</p>
+                                </div>
+                                <div className="rounded-xl bg-[var(--bg-card)]/80 border border-[var(--border-color)] p-4">
+                                    <p className="text-xs text-[var(--text-secondary)] mb-1">Expense (Month)</p>
+                                    <p className="text-2xl font-bold text-amber-400">{formatCurrency(stats.monthlyExpense)}</p>
+                                    <p className="text-xs text-[var(--text-secondary)] mt-1 flex items-center gap-1"><ArrowDownRight className="w-3 h-3" /> Operational outflow</p>
+                                </div>
+                                <div className="rounded-xl bg-[var(--bg-card)]/80 border border-[var(--border-color)] p-4">
+                                    <p className="text-xs text-[var(--text-secondary)] mb-1">Net Position</p>
+                                    <p className={`text-2xl font-bold ${netCashFlow >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                                        {formatCurrency(netCashFlow)}
+                                    </p>
+                                    <p className="text-xs text-[var(--text-secondary)] mt-1">Income minus expense</p>
+                                </div>
+                            </div>
+                        </>
+                    )}
+                </motion.section>
+
+                <motion.section
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.05 }}
+                    className="xl:col-span-4 bg-[var(--bg-card)] border border-[var(--border-color)] rounded-2xl p-6"
+                >
+                    <div className="flex items-center justify-between mb-4">
+                        <h3 className="text-[var(--text-primary)] font-semibold">System Signals</h3>
+                        <Activity className="w-4 h-4 text-[var(--primary)]" />
                     </div>
-                </SortableContext>
-            </DndContext>
+                    {loading ? (
+                        <Skeleton variant="card" className="h-[180px]" />
+                    ) : (
+                        <div className="space-y-3">
+                            <div className="rounded-xl bg-[var(--bg-overlay)] border border-[var(--border-color)] p-3 flex items-center justify-between">
+                                <span className="text-sm text-[var(--text-secondary)]">Pending approvals</span>
+                                <span className="text-lg font-bold text-amber-400">{stats.pendingApprovals}</span>
+                            </div>
+                            <div className="rounded-xl bg-[var(--bg-overlay)] border border-[var(--border-color)] p-3 flex items-center justify-between">
+                                <span className="text-sm text-[var(--text-secondary)]">Open tickets</span>
+                                <span className="text-lg font-bold text-blue-400">{stats.activeTickets}</span>
+                            </div>
+                            <div className="rounded-xl bg-[var(--bg-overlay)] border border-[var(--border-color)] p-3 flex items-center justify-between">
+                                <span className="text-sm text-[var(--text-secondary)]">Low stock skus</span>
+                                <span className="text-lg font-bold text-rose-400">{stats.lowStock}</span>
+                            </div>
+                            <div className="rounded-xl bg-[var(--bg-overlay)] border border-[var(--border-color)] p-3 flex items-center justify-between">
+                                <span className="text-sm text-[var(--text-secondary)]">Asset utilization</span>
+                                <span className="text-lg font-bold text-emerald-400">{utilization}%</span>
+                            </div>
+                        </div>
+                    )}
+                </motion.section>
+            </div>
+
+            <section className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+                <StatCard title="Total Assets" value={stats.totalAssets} icon={Package} color="primary" loading={loading} />
+                <StatCard title="Active Assets" value={stats.activeAssets} icon={CheckCircle2} color="green" loading={loading} />
+                <StatCard title="Inventory Items" value={stats.totalInventory} icon={Building2} color="blue" loading={loading} />
+                <StatCard title="Asset Book Value" value={formatCurrency(stats.totalAssetValue)} subtitle={`Cost: ${formatCurrency(stats.totalAssetPurchaseValue)}`} icon={DollarSign} color="orange" loading={loading} />
+            </section>
+
+            <section className="grid grid-cols-1 xl:grid-cols-12 gap-6">
+                <div className="xl:col-span-4">
+                    <DashboardChart type="donut" data={assetCategoryData} title="Asset Category Distribution" loading={loading} height={280} />
+                </div>
+                <div className="xl:col-span-4">
+                    <DashboardChart type="area" data={maintenanceTrendData} title="Maintenance Cost Trend" loading={loading} height={280} />
+                </div>
+                <div className="xl:col-span-4">
+                    <DashboardChart type="bar" data={inventoryData} title="Inventory by Type" loading={loading} height={280} />
+                </div>
+            </section>
+
+            <section className="grid grid-cols-1 xl:grid-cols-12 gap-6">
+                <div className="xl:col-span-8 min-h-[520px]">
+                    <RecentActivity />
+                </div>
+
+                <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="xl:col-span-4 bg-[var(--bg-card)] border border-[var(--border-color)] rounded-2xl p-6 min-h-[520px] flex flex-col"
+                >
+                    <div className="flex items-center justify-between mb-4">
+                        <h3 className="text-[var(--text-primary)] font-semibold">Approval Queue</h3>
+                        <span className="text-xs text-[var(--text-secondary)]">{approvals.length} pending</span>
+                    </div>
+
+                    <div className="space-y-3 flex-1 overflow-y-auto pr-1">
+                        {loading ? (
+                            <Skeleton variant="card" className="h-[260px]" />
+                        ) : approvals.length === 0 ? (
+                            <div className="text-center py-8 text-[var(--text-secondary)] my-auto h-full flex flex-col justify-center">
+                                <CheckCircle2 className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                                <p className="text-sm">No pending approvals</p>
+                            </div>
+                        ) : (
+                            approvals.slice(0, 8).map((item) => {
+                                const cfg = typeConfig[item.type] || typeConfig.MAINTENANCE;
+                                const TypeIcon = cfg.icon;
+                                return (
+                                    <div key={item.id} className="p-3 rounded-xl bg-[var(--bg-overlay)] border border-[var(--border-color)]">
+                                        <div className="flex items-center justify-between gap-2 mb-1">
+                                            <span className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border ${cfg.color}`}>
+                                                <TypeIcon className="w-3 h-3" />
+                                                {cfg.label}
+                                            </span>
+                                            <span className={`text-[10px] px-2 py-0.5 rounded-full border ${getPriorityClass(item.priority)}`}>
+                                                {item.priority || 'LOW'}
+                                            </span>
+                                        </div>
+                                        <p className="text-sm text-[var(--text-primary)] font-medium truncate">{item.title}</p>
+                                        <div className="mt-1 flex items-center justify-between text-xs text-[var(--text-secondary)]">
+                                            <span className="font-mono">#{item.number}</span>
+                                            <span>{formatCurrency(item.amount || 0)}</span>
+                                        </div>
+                                    </div>
+                                );
+                            })
+                        )}
+                    </div>
+                </motion.div>
+            </section>
+
+            <section>
+                <QuickActions title="Operational Shortcuts" />
+            </section>
 
             <KpiAlertsModal isOpen={isAlertsModalOpen} onClose={() => setIsAlertsModalOpen(false)} />
         </div>
