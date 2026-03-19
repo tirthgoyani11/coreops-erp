@@ -18,6 +18,14 @@ let providerStatus = {
     ollama: { available: null, lastCheck: 0 },
 };
 
+function getProviderOrder(preferred) {
+    const normalized = String(preferred || '').trim().toLowerCase();
+    const valid = ['kimi', 'kaggle', 'ollama'];
+    const defaultOrder = ['kimi', 'kaggle', 'ollama'];
+    if (!valid.includes(normalized)) return defaultOrder;
+    return [normalized, ...defaultOrder.filter((p) => p !== normalized)];
+}
+
 /**
  * Quick health probe — returns true/false in <3s
  */
@@ -118,24 +126,32 @@ async function callOllama(model, prompt, options = {}) {
 // ─── Public API ─────────────────────────────────────────
 
 async function reasoning(prompt, options = {}) {
-    // Tier 0: Kimi K2.5 via NVIDIA NIM
-    const kimi = await kimiService.generateText(prompt, {
-        systemPrompt: options.systemPrompt,
-        maxTokens: options.maxTokens,
-        temperature: options.temperature,
-    });
-    if (kimi?.text) return { ...kimi, source: 'kimi-k2.5' };
+    const order = getProviderOrder(options.providerPreference);
+    for (const provider of order) {
+        if (provider === 'kimi') {
+            const kimi = await kimiService.generateText(prompt, {
+                systemPrompt: options.systemPrompt,
+                maxTokens: options.maxTokens,
+                temperature: options.temperature,
+            });
+            if (kimi?.text) return { ...kimi, source: 'kimi-k2.5' };
+        }
 
-    // Tier 1: Kaggle GPU
-    const kaggle = await callKaggle('/api/reasoning', {
-        prompt, system_prompt: options.systemPrompt,
-        max_tokens: options.maxTokens, temperature: options.temperature,
-    });
-    if (kaggle?.text) return { ...kaggle, source: 'kaggle' };
+        if (provider === 'kaggle') {
+            const kaggle = await callKaggle('/api/reasoning', {
+                prompt,
+                system_prompt: options.systemPrompt,
+                max_tokens: options.maxTokens,
+                temperature: options.temperature,
+            });
+            if (kaggle?.text) return { ...kaggle, source: 'kaggle' };
+        }
 
-    // Tier 2: Local Ollama
-    const ollama = await callOllama('planning', prompt, options);
-    if (ollama?.text) return { ...ollama, source: 'ollama' };
+        if (provider === 'ollama') {
+            const ollama = await callOllama(options.modelPreference || 'planning', prompt, options);
+            if (ollama?.text) return { ...ollama, source: 'ollama' };
+        }
+    }
 
     return { text: null, source: 'none' };
 }
@@ -146,26 +162,34 @@ async function vision(imageBase64, prompt = 'Extract all text from this document
     return { text: null, source: 'none' };
 }
 
-async function intent(prompt, systemPrompt) {
-    // Tier 0: Kimi K2.5 via NVIDIA NIM
-    const kimi = await kimiService.generateJSON(prompt, {
-        systemPrompt,
-        temperature: 0.1,
-        maxTokens: 512,
-    });
-    if (kimi?.parsed) return { ...kimi, source: 'kimi-k2.5' };
+async function intent(prompt, systemPrompt, options = {}) {
+    const order = getProviderOrder(options.providerPreference);
 
-    // Tier 1: Kaggle GPU
-    const kaggle = await callKaggle('/api/intent', { prompt, system_prompt: systemPrompt });
-    if (kaggle?.parsed) return { ...kaggle, source: 'kaggle' };
+    for (const provider of order) {
+        if (provider === 'kimi') {
+            const kimi = await kimiService.generateJSON(prompt, {
+                systemPrompt,
+                temperature: 0.1,
+                maxTokens: 512,
+            });
+            if (kimi?.parsed) return { ...kimi, source: 'kimi-k2.5' };
+        }
 
-    // Tier 2: Ollama JSON generation
-    if (await probeProvider('ollama')) {
-        try {
-            const aiService = require('./aiService');
-            const result = await aiService.generateJSON('intent', prompt, { systemPrompt, temperature: 0.1 });
-            if (result?.parsed) return { ...result, source: 'ollama' };
-        } catch { }
+        if (provider === 'kaggle') {
+            const kaggle = await callKaggle('/api/intent', { prompt, system_prompt: systemPrompt });
+            if (kaggle?.parsed) return { ...kaggle, source: 'kaggle' };
+        }
+
+        if (provider === 'ollama' && await probeProvider('ollama')) {
+            try {
+                const aiService = require('./aiService');
+                const result = await aiService.generateJSON(options.modelPreference || 'intent', prompt, {
+                    systemPrompt,
+                    temperature: 0.1,
+                });
+                if (result?.parsed) return { ...result, source: 'ollama' };
+            } catch { }
+        }
     }
 
     // Fallback — orchestrator handles classification itself
@@ -173,24 +197,33 @@ async function intent(prompt, systemPrompt) {
 }
 
 async function chat(prompt, options = {}) {
-    // Tier 0: Kimi K2.5 via NVIDIA NIM
-    const kimi = await kimiService.generateText(prompt, {
-        systemPrompt: options.systemPrompt || 'You are OpsPilot, an AI assistant for CoreOps ERP.',
-        maxTokens: options.maxTokens,
-        temperature: options.temperature,
-    });
-    if (kimi?.text) return { ...kimi, source: 'kimi-k2.5' };
+    const order = getProviderOrder(options.providerPreference);
 
-    // Tier 1: Kaggle GPU
-    const kaggle = await callKaggle('/api/chat', {
-        prompt, system_prompt: options.systemPrompt || 'You are OpsPilot, an AI assistant for CoreOps ERP.',
-        max_tokens: options.maxTokens, temperature: options.temperature,
-    });
-    if (kaggle?.text) return { ...kaggle, source: 'kaggle' };
+    for (const provider of order) {
+        if (provider === 'kimi') {
+            const kimi = await kimiService.generateText(prompt, {
+                systemPrompt: options.systemPrompt || 'You are OpsPilot, an AI assistant for CoreOps ERP.',
+                maxTokens: options.maxTokens,
+                temperature: options.temperature,
+            });
+            if (kimi?.text) return { ...kimi, source: 'kimi-k2.5' };
+        }
 
-    // Tier 2: Local Ollama
-    const ollama = await callOllama('intent', prompt, options);
-    if (ollama?.text) return { ...ollama, source: 'ollama' };
+        if (provider === 'kaggle') {
+            const kaggle = await callKaggle('/api/chat', {
+                prompt,
+                system_prompt: options.systemPrompt || 'You are OpsPilot, an AI assistant for CoreOps ERP.',
+                max_tokens: options.maxTokens,
+                temperature: options.temperature,
+            });
+            if (kaggle?.text) return { ...kaggle, source: 'kaggle' };
+        }
+
+        if (provider === 'ollama') {
+            const ollama = await callOllama(options.modelPreference || 'intent', prompt, options);
+            if (ollama?.text) return { ...ollama, source: 'ollama' };
+        }
+    }
 
     return { text: null, source: 'none' };
 }

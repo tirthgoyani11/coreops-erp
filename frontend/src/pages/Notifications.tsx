@@ -199,7 +199,7 @@ export function Notifications() {
                 <div className="space-y-3">
                     <AnimatePresence mode="popLayout">
                         {notifications.map((notification, i) => {
-                            const config = PRIORITY_CONFIG[notification.priority] || PRIORITY_CONFIG.low;
+                            const config = PRIORITY_CONFIG[notification.priority] || PRIORITY_CONFIG.LOW;
                             const Icon = config.icon;
 
                             return (

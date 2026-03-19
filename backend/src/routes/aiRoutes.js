@@ -5,6 +5,26 @@ const prisma = require('../config/prisma');
 const aiService = require('../services/aiService');
 const intentService = require('../services/intentService');
 
+async function persistInAppNotification({ recipientId, title, message, priority = 'LOW', relatedModel, relatedDocId }) {
+    if (!recipientId || !title || !message) return;
+    try {
+        await prisma.notification.create({
+            data: {
+                recipientId,
+                type: 'SYSTEM_ALERT',
+                title,
+                message,
+                priority,
+                relatedModel,
+                relatedDocId,
+            },
+        });
+    } catch (err) {
+        // Do not block AI responses if notification persistence fails.
+        console.warn('[AI Routes] Failed to persist notification:', err.message);
+    }
+}
+
 /**
  * AI Routes — OpsPilot API (Prisma)
  */
@@ -36,6 +56,14 @@ router.post('/intent', protect, async (req, res) => {
             type: 'ai_progress',
             event: 'intent_extracted',
             data: { intent: result.intent, confidence: result.confidence },
+        });
+
+        await persistInAppNotification({
+            recipientId: req.user.id,
+            title: 'AI Intent Analyzed',
+            message: `Detected intent: ${result.intent} (${Math.round((result.confidence || 0) * 100)}% confidence).`,
+            priority: 'LOW',
+            relatedModel: 'AIOperation',
         });
 
         res.json({ success: true, data: result });
@@ -134,6 +162,15 @@ router.put('/operations/:id/approve', protect, async (req, res) => {
             intent: op.intent,
         });
 
+        await persistInAppNotification({
+            recipientId: op.userId,
+            title: decision === 'approved' ? 'AI Operation Approved' : 'AI Operation Rejected',
+            message: `Your AI request (${op.intent}) was ${decision}.`,
+            priority: decision === 'approved' ? 'MEDIUM' : 'HIGH',
+            relatedModel: 'AIOperation',
+            relatedDocId: op.id,
+        });
+
         res.json({ success: true, data: updated });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
@@ -172,14 +209,19 @@ const kaggleService = require('../services/kaggleInferenceService');
 // POST /api/ai/chat — Main OpsPilot orchestrator
 router.post('/chat', protect, async (req, res) => {
     try {
-        const { message } = req.body;
+        const { message, providerPreference, modelPreference } = req.body;
         if (!message) return res.status(400).json({ success: false, message: 'Message is required' });
+
+        const providerHint = providerPreference || req.headers['x-ai-provider'];
+        const modelHint = modelPreference || req.headers['x-ai-model'];
 
         const result = await orchestrator.processCommand(message, {
             userId: req.user.id,
             officeId: req.user.officeId || req.user.office?.id,
             role: req.user.role,
             sessionId: req.headers['x-session-id'],
+            providerPreference: providerHint,
+            modelPreference: modelHint,
         });
 
         // Notify via socket
@@ -188,6 +230,13 @@ router.post('/chat', protect, async (req, res) => {
             socketServer.notifyUser(req.user.id, {
                 type: 'opspilot_response',
                 data: { intent: result.intent, modelsUsed: result.modelsUsed },
+            });
+            await persistInAppNotification({
+                recipientId: req.user.id,
+                title: 'OpsPilot Response Ready',
+                message: `Completed: ${result.intent || 'GENERAL'} using ${result.modelsUsed?.map((m) => m.source || m.model).filter(Boolean).join(' -> ') || 'available providers'}.`,
+                priority: 'LOW',
+                relatedModel: 'AIOperation',
             });
         } catch (e) { /* socket optional */ }
 

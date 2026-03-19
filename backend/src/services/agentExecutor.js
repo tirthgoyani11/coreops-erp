@@ -794,10 +794,72 @@ module.exports = {
 
 // ─── v4: LIST & DASHBOARD HANDLERS ──────────────────────────────
 
+function normalizeAssetStatusFilter(status) {
+    if (!status) return null;
+    const value = String(status).trim().toUpperCase();
+
+    const map = {
+        ACTIVE: 'ACTIVE',
+        MAINTENANCE: 'MAINTENANCE',
+        RETIRED: 'RETIRED',
+        LOST: 'LOST',
+        SOLD: 'SOLD',
+        DECOMMISSIONED: 'DECOMMISSIONED',
+        DISPOSED: 'DECOMMISSIONED',
+    };
+
+    return map[value] || null;
+}
+
+function normalizePurchaseOrderStatusFilter(status) {
+    if (!status) return null;
+    const value = String(status).trim().toUpperCase().replace(/\s+/g, '_');
+
+    const map = {
+        DRAFT: 'DRAFT',
+        PENDING: 'PENDING_APPROVAL',
+        PENDING_APPROVAL: 'PENDING_APPROVAL',
+        APPROVED: 'APPROVED',
+        ORDERED: 'ORDERED',
+        PARTIALLY_RECEIVED: 'PARTIALLY_RECEIVED',
+        RECEIVED: 'RECEIVED',
+        CANCELLED: 'CANCELLED',
+    };
+
+    return map[value] || null;
+}
+
+function normalizeTicketStatusFilter(status) {
+    if (!status) return { not: 'COMPLETED' };
+    const value = String(status).trim().toUpperCase().replace(/\s+/g, '_');
+
+    if (['OPEN', 'ACTIVE'].includes(value)) {
+        return { in: ['REQUESTED', 'PENDING', 'IN_PROGRESS', 'PENDING_PARTS', 'APPROVED'] };
+    }
+
+    if (value === 'PENDING') {
+        return { in: ['REQUESTED', 'PENDING', 'PENDING_PARTS', 'APPROVED'] };
+    }
+
+    const map = {
+        REQUESTED: 'REQUESTED',
+        IN_PROGRESS: 'IN_PROGRESS',
+        PENDING_PARTS: 'PENDING_PARTS',
+        APPROVED: 'APPROVED',
+        REJECTED: 'REJECTED',
+        COMPLETED: 'COMPLETED',
+        CLOSED: 'CLOSED',
+        CANCELLED: 'CANCELLED',
+    };
+
+    return map[value] || { not: 'COMPLETED' };
+}
+
 async function listAssets(entities, context) {
     const where = {};
     if (context.officeId) where.officeId = context.officeId;
-    if (entities.status) where.status = entities.status.toUpperCase();
+    const assetStatusFilter = normalizeAssetStatusFilter(entities.status);
+    if (assetStatusFilter) where.status = assetStatusFilter;
 
     const assets = await prisma.asset.findMany({
         where,
@@ -844,7 +906,8 @@ async function listVendors(entities, context) {
 async function listPurchaseOrders(entities, context) {
     const where = {};
     if (context.officeId) where.officeId = context.officeId;
-    if (entities.status) where.status = entities.status.toUpperCase();
+    const poStatusFilter = normalizePurchaseOrderStatusFilter(entities.status);
+    if (poStatusFilter) where.status = poStatusFilter;
 
     const pos = await prisma.purchaseOrder.findMany({
         where,
@@ -857,7 +920,15 @@ async function listPurchaseOrders(entities, context) {
         return { success: true, message: '📭 No purchase orders found.' };
     }
 
-    const statusIcon = { DRAFT: '📝', PENDING: '⏳', APPROVED: '✅', ORDERED: '📦', RECEIVED: '✅', CANCELLED: '❌' };
+    const statusIcon = {
+        DRAFT: '📝',
+        PENDING_APPROVAL: '⏳',
+        APPROVED: '✅',
+        ORDERED: '📦',
+        PARTIALLY_RECEIVED: '📬',
+        RECEIVED: '✅',
+        CANCELLED: '❌',
+    };
     let msg = `📋 **Purchase Orders** (${pos.length} found)\n\n`;
     msg += `| PO # | Vendor | Amount | Status |\n|------|--------|--------|--------|\n`;
     for (const po of pos) {
@@ -870,11 +941,7 @@ async function listPurchaseOrders(entities, context) {
 async function listTickets(entities, context) {
     const where = {};
     if (context.officeId) where.officeId = context.officeId;
-    if (entities.status) {
-        where.status = entities.status.toUpperCase();
-    } else {
-        where.status = { not: 'COMPLETED' };
-    }
+    where.status = normalizeTicketStatusFilter(entities.status);
 
     const tickets = await prisma.maintenanceTicket.findMany({
         where,
@@ -939,7 +1006,6 @@ async function listTransactions(entities, context) {
         return { success: true, message: '📭 No transactions found.' };
     }
 
-    const total = txns.reduce((sum, t) => sum + (t.type === 'INCOME' ? t.amount : -t.amount), 0);
     let msg = `💰 **Recent Transactions** (${txns.length} shown)\n\n`;
     msg += `| Date | Type | Category | Amount | Description |\n|------|------|----------|--------|-------------|\n`;
     for (const t of txns) {
@@ -947,8 +1013,6 @@ async function listTransactions(entities, context) {
         const date = t.date ? new Date(t.date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' }) : '—';
         msg += `| ${date} | ${icon} ${t.type} | ${t.category || '—'} | ₹${t.amount.toLocaleString('en-IN')} | ${(t.description || '').substring(0, 30)} |\n`;
     }
-    const netIcon = total >= 0 ? '📈' : '📉';
-    msg += `\n${netIcon} **Net:** ₹${Math.abs(total).toLocaleString('en-IN')} ${total >= 0 ? 'surplus' : 'deficit'}`;
 
     return { success: true, message: msg, data: txns };
 }
@@ -969,7 +1033,7 @@ async function dashboardSummary(entities, context) {
         prisma.inventory.count({ where: { ...where, currentQuantity: { lte: 5 } } }),
         prisma.maintenanceTicket.count({ where: { ...where, status: { not: 'COMPLETED' } } }),
         prisma.maintenanceTicket.count({ where: { ...where, priority: 'CRITICAL', status: { not: 'COMPLETED' } } }),
-        prisma.purchaseOrder.count({ where: { ...where, status: 'PENDING' } }),
+        prisma.purchaseOrder.count({ where: { ...where, status: 'PENDING_APPROVAL' } }),
         prisma.transaction.findMany({ where, take: 5, orderBy: { date: 'desc' }, select: { type: true, amount: true, description: true } }),
         prisma.budget.findMany({ where: { ...where, month: now.getMonth() + 1, year: now.getFullYear() }, select: { category: true, limit: true, spent: true } }),
     ]);
@@ -987,13 +1051,6 @@ async function dashboardSummary(entities, context) {
     msg += `| 🔧 Maintenance | **${openTickets}** open tickets ${criticalTickets > 0 ? `• 🔴 **${criticalTickets}** critical` : ''} |\n`;
     msg += `| 📋 Purchase Orders | **${pendingPOs}** pending approval |\n`;
     msg += `| ${budgetIcon} Budget | ₹${totalSpent.toLocaleString('en-IN')} / ₹${totalBudget.toLocaleString('en-IN')} (**${budgetPct}%** used) |\n`;
-
-    if (lowStockCount > 0 || criticalTickets > 0 || pendingPOs > 0) {
-        msg += `\n⚠️ **Action Items:**\n`;
-        if (criticalTickets > 0) msg += `• 🔴 ${criticalTickets} critical ticket(s) need immediate attention\n`;
-        if (lowStockCount > 0) msg += `• 📦 ${lowStockCount} inventory item(s) below minimum stock\n`;
-        if (pendingPOs > 0) msg += `• 📋 ${pendingPOs} PO(s) awaiting approval\n`;
-    }
 
     return { success: true, message: msg, data: { assetCount, activeAssets, inventoryCount, lowStockCount, openTickets, criticalTickets, pendingPOs, budgetPct } };
 }
@@ -1067,7 +1124,7 @@ async function createPurchaseOrder(entities, context) {
             vendorId,
             officeId,
             totalAmount: amount,
-            status: 'PENDING',
+            status: 'PENDING_APPROVAL',
             requestedById: context.userId,
             notes: description,
         },
@@ -1079,7 +1136,7 @@ async function createPurchaseOrder(entities, context) {
     msg += `| **PO Number** | ${po.poNumber} |\n`;
     msg += `| **Vendor** | ${po.vendor?.name || '—'} |\n`;
     msg += `| **Amount** | ₹${amount.toLocaleString('en-IN')} |\n`;
-    msg += `| **Status** | ⏳ PENDING |\n`;
+    msg += `| **Status** | ⏳ PENDING_APPROVAL |\n`;
     msg += `| **Description** | ${description} |\n`;
     msg += `\n💡 Say **"approve PO ${po.poNumber}"** to approve it.`;
 

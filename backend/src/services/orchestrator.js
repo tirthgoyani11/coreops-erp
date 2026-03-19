@@ -17,6 +17,9 @@ const agentExecutor = require('./agentExecutor');
 const logger = require('../utils/logger');
 const prisma = require('../config/prisma');
 
+// Keep AI knowledge/prompts intact, but force intent routing through AI classification.
+const ENABLE_LOCAL_INTENT_CLASSIFIER = false;
+
 // ─── INTENT PATTERN MAP (sub-1ms local classification) ──────────
 const INTENT_PATTERNS = [
     { intent: 'CREATE_ASSET', keywords: ['create asset', 'add asset', 'new asset', 'register asset', 'register this', 'bought a new', 'add a new', 'create a new'] },
@@ -166,6 +169,12 @@ Capabilities you can EXECUTE (not just describe):
 • 👤 View your profile & account info
 
 When listing capabilities, show them as actionable commands the user can try.`;
+
+function buildRoleAwareIntentPrompt(context = {}) {
+    const role = context.role || 'UNKNOWN';
+    const office = context.officeId || 'GLOBAL';
+    return `${INTENT_SYSTEM_PROMPT}\n\nCurrent Request Context:\n- User Role: ${role}\n- Office Scope: ${office}\n- Enforce role-based access and office scoping for all actions.`;
+}
 
 // ─── LOCAL INTENT CLASSIFIER ────────────────────────────────────
 function classifyLocally(message) {
@@ -443,8 +452,8 @@ async function processCommand(userMessage, context = {}) {
             };
         }
 
-        // ── Step 1: Local keyword classification (sub-1ms) ──
-        let classification = classifyLocally(userMessage);
+        // ── Step 1: Intent classification ──
+        let classification = ENABLE_LOCAL_INTENT_CLASSIFIER ? classifyLocally(userMessage) : null;
         let entities = {};
 
         if (classification) {
@@ -454,7 +463,14 @@ async function processCommand(userMessage, context = {}) {
         } else {
             // ── Step 2: LLM classification (Kaggle → Ollama → fallback) ──
             logger.info('[Orchestrator] Ambiguous intent → calling LLM classifier...');
-            const llmResult = await kaggleService.intent(userMessage, INTENT_SYSTEM_PROMPT);
+            const llmResult = await kaggleService.intent(
+                userMessage,
+                buildRoleAwareIntentPrompt(context),
+                {
+                    providerPreference: context.providerPreference,
+                    modelPreference: context.modelPreference,
+                }
+            );
             modelsUsed.push({ model: 'intent-llm', source: llmResult.source });
 
             const parsed = llmResult.parsed || extractJSON(llmResult.text);
@@ -517,6 +533,8 @@ async function processCommand(userMessage, context = {}) {
             const llmResult = await kaggleService.reasoning(queryPrompt, {
                 systemPrompt: QUERY_SYSTEM_PROMPT,
                 temperature: 0.3,
+                providerPreference: context.providerPreference,
+                modelPreference: context.modelPreference,
             });
             modelsUsed.push({ model: 'reasoning', source: llmResult.source });
             finalResponse = llmResult.text || 'I could not generate an analysis. Please try a more specific question.';
@@ -529,6 +547,8 @@ async function processCommand(userMessage, context = {}) {
             const llmResult = await kaggleService.chat(chatPrompt, {
                 systemPrompt: CHAT_SYSTEM_PROMPT,
                 temperature: 0.7,
+                providerPreference: context.providerPreference,
+                modelPreference: context.modelPreference,
             });
             modelsUsed.push({ model: 'chat', source: llmResult.source });
             finalResponse = llmResult.text || "I'm OpsPilot, your ERP assistant. I can help with assets, inventory, POs, tickets, budgets, and transactions. What do you need?";
