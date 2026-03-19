@@ -104,7 +104,13 @@ export function InvoiceScanner({ onDataExtracted, context = 'general', linkedAss
                 headers: { 'Content-Type': 'multipart/form-data' },
             });
             const data = res.data.data;
-            setExtracted({ ...data.extractedData, documentId: data.documentId, matchedVendor: data.matchedVendor, aiSource: data.aiSource });
+            setExtracted({
+                ...data.extractedData,
+                documentId: data.documentId,
+                matchedVendor: data.matchedVendor,
+                aiSource: data.aiSource,
+                assetAutomation: data.assetAutomation,
+            });
             setEdited(data.extractedData);
         } catch (err: any) {
             setError(err.response?.data?.message || 'OCR scan failed. Please try again.');

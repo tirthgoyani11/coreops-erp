@@ -156,9 +156,33 @@ async function reasoning(prompt, options = {}) {
     return { text: null, source: 'none' };
 }
 
-async function vision(imageBase64, prompt = 'Extract all text from this document.') {
-    const kaggle = await callKaggle('/api/vision', { image: imageBase64, prompt });
-    if (kaggle?.text) return { ...kaggle, source: 'kaggle' };
+async function vision(imageBase64, prompt = 'Extract all text from this document.', options = {}) {
+    const order = getProviderOrder(options.providerPreference);
+
+    for (const provider of order) {
+        if (provider === 'kimi') {
+            const kimi = await kimiService.generateVisionJSON(imageBase64, prompt, {
+                mimeType: options.mimeType || 'image/jpeg',
+                maxTokens: options.maxTokens,
+                temperature: options.temperature,
+            });
+
+            if (kimi?.parsed) {
+                return {
+                    ...kimi,
+                    text: JSON.stringify(kimi.parsed),
+                    source: 'kimi-k2.5',
+                };
+            }
+            if (kimi?.text) return { ...kimi, source: 'kimi-k2.5' };
+        }
+
+        if (provider === 'kaggle') {
+            const kaggle = await callKaggle('/api/vision', { image: imageBase64, prompt });
+            if (kaggle?.text) return { ...kaggle, source: 'kaggle' };
+        }
+    }
+
     return { text: null, source: 'none' };
 }
 

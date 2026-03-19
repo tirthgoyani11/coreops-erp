@@ -6,31 +6,70 @@ import {
 } from 'lucide-react';
 import { Button } from '../../components/ui/Button';
 
-export function TransactionList() {
+type TransactionListProps = {
+    startDate: string;
+    endDate: string;
+    refreshKey: number;
+};
+
+export function TransactionList({ startDate, endDate, refreshKey }: TransactionListProps) {
     const [transactions, setTransactions] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [total, setTotal] = useState(0);
 
     useEffect(() => {
         fetchTransactions();
-    }, []);
+    }, [startDate, endDate, refreshKey]);
 
     const fetchTransactions = async () => {
         try {
-            const res = await api.get('/finance/transactions');
-            setTransactions(res.data.data);
+            const res = await api.get('/finance/transactions', {
+                params: { startDate, endDate, limit: 200, page: 1 },
+            });
+            setTransactions(Array.isArray(res.data?.data) ? res.data.data : []);
+            setTotal(Number(res.data?.total) || 0);
         } catch (error) {
             console.error('Failed to fetch transactions:', error);
+            setTransactions([]);
+            setTotal(0);
         } finally {
             setLoading(false);
         }
     };
 
+    const handleExport = () => {
+        if (!transactions.length) return;
+
+        const headers = ['date', 'description', 'category', 'referenceType', 'referenceId', 'type', 'amount'];
+        const rows = transactions.map((tx: any) => (
+            headers.map((key) => {
+                const value = tx[key] ?? '';
+                const text = String(value).replaceAll('"', '""');
+                return `"${text}"`;
+            }).join(',')
+        ));
+
+        const csv = `${headers.join(',')}\n${rows.join('\n')}`;
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `transactions-${new Date().toISOString().slice(0, 10)}.csv`;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        URL.revokeObjectURL(url);
+    };
+
     return (
         <Card className="p-0 overflow-hidden">
             <div className="p-4 border-b border-gray-100 dark:border-gray-700 flex justify-between items-center bg-white dark:bg-gray-800">
-                <h3 className="font-semibold text-lg text-gray-900 dark:text-gray-100">Recent Transactions</h3>
+                <div>
+                    <h3 className="font-semibold text-lg text-gray-900 dark:text-gray-100">Transactions</h3>
+                    <p className="text-xs text-gray-500">{new Date(startDate).toLocaleDateString()} - {new Date(endDate).toLocaleDateString()} • {total} records</p>
+                </div>
                 <div className="flex gap-2">
-                    <Button variant="ghost" size="sm">
+                    <Button variant="ghost" size="sm" onClick={handleExport} disabled={!transactions.length}>
                         <Download className="w-4 h-4 mr-2" /> Export
                     </Button>
                 </div>
@@ -72,6 +111,9 @@ export function TransactionList() {
                         ))}
                     </tbody>
                 </table>
+                {loading && (
+                    <div className="text-center py-6 text-gray-500 text-sm">Loading transactions...</div>
+                )}
                 {transactions.length === 0 && !loading && (
                     <div className="text-center py-12 text-gray-500">
                         No transactions found.

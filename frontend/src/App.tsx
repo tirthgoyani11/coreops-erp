@@ -77,6 +77,7 @@ const ARAging = lazy(() => import('./pages/financial/ARAging').then(m => ({ defa
 const ExceptionCenter = lazy(() => import('./pages/financial/ExceptionCenter').then(m => ({ default: m.ExceptionCenter })));
 const InventoryAnalytics = lazy(() => import('./pages/financial/InventoryAnalytics').then(m => ({ default: m.InventoryAnalytics })));
 const Analytics = lazy(() => import('./pages/Analytics').then(m => ({ default: m.Analytics })));
+const Reports = lazy(() => import('./pages/Reports'));
 const Notifications = lazy(() => import('./pages/Notifications').then(m => ({ default: m.Notifications })));
 const NotificationPreferences = lazy(() => import('./pages/NotificationPreferences'));
 const Profile = lazy(() => import('./pages/Profile'));
@@ -280,6 +281,15 @@ function App() {
                 }
               />
 
+              <Route
+                path="/reports"
+                element={
+                  <RoleGuard allowedRoles={['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF', 'VIEWER']}>
+                    <Reports />
+                  </RoleGuard>
+                }
+              />
+
               {/* Notifications - Everyone */}
               <Route path="/notifications" element={<Notifications />} />
               <Route path="/notifications/preferences" element={<NotificationPreferences />} />
@@ -354,7 +364,6 @@ function App() {
 
               {/* TODO: Add these routes as pages are created */}
               {/* <Route path="/financial" element={<RoleGuard allowedRoles={['SUPER_ADMIN', 'REGIONAL_MANAGER', 'BRANCH_MANAGER', 'VIEWER']}><Financial /></RoleGuard>} /> */}
-              {/* <Route path="/reports" element={<RoleGuard allowedRoles={['SUPER_ADMIN', 'REGIONAL_MANAGER', 'BRANCH_MANAGER', 'VIEWER']}><Reports /></RoleGuard>} /> */}
             </Route>
 
             {/* 404 — Not Found */}

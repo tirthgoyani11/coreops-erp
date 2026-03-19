@@ -265,6 +265,18 @@ export function OpsPilot() {
             if (ext.vendorGST) msg += `| **GST** | ${ext.vendorGST} |\n`;
             if (d.matchedVendor) msg += `\n✅ **Vendor matched:** ${d.matchedVendor.name}`;
             if (d.documentId) msg += `\n📁 **Saved to Documents** (ID: ${d.documentId.slice(0,8)}...)`;
+            if (d.assetAutomation?.enabled) {
+                msg += `\n🧩 **Auto assets created:** ${Number(d.assetAutomation.createdCount || 0)}`;
+                if (Array.isArray(d.assetAutomation.createdAssets) && d.assetAutomation.createdAssets.length > 0) {
+                    const preview = d.assetAutomation.createdAssets.slice(0, 3)
+                        .map((a: any) => `${a.name} (${a.guai})`)
+                        .join(', ');
+                    msg += `\n• ${preview}`;
+                }
+                if (Array.isArray(d.assetAutomation.warnings) && d.assetAutomation.warnings.length > 0) {
+                    msg += `\n⚠️ ${d.assetAutomation.warnings[0]}`;
+                }
+            }
             msg += `\n\n💡 Go to **Finance → Invoice Upload** to create a transaction from this invoice.`;
 
             const aiMsg: Message = {

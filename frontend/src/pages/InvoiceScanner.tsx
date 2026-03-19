@@ -54,6 +54,7 @@ export function InvoiceScanner() {
                     documentId: raw.documentId,
                     documentUrl: raw.documentUrl,
                     matchedVendor: raw.matchedVendor,
+                    assetAutomation: raw.assetAutomation,
                 });
                 fetchInvoices();
             }
@@ -168,6 +169,40 @@ export function InvoiceScanner() {
                                             </div>
                                         </div>
                                     </div>
+
+                                    {scanResult.assetAutomation?.enabled && (
+                                        <div className="mb-5 rounded-xl border border-cyan-500/25 bg-cyan-500/5 p-4">
+                                            <div className="flex items-center justify-between gap-3 mb-2">
+                                                <p className="text-sm font-semibold text-[var(--text-primary)]">Auto Asset Import</p>
+                                                <span className="text-xs text-[var(--text-muted)]">Created: {scanResult.assetAutomation.createdCount || 0}</span>
+                                            </div>
+
+                                            {scanResult.assetAutomation.createdAssets?.length > 0 ? (
+                                                <div className="space-y-2 max-h-40 overflow-y-auto">
+                                                    {scanResult.assetAutomation.createdAssets.slice(0, 8).map((asset: any) => (
+                                                        <div key={asset.id} className="text-xs bg-[var(--bg-overlay)] border border-[var(--border-color)] rounded-lg px-3 py-2 flex items-center justify-between gap-3">
+                                                            <div className="min-w-0">
+                                                                <p className="font-medium text-[var(--text-primary)] truncate">{asset.name}</p>
+                                                                <p className="text-[var(--text-muted)] font-mono truncate">{asset.guai}</p>
+                                                            </div>
+                                                            <span className="text-emerald-400 font-medium shrink-0">₹{Number(asset.purchasePrice || 0).toLocaleString('en-IN')}</span>
+                                                        </div>
+                                                    ))}
+                                                    {scanResult.assetAutomation.createdAssets.length > 8 && (
+                                                        <p className="text-xs text-[var(--text-muted)]">+{scanResult.assetAutomation.createdAssets.length - 8} more assets created</p>
+                                                    )}
+                                                </div>
+                                            ) : (
+                                                <p className="text-xs text-[var(--text-muted)]">No asset-classified line items were auto-created from this scan.</p>
+                                            )}
+
+                                            {scanResult.assetAutomation.warnings?.length > 0 && (
+                                                <div className="mt-2 text-xs text-amber-400">
+                                                    {scanResult.assetAutomation.warnings[0]}
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
 
                                     {/* Raw Text Preview */}
                                     {scanResult.rawText && (

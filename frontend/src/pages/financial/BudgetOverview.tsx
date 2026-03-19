@@ -21,7 +21,14 @@ import {
     SelectValue,
 } from '../../components/ui/Select';
 
-export function BudgetOverview() {
+type BudgetOverviewProps = {
+    month: number;
+    year: number;
+    refreshKey: number;
+    onBudgetChanged?: () => void;
+};
+
+export function BudgetOverview({ month, year, refreshKey, onBudgetChanged }: BudgetOverviewProps) {
     const [budgets, setBudgets] = useState([]);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [loading, setLoading] = useState(false);
@@ -29,18 +36,22 @@ export function BudgetOverview() {
 
     const [formData, setFormData] = useState({
         category: '',
-        month: new Date().getMonth() + 1,
-        year: new Date().getFullYear(),
+        month,
+        year,
         limit: ''
     });
 
     useEffect(() => {
         fetchBudgets();
-    }, []);
+    }, [month, year, refreshKey]);
+
+    useEffect(() => {
+        setFormData((prev) => ({ ...prev, month, year }));
+    }, [month, year]);
 
     const fetchBudgets = async () => {
         try {
-            const res = await api.get('/finance/budgets');
+            const res = await api.get('/finance/budgets', { params: { month, year } });
             setBudgets(res.data.data);
         } catch (error) {
             console.error('Failed to fetch budgets:', error);
@@ -61,11 +72,12 @@ export function BudgetOverview() {
             setIsModalOpen(false);
             setFormData({
                 category: '',
-                month: new Date().getMonth() + 1,
-                year: new Date().getFullYear(),
+                month,
+                year,
                 limit: ''
             });
             fetchBudgets();
+            onBudgetChanged?.();
         } catch (error: any) {
             toast.error(error.response?.data?.message || 'Failed to set budget');
         } finally {

@@ -3,6 +3,7 @@ const fs = require('fs');
 const path = require('path');
 const logger = require('../utils/logger');
 const kaggleService = require('../services/kaggleInferenceService');
+const kimiService = require('../services/kimiService');
 const { asyncHandler, AppError } = require('../utils/errorHandler');
 
 // ─── Core OCR prompt ─────────────────────────────────────────────
@@ -49,6 +50,196 @@ Required JSON schema:
 }
 
 Return ONLY the JSON. No explanation, no markdown.`;
+
+function normalizeExtractedData(data = {}) {
+    const normalized = {
+        ...data,
+        lineItems: Array.isArray(data.lineItems) ? data.lineItems : [],
+    };
+
+    const numericFields = ['subtotal', 'taxAmount', 'taxRate', 'discountAmount', 'shippingAmount', 'totalAmount', 'confidenceScore'];
+    for (const field of numericFields) {
+        if (normalized[field] !== undefined && normalized[field] !== null && normalized[field] !== '') {
+            const num = Number(normalized[field]);
+            normalized[field] = Number.isFinite(num) ? num : null;
+        }
+    }
+
+    normalized.lineItems = normalized.lineItems.map((item) => {
+        const quantity = Number(item.quantity);
+        const unitPrice = Number(item.unitPrice);
+        const total = Number(item.total);
+        return {
+            ...item,
+            quantity: Number.isFinite(quantity) ? quantity : 0,
+            unitPrice: Number.isFinite(unitPrice) ? unitPrice : 0,
+            total: Number.isFinite(total) ? total : 0,
+        };
+    });
+
+    if (!normalized.currency) normalized.currency = 'INR';
+    if (!normalized.documentType) normalized.documentType = 'INVOICE';
+    if (!Number.isFinite(normalized.confidenceScore)) normalized.confidenceScore = 0.5;
+
+    return normalized;
+}
+
+function parseBooleanFlag(value, defaultValue = false) {
+    if (value === undefined || value === null || value === '') return defaultValue;
+    if (typeof value === 'boolean') return value;
+    const normalized = String(value).trim().toLowerCase();
+    if (['true', '1', 'yes', 'y', 'on'].includes(normalized)) return true;
+    if (['false', '0', 'no', 'n', 'off'].includes(normalized)) return false;
+    return defaultValue;
+}
+
+async function generateGUAI(officeId) {
+    const office = await prisma.office.findUnique({
+        where: { id: officeId },
+        select: { countryCode: true, locationCode: true, code: true },
+    });
+
+    const countryCode = office?.countryCode || 'IN';
+    const locationCode = office?.locationCode || office?.code || 'HQ';
+
+    const counter = await prisma.counter.upsert({
+        where: { name: 'asset_guai' },
+        update: { sequence: { increment: 1 } },
+        create: { name: 'asset_guai', prefix: 'GUAI', sequence: 1 },
+    });
+
+    const seq = String(counter.sequence).padStart(6, '0');
+    return `${countryCode}-${locationCode}-${seq}`;
+}
+
+function mapAssetCategory(description = '') {
+    const text = String(description).toLowerCase();
+
+    const mapping = [
+        { keywords: ['laptop', 'notebook', 'macbook'], category: 'LAPTOP' },
+        { keywords: ['desktop', 'computer', 'pc', 'workstation'], category: 'COMPUTER' },
+        { keywords: ['printer', 'plotter', 'scanner'], category: 'PRINTER' },
+        { keywords: ['server', 'rack server'], category: 'SERVER' },
+        { keywords: ['router', 'switch', 'access point', 'firewall', 'network'], category: 'NETWORK' },
+        { keywords: ['phone', 'mobile', 'tablet', 'ipad'], category: 'PHONE' },
+        { keywords: ['chair', 'table', 'desk', 'cabinet', 'furniture'], category: 'FURNITURE' },
+        { keywords: ['vehicle', 'car', 'bike', 'truck'], category: 'VEHICLE' },
+        { keywords: ['machine', 'machinery'], category: 'MACHINERY' },
+        { keywords: ['equipment', 'tool', 'device'], category: 'EQUIPMENT' },
+    ];
+
+    const found = mapping.find((item) => item.keywords.some((kw) => text.includes(kw)));
+    return found?.category || 'OTHER';
+}
+
+function shouldCreateAssetFromLineItem(lineItem = {}) {
+    const description = String(lineItem.description || '').trim();
+    const lower = description.toLowerCase();
+    const quantity = Number(lineItem.quantity || 1);
+    const unitPrice = Number(lineItem.unitPrice || 0);
+
+    if (!description) return false;
+
+    // Skip common non-asset/service lines
+    const serviceKeywords = [
+        'service', 'installation', 'consulting', 'support', 'subscription', 'license',
+        'warranty extension', 'shipping', 'freight', 'delivery', 'gst', 'tax', 'discount',
+    ];
+    if (serviceKeywords.some((kw) => lower.includes(kw))) return false;
+
+    // Strong keyword hit or value threshold
+    const strongAsset = ['laptop', 'computer', 'desktop', 'printer', 'server', 'router', 'switch', 'phone', 'tablet', 'chair', 'desk', 'vehicle', 'equipment', 'machine']
+        .some((kw) => lower.includes(kw));
+
+    if (strongAsset) return true;
+    if (quantity > 0 && unitPrice >= 3000) return true;
+
+    return false;
+}
+
+function buildAssetCandidates(extractedData, maxAssetsPerScan = 60) {
+    const lineItems = Array.isArray(extractedData?.lineItems) ? extractedData.lineItems : [];
+    const candidates = [];
+    const skipped = [];
+
+    for (const line of lineItems) {
+        if (!shouldCreateAssetFromLineItem(line)) {
+            skipped.push({
+                description: line?.description || 'Unknown Item',
+                reason: 'Not classified as an asset line item',
+            });
+            continue;
+        }
+
+        const quantity = Math.max(1, Math.min(50, Math.round(Number(line.quantity || 1))));
+        const unitPriceRaw = Number(line.unitPrice || 0);
+        const totalRaw = Number(line.total || 0);
+        const unitPrice = unitPriceRaw > 0 ? unitPriceRaw : (quantity > 0 ? totalRaw / quantity : 0);
+
+        if (!Number.isFinite(unitPrice) || unitPrice <= 0) {
+            skipped.push({
+                description: line?.description || 'Unknown Item',
+                reason: 'Missing valid unit price',
+            });
+            continue;
+        }
+
+        for (let i = 0; i < quantity; i++) {
+            if (candidates.length >= maxAssetsPerScan) {
+                skipped.push({
+                    description: line?.description || 'Unknown Item',
+                    reason: `Exceeded max auto assets per scan (${maxAssetsPerScan})`,
+                });
+                break;
+            }
+
+            const baseName = String(line.description || 'Auto Imported Asset').trim();
+            const name = quantity > 1 ? `${baseName} (${i + 1}/${quantity})` : baseName;
+
+            candidates.push({
+                name,
+                category: mapAssetCategory(line.description),
+                purchasePrice: Number(unitPrice.toFixed(2)),
+                lineDescription: baseName,
+                quantity,
+            });
+        }
+    }
+
+    return { candidates, skipped, sourceLineItemCount: lineItems.length };
+}
+
+async function refineWithKimi(preliminaryData, rawText = '') {
+    if (!kimiService.isConfigured()) return preliminaryData;
+
+    const prompt = `You are improving OCR extraction quality for ERP finance workflows.
+Given preliminary JSON and raw OCR text, return one final JSON strictly matching this schema:
+${INVOICE_PROMPT}
+
+Rules:
+- Keep fields null when uncertain.
+- Normalize currency to INR unless clearly specified.
+- Ensure lineItems is always an array.
+- confidenceScore must be between 0 and 1.
+
+Preliminary JSON:
+${JSON.stringify(preliminaryData || {}, null, 2)}
+
+Raw OCR text:
+${String(rawText || '').slice(0, 12000)}
+`;
+
+    const result = await kimiService.generateJSON(prompt, {
+        temperature: 0.1,
+        maxTokens: 2000,
+    });
+
+    if (result?.parsed && typeof result.parsed === 'object') {
+        return normalizeExtractedData({ ...preliminaryData, ...result.parsed });
+    }
+
+    return normalizeExtractedData(preliminaryData);
+}
 
 // ─── Robust fallback text parser for Indian GST invoices ─────────
 function parseTextFallback(text) {
@@ -193,22 +384,30 @@ exports.processInvoice = asyncHandler(async (req, res, next) => {
     const mimeType = req.file.mimetype;
     let extractedData = {};
     let aiSource = 'none';
+    const autoCreateAssets = parseBooleanFlag(req.body.autoCreateAssets, true);
+    const maxAssetsPerScan = 60;
 
     try {
-        // ── Tier 1: kaggle vision (Qwen2.5-VL) ──────────────────
+        // ── Tier 1: Kimi vision (preferred) -> Kaggle vision fallback ──
         const imageBase64 = Buffer.from(fs.readFileSync(filePath)).toString('base64');
-        const visionResult = await kaggleService.vision(imageBase64, INVOICE_PROMPT);
+        const visionResult = await kaggleService.vision(imageBase64, INVOICE_PROMPT, {
+            mimeType,
+            providerPreference: 'kimi',
+            temperature: 0.1,
+            maxTokens: 2500,
+        });
 
         if (visionResult?.text) {
             aiSource = visionResult.source || 'kaggle';
             try {
                 const clean = visionResult.text.replace(/```json/gi, '').replace(/```/g, '').trim();
-                extractedData = JSON.parse(clean);
+                extractedData = normalizeExtractedData(JSON.parse(clean));
                 extractedData.confidenceScore = extractedData.confidenceScore || 0.85;
             } catch {
-                // JSON parse failed — try regex on raw text
-                extractedData = parseTextFallback(visionResult.text);
-                aiSource = 'vision-fallback';
+                // JSON parse failed — salvage fields then refine with Kimi text reasoning
+                const fallback = parseTextFallback(visionResult.text);
+                extractedData = await refineWithKimi(fallback, visionResult.text);
+                aiSource = aiSource === 'kimi-k2.5' ? 'kimi-refined' : 'vision-fallback';
             }
         } else {
             // ── Tier 2: Tesseract.js local OCR ──────────────────
@@ -217,9 +416,10 @@ exports.processInvoice = asyncHandler(async (req, res, next) => {
                 const worker = await createWorker('eng');
                 const { data: { text } } = await worker.recognize(filePath);
                 await worker.terminate();
-                extractedData = parseTextFallback(text);
+                const fallback = parseTextFallback(text);
+                extractedData = await refineWithKimi(fallback, text);
                 extractedData.rawText = text;
-                aiSource = 'tesseract';
+                aiSource = kimiService.isConfigured() ? 'tesseract+kimi' : 'tesseract';
             } catch {
                 // ── Tier 3: Demo data ────────────────────────────
                 extractedData = {
@@ -287,6 +487,88 @@ exports.processInvoice = asyncHandler(async (req, res, next) => {
         } catch {}
     }
 
+    // ── Auto-create assets from invoice line items (quantity aware) ─────
+    const assetAutomation = {
+        enabled: autoCreateAssets,
+        attemptedItems: 0,
+        createdCount: 0,
+        createdAssets: [],
+        skippedItems: [],
+        warnings: [],
+    };
+
+    const allowedRoles = ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF'];
+    const canAutoCreateAssets = allowedRoles.includes(String(req.user?.role || ''));
+
+    if (autoCreateAssets && !canAutoCreateAssets) {
+        assetAutomation.warnings.push('Your role is not allowed for automatic asset creation.');
+    }
+
+    if (autoCreateAssets && canAutoCreateAssets) {
+        try {
+            const { candidates, skipped, sourceLineItemCount } = buildAssetCandidates(extractedData, maxAssetsPerScan);
+            assetAutomation.attemptedItems = sourceLineItemCount;
+            assetAutomation.skippedItems.push(...skipped);
+
+            const officeId = resolvedOfficeId || req.user.office?.id || req.user.officeId;
+            if (!officeId) {
+                assetAutomation.warnings.push('No office found on user context. Assets were not created.');
+            } else if (!candidates.length) {
+                assetAutomation.warnings.push('No asset-classified line items found in this invoice.');
+            } else {
+                const office = await prisma.office.findUnique({
+                    where: { id: typeof officeId === 'object' ? officeId.id : officeId },
+                    select: { id: true, baseCurrency: true },
+                });
+
+                if (!office) {
+                    assetAutomation.warnings.push('Office record not found. Assets were not created.');
+                } else {
+                    for (const candidate of candidates) {
+                        const guai = await generateGUAI(office.id);
+                        const asset = await prisma.asset.create({
+                            data: {
+                                guai,
+                                name: candidate.name,
+                                category: candidate.category,
+                                purchasePrice: candidate.purchasePrice,
+                                currency: String(office.baseCurrency || extractedData.currency || 'INR').toUpperCase(),
+                                purchaseDate: extractedData.date ? new Date(extractedData.date) : new Date(),
+                                officeId: office.id,
+                                createdById: req.user.id,
+                                vendorId: matchedVendor?.id || null,
+                                invoiceNumber: extractedData.invoiceNumber || null,
+                                notes: `Auto-created from OCR invoice scan. Document ID: ${savedDocument?.id || 'N/A'}. Line item: ${candidate.lineDescription}`,
+                            },
+                            select: {
+                                id: true,
+                                guai: true,
+                                name: true,
+                                category: true,
+                                purchasePrice: true,
+                                currency: true,
+                            },
+                        });
+
+                        assetAutomation.createdAssets.push(asset);
+                    }
+
+                    assetAutomation.createdCount = assetAutomation.createdAssets.length;
+
+                    if (savedDocument?.id && assetAutomation.createdAssets.length > 0) {
+                        await prisma.document.update({
+                            where: { id: savedDocument.id },
+                            data: { linkedAssetId: assetAutomation.createdAssets[0].id },
+                        });
+                    }
+                }
+            }
+        } catch (assetError) {
+            logger.warn('[OCR] Auto asset creation failed:', assetError.message);
+            assetAutomation.warnings.push(`Auto asset creation failed: ${assetError.message}`);
+        }
+    }
+
     // Don't delete the file — it's stored as a document
     res.status(200).json({
         success: true,
@@ -296,6 +578,7 @@ exports.processInvoice = asyncHandler(async (req, res, next) => {
             documentId: savedDocument?.id,
             documentUrl: fileUrl,
             matchedVendor,
+            assetAutomation,
         },
     });
 });

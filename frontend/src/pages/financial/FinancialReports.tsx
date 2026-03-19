@@ -35,26 +35,33 @@ interface Budget {
     spent: number;
 }
 
-export function FinancialReports() {
+type FinancialReportsProps = {
+    startDate: string;
+    endDate: string;
+    month: number;
+    year: number;
+    refreshKey: number;
+};
+
+export function FinancialReports({ startDate, endDate, month, year, refreshKey }: FinancialReportsProps) {
     const [transactions, setTransactions] = useState<Transaction[]>([]);
     const [budgets, setBudgets] = useState<Budget[]>([]);
     const [loading, setLoading] = useState(true);
-    const [dateRange, setDateRange] = useState('this_month'); // 'this_month', 'last_month', 'ytd'
 
     useEffect(() => {
         const fetchData = async () => {
             try {
                 setLoading(true);
                 const [txRes, budgetRes] = await Promise.all([
-                    api.get('/finance/transactions'),
-                    api.get('/finance/budgets')
+                    api.get('/finance/transactions', { params: { startDate, endDate, limit: 500, page: 1 } }),
+                    api.get('/finance/budgets', { params: { month, year } })
                 ]);
 
                 if (txRes.data.success) {
-                    setTransactions(txRes.data.data);
+                    setTransactions(Array.isArray(txRes.data.data) ? txRes.data.data : []);
                 }
                 if (budgetRes.data.success) {
-                    setBudgets(budgetRes.data.data);
+                    setBudgets(Array.isArray(budgetRes.data.data) ? budgetRes.data.data : []);
                 }
             } catch (error) {
                 console.error('Failed to fetch report data', error);
@@ -64,7 +71,7 @@ export function FinancialReports() {
         };
 
         fetchData();
-    }, []);
+    }, [startDate, endDate, month, year, refreshKey]);
 
     // 1. Budget vs Actual Data
     const budgetVsActualData = useMemo(() => {
@@ -127,19 +134,10 @@ export function FinancialReports() {
                     </div>
                     <div>
                         <h2 className="font-semibold text-gray-900 dark:text-gray-100">Financial Reports</h2>
-                        <p className="text-sm text-gray-500">Real-time financial analysis</p>
+                        <p className="text-sm text-gray-500">Real-time financial analysis • {new Date(startDate).toLocaleDateString()} - {new Date(endDate).toLocaleDateString()}</p>
                     </div>
                 </div>
                 <div className="flex gap-2">
-                    <select
-                        value={dateRange}
-                        onChange={(e) => setDateRange(e.target.value)}
-                        className="bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary)]"
-                    >
-                        <option value="this_month">This Month</option>
-                        <option value="last_month">Last Month</option>
-                        <option value="ytd">Year to Date (YTD)</option>
-                    </select>
                     <button className="flex items-center gap-2 px-3 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg text-sm hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
                         <Download className="w-4 h-4" />
                         Export

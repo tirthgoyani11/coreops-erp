@@ -122,6 +122,56 @@ async function generateJSON(prompt, options = {}) {
 }
 
 /**
+ * Generate structured JSON from an image using Kimi multimodal chat.
+ * Expects base64 image content and returns parsed JSON when possible.
+ */
+async function generateVisionJSON(imageBase64, prompt, options = {}) {
+    if (!imageBase64) return null;
+
+    const mimeType = options.mimeType || 'image/jpeg';
+    const systemPrompt = (options.systemPrompt || '') +
+        '\n\nIMPORTANT: Output ONLY valid JSON. No markdown, no explanation, just the JSON object.';
+
+    const messages = [
+        { role: 'system', content: systemPrompt },
+        {
+            role: 'user',
+            content: [
+                { type: 'text', text: prompt },
+                {
+                    type: 'image_url',
+                    image_url: { url: `data:${mimeType};base64,${imageBase64}` },
+                },
+            ],
+        },
+    ];
+
+    const result = await callChatCompletions(messages, {
+        temperature: options.temperature ?? 0.1,
+        maxTokens: options.maxTokens || 4096,
+    });
+
+    if (!result?.text) return null;
+
+    try {
+        const parsed = JSON.parse(result.text);
+        return { ...result, parsed };
+    } catch {
+        const jsonMatch = result.text.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+            try {
+                const parsed = JSON.parse(jsonMatch[0]);
+                return { ...result, parsed };
+            } catch {
+                // fall through
+            }
+        }
+        logger.warn('[KimiService] Vision JSON parse failed, returning raw text');
+        return { ...result, parsed: null };
+    }
+}
+
+/**
  * Health check — verify API key works
  */
 async function healthCheck() {
@@ -147,6 +197,7 @@ module.exports = {
     isConfigured,
     generateText,
     generateJSON,
+    generateVisionJSON,
     callChatCompletions,
     healthCheck,
 };
