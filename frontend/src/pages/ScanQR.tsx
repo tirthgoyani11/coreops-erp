@@ -34,12 +34,18 @@ function parseQrCode(raw: string): string {
         }
     })();
 
-    const uuidMatch = decoded.match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i);
+    const clean = decoded.replace(/[\u200B-\u200D\uFEFF\s]/g, '').trim();
+
+    const uuidMatch = clean.match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i);
     if (uuidMatch && uuidMatch[0]) return uuidMatch[0];
 
-    const pathMatch = decoded.match(/\/assets\/([a-zA-Z0-9-]{10,})/i);
+    const pathMatch = clean.match(/\/assets\/([a-zA-Z0-9-]{10,})/i);
     if (pathMatch && pathMatch[1]) return pathMatch[1];
-    return decoded;
+
+    const guaiMatch = clean.match(/\b([a-z]{2}-[a-z0-9]+-\d{3,})\b/i);
+    if (guaiMatch && guaiMatch[1]) return guaiMatch[1].toUpperCase();
+
+    return clean;
 }
 
 function extractUrl(raw: string): string | null {
@@ -117,9 +123,11 @@ export function ScanQR() {
         } catch (err: any) {
             const status = err?.response?.status;
             const maybeUrl = extractUrl(code);
-            if (status === 404 && maybeUrl) {
+            if ((status === 404 || status === 403) && maybeUrl) {
                 setExternalAssetUrl(maybeUrl);
                 setError('Asset not found in current environment. This QR may belong to another deployment.');
+            } else if (status === 403) {
+                setError('Asset found but access is denied for your current office/role.');
             } else {
                 setError(getErrorMessage(err));
             }

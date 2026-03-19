@@ -191,15 +191,37 @@ exports.lookupAsset = asyncHandler(async (req, res, next) => {
     const rawCode = String(req.query.code || '').trim();
     if (!rawCode) return next(new AppError('code query parameter is required', 400));
 
-    let parsed = rawCode;
-    const urlMatch = rawCode.match(/\/assets\/([a-zA-Z0-9-]{10,})/);
+    const decodedCode = (() => {
+        try {
+            return decodeURIComponent(rawCode);
+        } catch {
+            return rawCode;
+        }
+    })();
+
+    let parsed = decodedCode;
+    const urlMatch = decodedCode.match(/\/assets\/([a-zA-Z0-9-]{10,})/i);
     if (urlMatch && urlMatch[1]) parsed = urlMatch[1];
 
-    const whereOr = [
-        { id: parsed },
-        { guai: parsed },
-        { serialNumber: parsed },
-    ];
+    const guaiMatch = decodedCode.match(/\b([a-z]{2}-[a-z0-9]+-\d{3,})\b/i);
+    if (guaiMatch && guaiMatch[1]) {
+        parsed = guaiMatch[1];
+    }
+
+    parsed = String(parsed || '').replace(/[\u200B-\u200D\uFEFF\s]/g, '').trim();
+
+    const candidates = Array.from(new Set([
+        parsed,
+        parsed.toUpperCase(),
+        parsed.toLowerCase(),
+    ].filter(Boolean)));
+
+    const whereOr = [];
+    for (const c of candidates) {
+        whereOr.push({ id: c });
+        whereOr.push({ guai: { equals: c, mode: 'insensitive' } });
+        whereOr.push({ serialNumber: { equals: c, mode: 'insensitive' } });
+    }
 
     const asset = await prisma.asset.findFirst({
         where: { OR: whereOr },
