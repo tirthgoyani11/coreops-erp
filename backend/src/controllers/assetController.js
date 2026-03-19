@@ -82,7 +82,7 @@ exports.createAsset = asyncHandler(async (req, res, next) => {
 
     // Generate QR Code
     try {
-        const qrData = `${process.env.FRONTEND_URL || 'http://localhost:5173'}/assets/${asset.id}`;
+        const qrData = `${process.env.FRONTEND_URL || 'https://coreops.tirthgoyani.in'}/assets/${asset.id}`;
         const qrCode = await QRCode.toDataURL(qrData);
         asset = await prisma.asset.update({ where: { id: asset.id }, data: { qrCode } });
     } catch (qrError) {
