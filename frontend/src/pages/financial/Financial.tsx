@@ -19,6 +19,8 @@ import {
 } from 'lucide-react';
 import api from '../../lib/api';
 import { formatCurrency } from '../../lib/utils';
+import { useAuthStore } from '../../stores/authStore';
+import type { UserRole } from '../../types';
 
 type Snapshot = {
     expenseTotal: number;
@@ -38,6 +40,7 @@ function getMonthRange(year: number, month: number) {
 
 export function Financial() {
     const navigate = useNavigate();
+    const userRole = useAuthStore((state) => state.user?.role);
     const [activeTab, setActiveTab] = useState('DASHBOARD');
     const now = new Date();
     const [selectedMonth, setSelectedMonth] = useState(now.getMonth() + 1);
@@ -67,13 +70,13 @@ export function Financial() {
         const fetchSnapshot = async () => {
             setSnapshotLoading(true);
             try {
-                const [txRes, budgetRes] = await Promise.all([
+                const [txRes, budgetRes] = await Promise.allSettled([
                     api.get('/finance/transactions', { params: { startDate, endDate, limit: 500, page: 1 } }),
                     api.get('/finance/budgets', { params: { month: selectedMonth, year: selectedYear } }),
                 ]);
 
-                const tx = Array.isArray(txRes.data?.data) ? txRes.data.data : [];
-                const budgets = Array.isArray(budgetRes.data?.data) ? budgetRes.data.data : [];
+                const tx = txRes.status === 'fulfilled' && Array.isArray(txRes.value.data?.data) ? txRes.value.data.data : [];
+                const budgets = budgetRes.status === 'fulfilled' && Array.isArray(budgetRes.value.data?.data) ? budgetRes.value.data.data : [];
 
                 const expenseTotal = tx
                     .filter((item: any) => item.type === 'EXPENSE')
@@ -121,12 +124,44 @@ export function Financial() {
         return items;
     }, [budgetUtilization, burnMultiple, discrepancy, isConsistent]);
 
-    const quickLinks = [
-        { label: 'Working Capital', path: '/finance/working-capital', icon: Landmark, note: 'AP + AR unified aging' },
-        { label: 'Exception Center', path: '/finance/exception-center', icon: ShieldAlert, note: 'Escalations and SLA breaches' },
-        { label: 'Profit & Loss', path: '/profit-loss', icon: Target, note: 'Performance and margin trend' },
-        { label: 'Cash Flow', path: '/cash-flow', icon: Wallet, note: 'Operating cash movement' },
+    const quickLinks: Array<{ label: string; path: string; icon: any; note: string; roles: UserRole[] }> = [
+        {
+            label: 'Working Capital',
+            path: '/finance/working-capital',
+            icon: Landmark,
+            note: 'AP + AR unified aging',
+            roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'VIEWER'],
+        },
+        {
+            label: 'Exception Center',
+            path: '/finance/exception-center',
+            icon: ShieldAlert,
+            note: 'Escalations and SLA breaches',
+            roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF'],
+        },
+        {
+            label: 'Profit & Loss',
+            path: '/profit-loss',
+            icon: Target,
+            note: 'Performance and margin trend',
+            roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'VIEWER'],
+        },
+        {
+            label: 'Cash Flow',
+            path: '/cash-flow',
+            icon: Wallet,
+            note: 'Operating cash movement',
+            roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'VIEWER'],
+        },
+        {
+            label: 'Expense Claims',
+            path: '/expense-claims',
+            icon: Receipt,
+            note: 'Claims and reimbursements',
+            roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF'],
+        },
     ];
+    const visibleQuickLinks = quickLinks.filter((item) => !userRole || item.roles.includes(userRole));
 
     return (
         <div className="space-y-6">
@@ -226,7 +261,7 @@ export function Financial() {
                 <div className="xl:col-span-5 rounded-xl border border-[var(--border-color)] bg-[var(--bg-card)] p-4">
                     <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-3">Quick Navigation</h3>
                     <div className="space-y-2">
-                        {quickLinks.map((item) => (
+                        {visibleQuickLinks.map((item) => (
                             <button
                                 key={item.path}
                                 onClick={() => navigate(item.path)}

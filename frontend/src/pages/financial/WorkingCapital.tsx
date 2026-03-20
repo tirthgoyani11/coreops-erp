@@ -44,13 +44,24 @@ export function WorkingCapital() {
         try {
             setIsLoading(true);
             setError(null);
-            const [apRes, arRes] = await Promise.all([
+            const [apRes, arRes] = await Promise.allSettled([
                 api.get('/finance-ext/ap-aging'),
                 api.get('/finance-ext/ar-aging'),
             ]);
 
-            setAp(apRes.data?.success ? apRes.data.data : null);
-            setAr(arRes.data?.success ? arRes.data.data : null);
+            const nextAp = apRes.status === 'fulfilled' && apRes.value.data?.success ? apRes.value.data.data : null;
+            const nextAr = arRes.status === 'fulfilled' && arRes.value.data?.success ? arRes.value.data.data : null;
+
+            setAp(nextAp);
+            setAr(nextAr);
+
+            if (!nextAp && !nextAr) {
+                setError('Unable to load AP and AR aging data right now.');
+            } else if (!nextAp) {
+                setError('AP aging is temporarily unavailable. Showing AR data only.');
+            } else if (!nextAr) {
+                setError('AR aging is temporarily unavailable. Showing AP data only.');
+            }
         } catch (fetchError: any) {
             console.error('Failed to fetch working capital data:', fetchError);
             setError(fetchError?.response?.data?.message || 'Failed to load working capital data');
@@ -107,10 +118,13 @@ export function WorkingCapital() {
 
             {isLoading ? (
                 <div className="flex justify-center py-20"><Loader2 className="w-8 h-8 animate-spin text-[var(--primary)]" /></div>
-            ) : error ? (
-                <div className="rounded-xl border border-red-500/40 bg-red-500/10 p-4 text-red-200">{error}</div>
             ) : (
                 <>
+                    {error && (
+                        <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-amber-200">
+                            {error}
+                        </div>
+                    )}
                     <section className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-4">
                         <div className="bg-[var(--bg-card)] border border-[var(--border-color)] rounded-xl p-4">
                             <p className="text-xs text-[var(--text-muted)] uppercase tracking-wider">Accounts Receivable</p>
