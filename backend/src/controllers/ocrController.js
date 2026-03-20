@@ -51,6 +51,15 @@ Required JSON schema:
 
 Return ONLY the JSON. No explanation, no markdown.`;
 
+const HARD_OCR_PROMPT_SUFFIX = `
+
+Hard-mode rules for difficult documents:
+- Handle skewed, blurry, rotated, low-contrast, cropped, and multilingual invoices/receipts.
+- Infer missing totals from line items when possible.
+- Use null for unknown fields, never hallucinate.
+- Always return complete schema fields and valid numeric types.
+`;
+
 function normalizeExtractedData(data = {}) {
     const normalized = {
         ...data,
@@ -386,16 +395,33 @@ exports.processInvoice = asyncHandler(async (req, res, next) => {
     let aiSource = 'none';
     const autoCreateAssets = parseBooleanFlag(req.body.autoCreateAssets, true);
     const maxAssetsPerScan = 60;
+    const ocrMode = String(req.body.ocrMode || 'high').trim().toLowerCase();
+    const isHighCapabilityMode = ocrMode !== 'fast';
 
     try {
         // ── Tier 1: Kimi vision (preferred) -> Kaggle vision fallback ──
         const imageBase64 = Buffer.from(fs.readFileSync(filePath)).toString('base64');
-        const visionResult = await kaggleService.vision(imageBase64, INVOICE_PROMPT, {
+        const primaryPrompt = isHighCapabilityMode
+            ? `${INVOICE_PROMPT}\n${HARD_OCR_PROMPT_SUFFIX}`
+            : INVOICE_PROMPT;
+
+        let visionResult = await kaggleService.vision(imageBase64, primaryPrompt, {
             mimeType,
             providerPreference: 'kimi',
-            temperature: 0.1,
-            maxTokens: 2500,
+            temperature: isHighCapabilityMode ? 0.05 : 0.1,
+            maxTokens: isHighCapabilityMode ? 5000 : 2500,
         });
+
+        // Retry with alternate provider preference in high-capability mode for hard scans.
+        if ((!visionResult?.text || visionResult?.source === 'none') && isHighCapabilityMode) {
+            const secondaryPrompt = `${primaryPrompt}\nRe-run extraction with strict robustness and return only JSON.`;
+            visionResult = await kaggleService.vision(imageBase64, secondaryPrompt, {
+                mimeType,
+                providerPreference: 'kaggle',
+                temperature: 0.05,
+                maxTokens: 5000,
+            });
+        }
 
         if (visionResult?.text) {
             aiSource = visionResult.source || 'kaggle';
@@ -403,6 +429,11 @@ exports.processInvoice = asyncHandler(async (req, res, next) => {
                 const clean = visionResult.text.replace(/```json/gi, '').replace(/```/g, '').trim();
                 extractedData = normalizeExtractedData(JSON.parse(clean));
                 extractedData.confidenceScore = extractedData.confidenceScore || 0.85;
+
+                // High-capability refinement pass for edge cases and consistency checks.
+                if (isHighCapabilityMode) {
+                    extractedData = await refineWithKimi(extractedData, visionResult.text);
+                }
             } catch {
                 // JSON parse failed — salvage fields then refine with Kimi text reasoning
                 const fallback = parseTextFallback(visionResult.text);
@@ -575,6 +606,7 @@ exports.processInvoice = asyncHandler(async (req, res, next) => {
         data: {
             extractedData,
             aiSource,
+            ocrMode: isHighCapabilityMode ? 'high' : 'fast',
             documentId: savedDocument?.id,
             documentUrl: fileUrl,
             matchedVendor,

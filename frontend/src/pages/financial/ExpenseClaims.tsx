@@ -66,12 +66,15 @@ export function ExpenseClaims() {
 
             const formData = new FormData();
             formData.append('invoice', file);
+            formData.append('ocrMode', 'high');
 
             const res = await api.post('/ocr/upload', formData, {
                 headers: { 'Content-Type': 'multipart/form-data' },
             });
 
             const extracted = res?.data?.data?.extractedData || {};
+            const aiSource = res?.data?.data?.aiSource || 'unknown';
+            const ocrMode = res?.data?.data?.ocrMode || 'high';
             const lineItems = Array.isArray(extracted.lineItems) ? extracted.lineItems : [];
 
             if (extracted.vendorName || extracted.invoiceNumber || extracted.notes) {
@@ -92,7 +95,7 @@ export function ExpenseClaims() {
                     amount: String(Number(line.total || line.unitPrice || 0) || ''),
                 }));
                 setItems(mappedItems.length > 0 ? mappedItems : items);
-                setOcrMessage(`OCR complete. Imported ${mappedItems.length} expense item(s).`);
+                setOcrMessage(`OCR (${ocrMode}, ${aiSource}) complete. Imported ${mappedItems.length} expense item(s).`);
             } else if (extracted.totalAmount) {
                 setItems([
                     {
@@ -102,9 +105,9 @@ export function ExpenseClaims() {
                         amount: String(Number(extracted.totalAmount)),
                     },
                 ]);
-                setOcrMessage('OCR complete. Total amount imported as one expense item.');
+                setOcrMessage(`OCR (${ocrMode}, ${aiSource}) complete. Total amount imported as one expense item.`);
             } else {
-                setOcrMessage('OCR complete, but no amount was detected. Please fill values manually.');
+                setOcrMessage(`OCR (${ocrMode}, ${aiSource}) complete, but no amount was detected. Please fill values manually.`);
             }
         } catch (error: any) {
             console.error('OCR scan failed:', error);
