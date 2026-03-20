@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Receipt, Plus, Loader2, CheckCircle2, XCircle, DollarSign, List, FileText } from 'lucide-react';
+import { Receipt, Plus, Loader2, CheckCircle2, XCircle, DollarSign, List, FileText, ScanLine } from 'lucide-react';
 import api from '../../lib/api';
 import { formatCurrency } from '../../lib/utils';
 
@@ -10,6 +10,8 @@ export function ExpenseClaims() {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [showForm, setShowForm] = useState(false);
     const [userRole, setUserRole] = useState<string>('STAFF');
+    const [isOcrScanning, setIsOcrScanning] = useState(false);
+    const [ocrMessage, setOcrMessage] = useState<string>('');
 
     // Form State
     const [description, setDescription] = useState('');
@@ -52,6 +54,65 @@ export function ExpenseClaims() {
 
     const handleRemoveItem = (index: number) => {
         setItems(items.filter((_, i) => i !== index));
+    };
+
+    const handleScanReceipt = async (event: React.ChangeEvent<HTMLInputElement>) => {
+        const file = event.target.files?.[0];
+        if (!file) return;
+
+        try {
+            setIsOcrScanning(true);
+            setOcrMessage('Scanning receipt with OCR...');
+
+            const formData = new FormData();
+            formData.append('invoice', file);
+
+            const res = await api.post('/ocr/upload', formData, {
+                headers: { 'Content-Type': 'multipart/form-data' },
+            });
+
+            const extracted = res?.data?.data?.extractedData || {};
+            const lineItems = Array.isArray(extracted.lineItems) ? extracted.lineItems : [];
+
+            if (extracted.vendorName || extracted.invoiceNumber || extracted.notes) {
+                const autoDescription = [
+                    extracted.vendorName ? `Vendor: ${extracted.vendorName}` : '',
+                    extracted.invoiceNumber ? `Invoice: ${extracted.invoiceNumber}` : '',
+                    extracted.notes || '',
+                ].filter(Boolean).join(' | ');
+
+                setDescription(autoDescription || description);
+            }
+
+            if (lineItems.length > 0) {
+                const mappedItems = lineItems.slice(0, 20).map((line: any) => ({
+                    date: extracted.date || new Date().toISOString().split('T')[0],
+                    category: 'SUPPLIES',
+                    description: String(line.description || 'OCR Imported Item').slice(0, 200),
+                    amount: String(Number(line.total || line.unitPrice || 0) || ''),
+                }));
+                setItems(mappedItems.length > 0 ? mappedItems : items);
+                setOcrMessage(`OCR complete. Imported ${mappedItems.length} expense item(s).`);
+            } else if (extracted.totalAmount) {
+                setItems([
+                    {
+                        date: extracted.date || new Date().toISOString().split('T')[0],
+                        category: 'SUPPLIES',
+                        description: extracted.vendorName ? `Receipt from ${extracted.vendorName}` : 'OCR imported receipt',
+                        amount: String(Number(extracted.totalAmount)),
+                    },
+                ]);
+                setOcrMessage('OCR complete. Total amount imported as one expense item.');
+            } else {
+                setOcrMessage('OCR complete, but no amount was detected. Please fill values manually.');
+            }
+        } catch (error: any) {
+            console.error('OCR scan failed:', error);
+            setOcrMessage(error?.response?.data?.message || 'OCR scan failed. Try another image.');
+        } finally {
+            setIsOcrScanning(false);
+            event.target.value = '';
+        }
     };
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -148,6 +209,29 @@ export function ExpenseClaims() {
                         </div>
 
                         <form onSubmit={handleSubmit} className="space-y-6">
+                            <div className="bg-[var(--bg-overlay)] border border-[var(--border-color)] rounded-lg p-4">
+                                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                                    <div>
+                                        <h3 className="font-medium text-[var(--text-primary)] flex items-center gap-2">
+                                            <ScanLine className="w-4 h-4 text-[var(--primary)]" /> OCR Receipt Scanner
+                                        </h3>
+                                        <p className="text-xs text-[var(--text-secondary)] mt-1">Upload receipt/invoice image to auto-fill claim fields.</p>
+                                    </div>
+                                    <label className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-[var(--border-color)] cursor-pointer hover:bg-[var(--bg-card)] text-sm">
+                                        {isOcrScanning ? <Loader2 className="w-4 h-4 animate-spin" /> : <ScanLine className="w-4 h-4" />}
+                                        {isOcrScanning ? 'Scanning...' : 'Scan Receipt'}
+                                        <input
+                                            type="file"
+                                            accept="image/*,.pdf"
+                                            onChange={handleScanReceipt}
+                                            className="hidden"
+                                            disabled={isOcrScanning}
+                                        />
+                                    </label>
+                                </div>
+                                {ocrMessage && <p className="mt-2 text-xs text-[var(--text-secondary)]">{ocrMessage}</p>}
+                            </div>
+
                             <div>
                                 <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1">Purpose / Description</label>
                                 <input
