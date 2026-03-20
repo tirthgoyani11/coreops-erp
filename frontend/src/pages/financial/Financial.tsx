@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { InvoiceUpload } from './InvoiceUpload';
 import { TransactionList } from './TransactionList';
 import { BudgetOverview } from './BudgetOverview';
@@ -11,6 +12,10 @@ import {
     RefreshCw,
     AlertTriangle,
     CheckCircle2,
+    ArrowRight,
+    Landmark,
+    ShieldAlert,
+    Target,
 } from 'lucide-react';
 import api from '../../lib/api';
 import { formatCurrency } from '../../lib/utils';
@@ -32,6 +37,7 @@ function getMonthRange(year: number, month: number) {
 }
 
 export function Financial() {
+    const navigate = useNavigate();
     const [activeTab, setActiveTab] = useState('DASHBOARD');
     const now = new Date();
     const [selectedMonth, setSelectedMonth] = useState(now.getMonth() + 1);
@@ -93,6 +99,34 @@ export function Financial() {
 
     const discrepancy = Math.abs(snapshot.expenseTotal - snapshot.budgetSpentTotal);
     const isConsistent = discrepancy < 0.5;
+    const netCash = snapshot.incomeTotal - snapshot.expenseTotal;
+    const budgetUtilization = snapshot.budgetLimitTotal > 0 ? (snapshot.budgetSpentTotal / snapshot.budgetLimitTotal) * 100 : 0;
+    const burnMultiple = snapshot.incomeTotal > 0 ? snapshot.expenseTotal / snapshot.incomeTotal : 0;
+    const cashRunwayMonths = snapshot.expenseTotal > 0 && netCash > 0 ? netCash / snapshot.expenseTotal : 0;
+
+    const recommendations = useMemo(() => {
+        const items: string[] = [];
+        if (budgetUtilization > 90) {
+            items.push('Budget utilization exceeded 90%. Lock non-essential spends and move exceptions to approval gate.');
+        }
+        if (burnMultiple > 1) {
+            items.push('Burn multiple is above 1. Reduce discretionary expenses or accelerate receivables.');
+        }
+        if (!isConsistent) {
+            items.push(`Detected variance of ${formatCurrency(discrepancy)} between expense ledger and budget usage.`);
+        }
+        if (items.length === 0) {
+            items.push('Financial controls are stable. Focus on efficiency gains and cash conversion optimization.');
+        }
+        return items;
+    }, [budgetUtilization, burnMultiple, discrepancy, isConsistent]);
+
+    const quickLinks = [
+        { label: 'Working Capital', path: '/finance/working-capital', icon: Landmark, note: 'AP + AR unified aging' },
+        { label: 'Exception Center', path: '/finance/exception-center', icon: ShieldAlert, note: 'Escalations and SLA breaches' },
+        { label: 'Profit & Loss', path: '/profit-loss', icon: Target, note: 'Performance and margin trend' },
+        { label: 'Cash Flow', path: '/cash-flow', icon: Wallet, note: 'Operating cash movement' },
+    ];
 
     return (
         <div className="space-y-6">
@@ -145,6 +179,74 @@ export function Financial() {
                     )}
                 </div>
             </div>
+
+            <section className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+                <div className="rounded-xl border border-[var(--border-color)] bg-[var(--bg-card)] p-4">
+                    <p className="text-xs text-[var(--text-muted)] uppercase tracking-wider">Net Cash Position</p>
+                    <p className={`text-2xl font-bold mt-1 ${netCash >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                        {formatCurrency(netCash)}
+                    </p>
+                    <p className="text-xs text-[var(--text-secondary)] mt-1">Income minus expense for selected month</p>
+                </div>
+                <div className="rounded-xl border border-[var(--border-color)] bg-[var(--bg-card)] p-4">
+                    <p className="text-xs text-[var(--text-muted)] uppercase tracking-wider">Budget Utilization</p>
+                    <p className={`text-2xl font-bold mt-1 ${budgetUtilization > 90 ? 'text-amber-400' : 'text-[var(--text-primary)]'}`}>
+                        {budgetUtilization.toFixed(1)}%
+                    </p>
+                    <p className="text-xs text-[var(--text-secondary)] mt-1">Total spent vs allocated limit</p>
+                </div>
+                <div className="rounded-xl border border-[var(--border-color)] bg-[var(--bg-card)] p-4">
+                    <p className="text-xs text-[var(--text-muted)] uppercase tracking-wider">Burn Multiple</p>
+                    <p className={`text-2xl font-bold mt-1 ${burnMultiple > 1 ? 'text-orange-400' : 'text-emerald-400'}`}>
+                        {Number.isFinite(burnMultiple) ? burnMultiple.toFixed(2) : '0.00'}x
+                    </p>
+                    <p className="text-xs text-[var(--text-secondary)] mt-1">Expense divided by income</p>
+                </div>
+                <div className="rounded-xl border border-[var(--border-color)] bg-[var(--bg-card)] p-4">
+                    <p className="text-xs text-[var(--text-muted)] uppercase tracking-wider">Estimated Runway</p>
+                    <p className="text-2xl font-bold mt-1 text-[var(--text-primary)]">
+                        {cashRunwayMonths > 0 ? `${cashRunwayMonths.toFixed(1)} mo` : 'At Risk'}
+                    </p>
+                    <p className="text-xs text-[var(--text-secondary)] mt-1">Based on current monthly burn</p>
+                </div>
+            </section>
+
+            <section className="grid grid-cols-1 xl:grid-cols-12 gap-4">
+                <div className="xl:col-span-7 rounded-xl border border-[var(--border-color)] bg-[var(--bg-card)] p-4">
+                    <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-3">CFO Recommendations</h3>
+                    <div className="space-y-2">
+                        {recommendations.map((rec, index) => (
+                            <div key={index} className="rounded-lg border border-[var(--border-color)] bg-[var(--bg-overlay)] px-3 py-2 text-sm text-[var(--text-secondary)]">
+                                {rec}
+                            </div>
+                        ))}
+                    </div>
+                </div>
+
+                <div className="xl:col-span-5 rounded-xl border border-[var(--border-color)] bg-[var(--bg-card)] p-4">
+                    <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-3">Quick Navigation</h3>
+                    <div className="space-y-2">
+                        {quickLinks.map((item) => (
+                            <button
+                                key={item.path}
+                                onClick={() => navigate(item.path)}
+                                className="w-full text-left rounded-lg border border-[var(--border-color)] bg-[var(--bg-overlay)] px-3 py-2 hover:border-[var(--primary)]/40 hover:bg-[var(--bg-card-hover)] transition-colors"
+                            >
+                                <div className="flex items-center justify-between gap-3">
+                                    <div className="min-w-0">
+                                        <div className="flex items-center gap-2 text-[var(--text-primary)] font-medium">
+                                            <item.icon className="w-4 h-4 text-[var(--primary)]" />
+                                            {item.label}
+                                        </div>
+                                        <p className="text-xs text-[var(--text-secondary)] mt-1">{item.note}</p>
+                                    </div>
+                                    <ArrowRight className="w-4 h-4 text-[var(--text-secondary)]" />
+                                </div>
+                            </button>
+                        ))}
+                    </div>
+                </div>
+            </section>
 
             <div className="flex bg-[var(--bg-card)] border border-[var(--border-color)] p-1 rounded-lg w-full overflow-auto">
                 {[
