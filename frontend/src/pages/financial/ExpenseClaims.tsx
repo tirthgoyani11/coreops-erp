@@ -1,15 +1,18 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Receipt, Plus, Loader2, CheckCircle2, XCircle, DollarSign, List, FileText } from 'lucide-react';
+import { useSearchParams } from 'react-router-dom';
 import api from '../../lib/api';
 import { formatCurrency } from '../../lib/utils';
 
 export function ExpenseClaims() {
+    const [searchParams] = useSearchParams();
     const [claims, setClaims] = useState<any[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [showForm, setShowForm] = useState(false);
     const [userRole, setUserRole] = useState<string>('STAFF');
+    const selectedClaimId = searchParams.get('claimId');
 
     // Form State
     const [description, setDescription] = useState('');
@@ -25,6 +28,17 @@ export function ExpenseClaims() {
         }
         fetchClaims();
     }, []);
+
+    useEffect(() => {
+        if (!selectedClaimId || isLoading || claims.length === 0) {
+            return;
+        }
+
+        const element = document.querySelector(`[data-claim-id="${selectedClaimId}"]`);
+        if (element instanceof HTMLElement) {
+            element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+    }, [selectedClaimId, isLoading, claims]);
 
     const fetchClaims = async () => {
         try {
@@ -234,7 +248,15 @@ export function ExpenseClaims() {
                         ) : (
                             <div className="space-y-4">
                                 {claims.map(claim => (
-                                    <div key={claim.id} className="bg-[var(--bg-card)] border border-[var(--border-color)] rounded-xl p-5 hover:border-[var(--primary)]/50 transition-colors">
+                                    <div
+                                        key={claim.id}
+                                        data-claim-id={claim.id}
+                                        className={`bg-[var(--bg-card)] border rounded-xl p-5 transition-colors ${
+                                            selectedClaimId === claim.id
+                                                ? 'border-[var(--primary)] shadow-[0_0_0_1px_var(--primary)]'
+                                                : 'border-[var(--border-color)] hover:border-[var(--primary)]/50'
+                                        }`}
+                                    >
                                         <div className="flex justify-between items-start mb-4">
                                             <div>
                                                 <div className="flex items-center gap-3">

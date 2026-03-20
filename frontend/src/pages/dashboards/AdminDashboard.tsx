@@ -1,5 +1,6 @@
 import { useState, useEffect, memo } from 'react';
 import { motion } from 'framer-motion';
+import { useNavigate } from 'react-router-dom';
 import {
     Package,
     Wrench,
@@ -71,6 +72,7 @@ function getPriorityClass(priority: string) {
 }
 
 export const AdminDashboard = memo(function AdminDashboard() {
+    const navigate = useNavigate();
     const { user } = useAuthStore();
     const isSuperAdmin = user?.role === 'SUPER_ADMIN';
 
@@ -118,6 +120,18 @@ export const AdminDashboard = memo(function AdminDashboard() {
             url: `/finance-ext/expense-claims/${item.id}/status`,
             data: { status: decision === 'APPROVE' ? 'APPROVED' : 'REJECTED' },
         };
+    };
+
+    const getApprovalDetailsPath = (item: ApprovalItem) => {
+        if (item.type === 'PURCHASE_ORDER') {
+            return `/purchase-orders/${item.id}`;
+        }
+
+        if (item.type === 'MAINTENANCE') {
+            return `/maintenance/${item.id}`;
+        }
+
+        return `/expense-claims?claimId=${item.id}`;
     };
 
     const handleApprovalAction = async (item: ApprovalItem, decision: 'APPROVE' | 'REJECT') => {
@@ -370,7 +384,19 @@ export const AdminDashboard = memo(function AdminDashboard() {
                                 const TypeIcon = cfg.icon;
                                 const isBusy = !!actionBusyById[item.id];
                                 return (
-                                    <div key={item.id} className="p-3 rounded-xl bg-[var(--bg-overlay)] border border-[var(--border-color)]">
+                                    <div
+                                        key={item.id}
+                                        role="button"
+                                        tabIndex={0}
+                                        onClick={() => navigate(getApprovalDetailsPath(item))}
+                                        onKeyDown={(event) => {
+                                            if (event.key === 'Enter' || event.key === ' ') {
+                                                event.preventDefault();
+                                                navigate(getApprovalDetailsPath(item));
+                                            }
+                                        }}
+                                        className="p-3 rounded-xl bg-[var(--bg-overlay)] border border-[var(--border-color)] cursor-pointer hover:border-[var(--primary)]/35 transition-colors"
+                                    >
                                         <div className="flex items-center justify-between gap-2 mb-1">
                                             <span className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border ${cfg.color}`}>
                                                 <TypeIcon className="w-3 h-3" />
@@ -387,7 +413,10 @@ export const AdminDashboard = memo(function AdminDashboard() {
                                         </div>
                                         <div className="mt-3 flex gap-2">
                                             <button
-                                                onClick={() => handleApprovalAction(item, 'APPROVE')}
+                                                onClick={(event) => {
+                                                    event.stopPropagation();
+                                                    handleApprovalAction(item, 'APPROVE');
+                                                }}
                                                 disabled={isBusy}
                                                 className="flex-1 inline-flex items-center justify-center gap-1.5 px-2 py-1.5 text-xs rounded-md border border-emerald-500/30 text-emerald-300 bg-emerald-500/10 hover:bg-emerald-500/15 disabled:opacity-60"
                                             >
@@ -395,7 +424,10 @@ export const AdminDashboard = memo(function AdminDashboard() {
                                                 Approve
                                             </button>
                                             <button
-                                                onClick={() => handleApprovalAction(item, 'REJECT')}
+                                                onClick={(event) => {
+                                                    event.stopPropagation();
+                                                    handleApprovalAction(item, 'REJECT');
+                                                }}
                                                 disabled={isBusy}
                                                 className="flex-1 inline-flex items-center justify-center gap-1.5 px-2 py-1.5 text-xs rounded-md border border-rose-500/30 text-rose-300 bg-rose-500/10 hover:bg-rose-500/15 disabled:opacity-60"
                                             >

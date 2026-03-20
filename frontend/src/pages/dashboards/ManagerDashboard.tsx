@@ -65,11 +65,13 @@ const ApprovalQueue = memo(function ApprovalQueue({
     loading,
     onApprove,
     onReject,
+    onOpenDetails,
 }: {
     items: ApprovalItem[];
     loading: boolean;
     onApprove: (id: string) => void;
     onReject: (id: string) => void;
+    onOpenDetails: (item: ApprovalItem) => void;
 }) {
     if (loading) {
         return (
@@ -116,7 +118,16 @@ const ApprovalQueue = memo(function ApprovalQueue({
                                 initial={{ opacity: 0, x: -10 }}
                                 animate={{ opacity: 1, x: 0 }}
                                 transition={{ delay: index * 0.05 }}
-                                className="p-4 rounded-xl bg-[var(--bg-overlay)] border border-[var(--border-color)] hover:border-[var(--primary)]/30 transition-colors"
+                                role="button"
+                                tabIndex={0}
+                                onClick={() => onOpenDetails(item)}
+                                onKeyDown={(event) => {
+                                    if (event.key === 'Enter' || event.key === ' ') {
+                                        event.preventDefault();
+                                        onOpenDetails(item);
+                                    }
+                                }}
+                                className="p-4 rounded-xl bg-[var(--bg-overlay)] border border-[var(--border-color)] hover:border-[var(--primary)]/30 transition-colors cursor-pointer"
                             >
                                 <div className="flex items-start justify-between gap-4">
                                     <div className="flex-1 min-w-0">
@@ -143,14 +154,20 @@ const ApprovalQueue = memo(function ApprovalQueue({
                                     </div>
                                     <div className="flex items-center gap-2">
                                         <button
-                                            onClick={() => onApprove(item.id)}
+                                            onClick={(event) => {
+                                                event.stopPropagation();
+                                                onApprove(item.id);
+                                            }}
                                             className="p-2 rounded-lg bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 transition-colors"
                                             title="Approve"
                                         >
                                             <CheckCircle2 className="w-4 h-4" />
                                         </button>
                                         <button
-                                            onClick={() => onReject(item.id)}
+                                            onClick={(event) => {
+                                                event.stopPropagation();
+                                                onReject(item.id);
+                                            }}
                                             className="p-2 rounded-lg bg-red-500/10 text-red-400 hover:bg-red-500/20 transition-colors"
                                             title="Reject"
                                         >
@@ -261,6 +278,15 @@ export const ManagerDashboard = memo(function ManagerDashboard() {
         }
     };
 
+    const getApprovalDetailsPath = (item: ApprovalItem) => {
+        switch (item.type) {
+            case 'MAINTENANCE': return `/maintenance/${item.id}`;
+            case 'PURCHASE_ORDER': return `/purchase-orders/${item.id}`;
+            case 'EXPENSE_CLAIM': return `/expense-claims?claimId=${item.id}`;
+            default: return '/expense-claims';
+        }
+    };
+
     const handleApprove = async (id: string) => {
         const item = approvals.find(a => a.id === id);
         if (!item) return;
@@ -359,6 +385,7 @@ export const ManagerDashboard = memo(function ManagerDashboard() {
                         loading={loading}
                         onApprove={handleApprove}
                         onReject={handleReject}
+                        onOpenDetails={(item) => navigate(getApprovalDetailsPath(item))}
                     />
                 </div>
 
