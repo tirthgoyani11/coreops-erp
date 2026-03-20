@@ -60,28 +60,36 @@ export function ExceptionCenter() {
     const [searchParams] = useSearchParams();
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const [warning, setWarning] = useState<string | null>(null);
     const [report, setReport] = useState<ExceptionResponse | null>(null);
     const [cockpit, setCockpit] = useState<CockpitResponse | null>(null);
 
     const fetchData = useCallback(async () => {
         setIsLoading(true);
         setError(null);
+        setWarning(null);
         try {
-            const [exceptionRes, cockpitRes] = await Promise.all([
+            const [exceptionRes, cockpitRes] = await Promise.allSettled([
                 api.get('/finance-ext/exception-center'),
                 api.get('/finance-ext/cockpit'),
             ]);
 
-            if (exceptionRes.data?.success) {
-                setReport(exceptionRes.data.data as ExceptionResponse);
-            } else {
-                setReport(null);
-            }
+            const nextReport = exceptionRes.status === 'fulfilled' && exceptionRes.value.data?.success
+                ? (exceptionRes.value.data.data as ExceptionResponse)
+                : null;
+            const nextCockpit = cockpitRes.status === 'fulfilled' && cockpitRes.value.data?.success
+                ? (cockpitRes.value.data.data as CockpitResponse)
+                : null;
 
-            if (cockpitRes.data?.success) {
-                setCockpit(cockpitRes.data.data as CockpitResponse);
-            } else {
-                setCockpit(null);
+            setReport(nextReport);
+            setCockpit(nextCockpit);
+
+            if (!nextReport && !nextCockpit) {
+                setError('Failed to load exception center data.');
+            } else if (!nextReport) {
+                setWarning('Exception queue is temporarily unavailable. KPI cockpit is shown with available data.');
+            } else if (!nextCockpit) {
+                setWarning('KPI cockpit is temporarily unavailable. Exception queue is shown with available data.');
             }
         } catch (err: any) {
             console.error('Failed to load exception center data', err);
@@ -166,6 +174,11 @@ export function ExceptionCenter() {
                 </div>
             ) : (
                 <>
+                    {warning && (
+                        <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-amber-200">
+                            {warning}
+                        </div>
+                    )}
                     <section className="grid grid-cols-2 lg:grid-cols-5 gap-4">
                         <div className="bg-[var(--bg-card)] border border-[var(--border-color)] rounded-xl p-4">
                             <div className="text-xs text-[var(--text-muted)] uppercase tracking-wider">Total Exceptions</div>

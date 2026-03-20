@@ -9,6 +9,10 @@ export function BankReconciliation() {
     const [isUploading, setIsUploading] = useState(false);
     const [selectedStatementId, setSelectedStatementId] = useState<string | null>(null);
     const [reconData, setReconData] = useState<any>(null);
+    const [reconLoading, setReconLoading] = useState(false);
+    const [pageError, setPageError] = useState<string | null>(null);
+    const [reconError, setReconError] = useState<string | null>(null);
+    const [notice, setNotice] = useState<string | null>(null);
 
     useEffect(() => {
         fetchStatements();
@@ -17,12 +21,17 @@ export function BankReconciliation() {
     const fetchStatements = async () => {
         try {
             setIsLoading(true);
+            setPageError(null);
             const res = await api.get('/finance-ext/bank-statements');
             if (res.data.success) {
                 setStatements(res.data.data);
+            } else {
+                setStatements([]);
             }
-        } catch (error) {
+        } catch (error: any) {
             console.error('Failed to fetch Bank Statements:', error);
+            setStatements([]);
+            setPageError(error?.response?.data?.message || 'Failed to load bank statements. Please try again.');
         } finally {
             setIsLoading(false);
         }
@@ -30,12 +39,20 @@ export function BankReconciliation() {
 
     const fetchReconData = async (id: string) => {
         try {
+            setReconLoading(true);
+            setReconError(null);
             const res = await api.get(`/finance-ext/bank-statements/${id}/reconcile`);
             if (res.data.success) {
                 setReconData(res.data.data);
+            } else {
+                setReconData(null);
             }
-        } catch (error) {
+        } catch (error: any) {
             console.error('Failed to fetch reconciliation details:', error);
+            setReconData(null);
+            setReconError(error?.response?.data?.message || 'Unable to load reconciliation details.');
+        } finally {
+            setReconLoading(false);
         }
     };
 
@@ -67,17 +84,19 @@ export function BankReconciliation() {
 
             const res = await api.post('/finance-ext/bank-statements', payload);
             if (res.data.success) {
-                fetchStatements();
+                setNotice('Statement uploaded successfully.');
+                void fetchStatements();
             }
-        } catch (error) {
+        } catch (error: any) {
             console.error('Upload failed', error);
+            setNotice(error?.response?.data?.message || 'Statement upload failed.');
         } finally {
             setIsUploading(false);
         }
     };
 
     const confirmMatches = async () => {
-        if (!reconData || !reconData.suggestedMatches.length) return;
+        if (!reconData || !reconData.suggestedMatches.length || !selectedStatementId) return;
 
         try {
             const matches = reconData.suggestedMatches.map((m: any) => ({
@@ -86,11 +105,12 @@ export function BankReconciliation() {
             }));
             const res = await api.post(`/finance-ext/bank-statements/${selectedStatementId}/reconcile`, { matches });
             if (res.data.success) {
-                alert('Matches confirmed successfully!');
-                fetchReconData(selectedStatementId!);
+                setNotice('Matches confirmed successfully.');
+                void fetchReconData(selectedStatementId);
             }
-        } catch (error) {
+        } catch (error: any) {
             console.error('Match confirmation failed:', error);
+            setNotice(error?.response?.data?.message || 'Match confirmation failed.');
         }
     };
 
@@ -118,6 +138,18 @@ export function BankReconciliation() {
                 </button>
             </div>
 
+            {notice && (
+                <div className="rounded-xl border border-[var(--border-color)] bg-[var(--bg-overlay)] p-3 text-sm text-[var(--text-secondary)]">
+                    {notice}
+                </div>
+            )}
+
+            {pageError && (
+                <div className="rounded-xl border border-red-500/40 bg-red-500/10 p-3 text-sm text-red-200">
+                    {pageError}
+                </div>
+            )}
+
             {isLoading ? (
                 <div className="flex justify-center flex-col items-center py-20">
                     <Loader2 className="w-8 h-8 animate-spin text-[var(--primary)]" />
@@ -140,7 +172,8 @@ export function BankReconciliation() {
                                     key={stmt.id}
                                     onClick={() => {
                                         setSelectedStatementId(stmt.id);
-                                        fetchReconData(stmt.id);
+                                        setReconData(null);
+                                        void fetchReconData(stmt.id);
                                     }}
                                     className={`p-4 rounded-xl border cursor-pointer transition-all ${selectedStatementId === stmt.id
                                         ? 'bg-[var(--primary)]/10 border-[var(--primary)] shadow-[0_0_10px_rgba(185,255,102,0.1)]'
@@ -153,7 +186,7 @@ export function BankReconciliation() {
                                     </div>
                                     <div className="text-xs text-[var(--text-muted)] flex justify-between">
                                         <span>Date: {new Date(stmt.statementDate).toLocaleDateString()}</span>
-                                        <span>{stmt._count.entries} entries</span>
+                                        <span>{stmt._count?.entries || 0} entries</span>
                                     </div>
                                 </div>
                             ))}
@@ -166,9 +199,17 @@ export function BankReconciliation() {
                             <div className="h-full min-h-[400px] flex items-center justify-center bg-[var(--bg-card)] border border-[var(--border-color)] rounded-xl">
                                 <p className="text-[var(--text-muted)]">Select a statement to view reconciliation details.</p>
                             </div>
-                        ) : !reconData ? (
+                        ) : reconLoading ? (
                             <div className="h-full min-h-[400px] flex items-center justify-center bg-[var(--bg-card)] border border-[var(--border-color)] rounded-xl">
                                 <Loader2 className="w-8 h-8 animate-spin text-[var(--primary)]" />
+                            </div>
+                        ) : reconError ? (
+                            <div className="h-full min-h-[400px] flex items-center justify-center bg-[var(--bg-card)] border border-red-500/30 rounded-xl p-6 text-center text-red-200">
+                                {reconError}
+                            </div>
+                        ) : !reconData ? (
+                            <div className="h-full min-h-[400px] flex items-center justify-center bg-[var(--bg-card)] border border-[var(--border-color)] rounded-xl text-[var(--text-muted)]">
+                                No reconciliation data for this statement.
                             </div>
                         ) : (
                             <div className="space-y-6">
