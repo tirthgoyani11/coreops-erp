@@ -646,7 +646,7 @@ async function main() {
 
   const glAccounts = [];
   for (const account of glAccountSeed) {
-    const saved = await prisma.glAccount.upsert({
+    const saved = await prisma.gLAccount.upsert({
       where: { code: account.code },
       update: {
         name: account.name,
