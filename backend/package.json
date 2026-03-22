@@ -8,7 +8,8 @@
     "dev": "nodemon server.js",
     "test": "echo \"Error: no test specified\" && exit 1",
     "db:seed": "node prisma/seed.js",
-    "db:reset": "npx prisma migrate reset --force"
+    "db:reset": "npx prisma migrate reset --force",
+    "db:seed:fresh": "node scripts/resetAndSeedFreshData.js"
   },
   "prisma": {
     "seed": "node prisma/seed.js"

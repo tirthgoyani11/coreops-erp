@@ -221,6 +221,7 @@ export const NAV_ITEMS: NavItem[] = [
         icon: Users,
         roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF'],
         subItems: [
+            { label: 'CRM Dashboard', path: '/sales/dashboard', roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF'] },
             { label: 'Customers', path: '/sales/customers', roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF'] },
             { label: 'Quotations', path: '/sales/quotations', roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF'] },
             { label: 'Sales Orders', path: '/sales/orders', roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF'] }

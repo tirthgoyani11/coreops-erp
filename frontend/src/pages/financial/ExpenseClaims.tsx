@@ -74,6 +74,27 @@ export function ExpenseClaims() {
         return { amount: String(parsed), fixed: false };
     };
 
+    const toNumber = (value: unknown): number => {
+        if (value === null || value === undefined || value === '') return 0;
+        const raw = String(value).trim().replace(/[₹,\s]/g, '');
+        const num = Number(raw);
+        return Number.isFinite(num) ? num : 0;
+    };
+
+    const getLinePreTaxAmount = (line: any): number => {
+        const quantity = Math.max(0, toNumber(line?.quantity));
+        const unitPrice = Math.max(0, toNumber(line?.unitPrice));
+        const subtotal = Math.max(0, toNumber(line?.subtotal));
+        const total = Math.max(0, toNumber(line?.total));
+        const taxAmount = Math.max(0, toNumber(line?.taxAmount));
+
+        // Prefer explicit pre-tax values first.
+        if (quantity > 0 && unitPrice > 0) return quantity * unitPrice;
+        if (subtotal > 0) return subtotal;
+        if (total > 0 && taxAmount > 0) return Math.max(0, total - taxAmount);
+        return total > 0 ? total : unitPrice;
+    };
+
     const handleScanReceipt = async (event: React.ChangeEvent<HTMLInputElement>) => {
         const file = event.target.files?.[0];
         if (!file) return;
@@ -108,7 +129,7 @@ export function ExpenseClaims() {
 
             if (lineItems.length > 0) {
                 const mappedItems = lineItems.slice(0, 20).map((line: any) => {
-                    const normalized = normalizeScannedAmount(line.total || line.unitPrice || 0);
+                    const normalized = normalizeScannedAmount(getLinePreTaxAmount(line));
                     if (normalized.fixed) correctedCount += 1;
 
                     return {
@@ -121,10 +142,14 @@ export function ExpenseClaims() {
                 setItems(mappedItems.length > 0 ? mappedItems : items);
                 setOcrMessage(
                     `OCR (${ocrMode}, ${aiSource}) complete. Imported ${mappedItems.length} expense item(s).` +
+                    ' Tax excluded from imported amounts when detected.' +
                     (correctedCount > 0 ? ` Auto-corrected decimal in ${correctedCount} amount(s).` : '')
                 );
             } else if (extracted.totalAmount) {
-                const normalized = normalizeScannedAmount(extracted.totalAmount);
+                const preTaxTotal = toNumber(extracted.subtotal) > 0
+                    ? toNumber(extracted.subtotal)
+                    : Math.max(0, toNumber(extracted.totalAmount) - toNumber(extracted.taxAmount));
+                const normalized = normalizeScannedAmount(preTaxTotal > 0 ? preTaxTotal : extracted.totalAmount);
                 if (normalized.fixed) correctedCount += 1;
 
                 setItems([
@@ -137,6 +162,7 @@ export function ExpenseClaims() {
                 ]);
                 setOcrMessage(
                     `OCR (${ocrMode}, ${aiSource}) complete. Total amount imported as one expense item.` +
+                    ' Tax excluded from imported amount when detected.' +
                     (correctedCount > 0 ? ' Decimal point was auto-corrected.' : '')
                 );
             } else {

@@ -93,6 +93,7 @@ const WorkflowBuilder = lazy(() => import('./pages/WorkflowBuilder').then(m => (
 const Customers = lazy(() => import('./pages/sales/Customers').then(m => ({ default: m.Customers })));
 const Quotations = lazy(() => import('./pages/sales/Quotations').then(m => ({ default: m.Quotations })));
 const SalesOrders = lazy(() => import('./pages/sales/SalesOrders').then(m => ({ default: m.SalesOrders })));
+const CRMDashboard = lazy(() => import('./pages/sales/CRMDashboard').then(m => ({ default: m.CRMDashboard })));
 
 import './index.css';
 
@@ -266,6 +267,7 @@ function App() {
               <Route path="/financial/working-capital" element={<RoleGuard allowedRoles={['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF', 'VIEWER']}><Financial /></RoleGuard>} />
 
               {/* CRM & Sales */}
+              <Route path="/sales/dashboard" element={<RoleGuard allowedRoles={['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF']}><CRMDashboard /></RoleGuard>} />
               <Route path="/sales/customers" element={<RoleGuard allowedRoles={['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF']}><Customers /></RoleGuard>} />
               <Route path="/sales/quotations" element={<RoleGuard allowedRoles={['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF']}><Quotations /></RoleGuard>} />
               <Route path="/sales/orders" element={<RoleGuard allowedRoles={['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF']}><SalesOrders /></RoleGuard>} />
