@@ -31,7 +31,8 @@ export function useShortcut(
                 if (key === 'ctrl' || key === 'cmd') return e.ctrlKey || e.metaKey;
                 if (key === 'alt') return e.altKey;
                 if (key === 'shift') return e.shiftKey;
-                return e.key.toLowerCase() === key.toLowerCase();
+                const pressedKey = typeof e.key === 'string' ? e.key.toLowerCase() : '';
+                return pressedKey === key.toLowerCase();
             });
 
             if (keyMatches) {

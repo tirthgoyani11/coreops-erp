@@ -7,7 +7,8 @@ const socketServer = require('./src/config/socketServer');
 const prisma = require('./src/config/prisma');
 const { startSchedulers, stopSchedulers } = require('./src/services/schedulerService');
 
-const PORT = process.env.PORT || 5000;
+const PORT = Number(process.env.PORT || 5000);
+const MAX_PORT_RETRY = Number(process.env.MAX_PORT_RETRY || PORT + 5);
 
 // Validate required environment variables in production
 if (process.env.NODE_ENV === 'production') {
@@ -34,14 +35,41 @@ const startServer = async () => {
         // Initialize Socket.IO
         socketServer.init(server);
 
-        server.listen(PORT, () => {
+        let activePort = PORT;
+
+        server.on('error', (err) => {
+            if (err && err.code === 'EADDRINUSE' && process.env.NODE_ENV !== 'production') {
+                if (activePort < MAX_PORT_RETRY) {
+                    const nextPort = activePort + 1;
+                    logger.warn(`Port ${activePort} is in use. Retrying on ${nextPort}...`);
+                    activePort = nextPort;
+                    setTimeout(() => server.listen(activePort), 100);
+                    return;
+                }
+
+                logger.error(
+                    `All ports from ${PORT} to ${MAX_PORT_RETRY} are in use. Set a free port explicitly (example: set PORT=5050&& npm run dev).`
+                );
+                process.exit(1);
+            }
+
+            if (err && err.code === 'EADDRINUSE') {
+                logger.error(`Port ${activePort} is already in use.`);
+                process.exit(1);
+            }
+
+            logger.error('HTTP server error:', err);
+            process.exit(1);
+        });
+
+        server.listen(activePort, () => {
             logger.info(`
 ╔════════════════════════════════════════════════════╗
 ║                                                    ║
 ║   🚀 CoreOps ERP Backend Server                   ║
 ║                                                    ║
 ║   Environment: ${(process.env.NODE_ENV || 'development').padEnd(20)}      ║
-║   Port:        ${String(PORT).padEnd(20)}          ║
+║   Port:        ${String(activePort).padEnd(20)}          ║
 ║   Database:    PostgreSQL (Prisma)                 ║
 ║   Socket.IO:   Enabled                             ║
 ║   Status:      Running                             ║

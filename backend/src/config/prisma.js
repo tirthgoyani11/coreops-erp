@@ -16,8 +16,34 @@ const { Pool } = require('pg');
  *  - Connection timeout to fail fast instead of hanging 20+ seconds
  */
 
-const connectionString = process.env.DATABASE_URL || 'postgresql://postgres:password@localhost:5432/coreops_dev';
+const rawConnectionString = process.env.DATABASE_URL || 'postgresql://postgres:password@localhost:5432/coreops_dev';
 const isProduction = process.env.NODE_ENV === 'production';
+
+function normalizeConnectionString(input) {
+    try {
+        const url = new URL(input);
+        const isPg = url.protocol === 'postgresql:' || url.protocol === 'postgres:';
+        if (!isPg) return input;
+
+        const sslMode = (url.searchParams.get('sslmode') || '').toLowerCase();
+        const hasLibpqCompat = (url.searchParams.get('uselibpqcompat') || '').toLowerCase() === 'true';
+        const isCloudPg = url.hostname.includes('neon') || url.hostname.includes('render') || url.hostname.includes('supabase');
+
+        // Keep stronger semantics explicit ahead of pg@9 changes.
+        if (!sslMode && (isCloudPg || isProduction)) {
+            url.searchParams.set('sslmode', 'verify-full');
+        } else if (sslMode === 'require' && !hasLibpqCompat) {
+            url.searchParams.set('sslmode', 'verify-full');
+        }
+
+        return url.toString();
+    } catch (_err) {
+        // Fallback to the original string if URL parsing fails.
+        return input;
+    }
+}
+
+const connectionString = normalizeConnectionString(rawConnectionString);
 const isNeon = connectionString.includes('neon.tech') || connectionString.includes('neon.');
 
 let prisma;
@@ -32,10 +58,8 @@ function createClient(logLevel) {
         keepAliveInitialDelayMillis: 10_000,
     };
 
-    // Neon cloud requires SSL
-    if (isNeon || isProduction) {
-        poolConfig.ssl = { rejectUnauthorized: false };
-    }
+    // Leave TLS behavior to the explicit connection string (sslmode).
+    // This avoids weak defaults and aligns with upcoming pg/libpq behavior.
 
     const pool = new Pool(poolConfig);
 

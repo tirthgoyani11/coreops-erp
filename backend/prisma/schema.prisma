@@ -335,6 +335,56 @@ enum PricingRuleType {
   FLAT
 }
 
+enum EmploymentType {
+  FULL_TIME
+  PART_TIME
+  CONTRACT
+  INTERN
+}
+
+enum EmployeeStatus {
+  ACTIVE
+  ON_LEAVE
+  INACTIVE
+  TERMINATED
+}
+
+enum AttendanceStatus {
+  PRESENT
+  ABSENT
+  HALF_DAY
+  LEAVE
+  HOLIDAY
+}
+
+enum LeaveType {
+  CASUAL
+  SICK
+  EARNED
+  MATERNITY
+  PATERNITY
+  UNPAID
+}
+
+enum LeaveStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
+}
+
+enum PayrollRunStatus {
+  DRAFT
+  PROCESSED
+  LOCKED
+}
+
+enum PayslipStatus {
+  GENERATED
+  LOCKED
+  PAID
+}
+
 // ─── MODELS ────────────────────────────────────────────────────
 
 model Office {
@@ -391,6 +441,8 @@ model Office {
   salesOrders                  SalesOrder[]
   arInvoices                   ARInvoice[]
   apInvoices                   APInvoice[]
+  employees                    Employee[]
+  payrollRuns                  PayrollRun[]
 
   @@index([name, country])
   @@index([parentId])
@@ -465,10 +517,124 @@ model User {
   // Phase 1: CRM
   createdQuotations     Quotation[]         @relation("QuoteCreator")
   createdSalesOrders    SalesOrder[]        @relation("SOCreator")
+  employeeProfile       Employee?
+  approvedLeaveRequests LeaveRequest[]      @relation("LeaveApprover")
+  processedPayrollRuns  PayrollRun[]        @relation("PayrollProcessor")
 
   @@index([role, officeId])
   @@index([officeId])
   @@index([isActive])
+}
+
+model Employee {
+  id             String         @id @default(uuid())
+  employeeCode   String         @unique
+  userId         String?        @unique
+  user           User?          @relation(fields: [userId], references: [id])
+  officeId       String
+  office         Office         @relation(fields: [officeId], references: [id])
+  firstName      String
+  lastName       String
+  email          String?
+  phone          String?
+  designation    String?
+  department     String?
+  employmentType EmploymentType @default(FULL_TIME)
+  status         EmployeeStatus @default(ACTIVE)
+  dateOfJoining  DateTime
+  dateOfExit     DateTime?
+  basicSalary    Float          @default(0)
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  attendances    Attendance[]
+  leaveRequests  LeaveRequest[]
+  payslips       Payslip[]
+
+  @@index([officeId, status])
+  @@index([department])
+}
+
+model Attendance {
+  id          String           @id @default(uuid())
+  employeeId  String
+  employee    Employee         @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  date        DateTime
+  checkIn     DateTime?
+  checkOut    DateTime?
+  hoursWorked Float?
+  status      AttendanceStatus @default(PRESENT)
+  notes       String?
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  @@unique([employeeId, date])
+  @@index([date])
+  @@index([status])
+}
+
+model LeaveRequest {
+  id            String      @id @default(uuid())
+  employeeId    String
+  employee      Employee    @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  leaveType     LeaveType
+  startDate     DateTime
+  endDate       DateTime
+  totalDays     Float
+  reason        String?
+  status        LeaveStatus @default(PENDING)
+  approvedById  String?
+  approvedBy    User?       @relation("LeaveApprover", fields: [approvedById], references: [id])
+  approvedAt    DateTime?
+  approverNotes String?
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  @@index([employeeId, status])
+  @@index([startDate, endDate])
+}
+
+model PayrollRun {
+  id              String           @id @default(uuid())
+  runCode         String           @unique
+  officeId        String
+  office          Office           @relation(fields: [officeId], references: [id])
+  periodStart     DateTime
+  periodEnd       DateTime
+  status          PayrollRunStatus @default(DRAFT)
+  grossAmount     Float            @default(0)
+  deductionAmount Float            @default(0)
+  netAmount       Float            @default(0)
+  processedById   String?
+  processedBy     User?            @relation("PayrollProcessor", fields: [processedById], references: [id])
+  processedAt     DateTime?
+  lockedAt        DateTime?
+  notes           String?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  payslips        Payslip[]
+
+  @@unique([officeId, periodStart, periodEnd])
+  @@index([officeId, status])
+}
+
+model Payslip {
+  id            String        @id @default(uuid())
+  payslipNumber String        @unique
+  payrollRunId  String
+  payrollRun    PayrollRun    @relation(fields: [payrollRunId], references: [id], onDelete: Cascade)
+  employeeId    String
+  employee      Employee      @relation(fields: [employeeId], references: [id])
+  status        PayslipStatus @default(GENERATED)
+  earnings      Json
+  deductions    Json
+  grossPay      Float
+  netPay        Float
+  paidAt        DateTime?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  @@index([employeeId, status])
+  @@index([payrollRunId])
 }
 
 model RefreshToken {

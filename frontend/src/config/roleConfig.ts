@@ -228,6 +228,14 @@ export const NAV_ITEMS: NavItem[] = [
         ]
     },
 
+    // HCM
+    {
+        label: 'Human Capital',
+        path: '/hcm',
+        icon: Users,
+        roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF', 'VIEWER']
+    },
+
     // Financial Group
     {
         label: 'Financial',

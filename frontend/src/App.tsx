@@ -94,6 +94,7 @@ const Customers = lazy(() => import('./pages/sales/Customers').then(m => ({ defa
 const Quotations = lazy(() => import('./pages/sales/Quotations').then(m => ({ default: m.Quotations })));
 const SalesOrders = lazy(() => import('./pages/sales/SalesOrders').then(m => ({ default: m.SalesOrders })));
 const CRMDashboard = lazy(() => import('./pages/sales/CRMDashboard').then(m => ({ default: m.CRMDashboard })));
+const HCMWorkspace = lazy(() => import('./pages/hcm/HCMWorkspace').then(m => ({ default: m.HCMWorkspace })));
 
 import './index.css';
 
@@ -271,6 +272,9 @@ function App() {
               <Route path="/sales/customers" element={<RoleGuard allowedRoles={['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF']}><Customers /></RoleGuard>} />
               <Route path="/sales/quotations" element={<RoleGuard allowedRoles={['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF']}><Quotations /></RoleGuard>} />
               <Route path="/sales/orders" element={<RoleGuard allowedRoles={['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF']}><SalesOrders /></RoleGuard>} />
+
+              {/* Phase 2: HCM */}
+              <Route path="/hcm" element={<RoleGuard allowedRoles={['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF', 'VIEWER']}><HCMWorkspace /></RoleGuard>} />
 
               {/* Phase 2 — GL, P&L, Cash Flow, Inventory Analytics */}
               <Route path="/gl" element={<RoleGuard allowedRoles={['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'VIEWER']}><GLDashboard /></RoleGuard>} />
