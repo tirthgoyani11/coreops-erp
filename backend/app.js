@@ -39,6 +39,11 @@ const financeExtRoutes = require('./src/routes/financeExtRoutes');
 const userRoutes = require('./src/routes/userRoutes');
 const workflowRoutes = require('./src/routes/workflowRoutes');
 const customFieldRoutes = require('./src/routes/customFieldRoutes');
+// Phase 1: CRM & Sales
+const customerRoutes = require('./src/routes/customerRoutes');
+const pricingRuleRoutes = require('./src/routes/pricingRuleRoutes');
+const quotationRoutes = require('./src/routes/quotationRoutes');
+const salesOrderRoutes = require('./src/routes/salesOrderRoutes');
 
 // Services
 const currencyService = require('./src/services/currencyService');
@@ -171,6 +176,10 @@ app.use('/api/finance-ext', financeExtRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/workflows', workflowRoutes);
 app.use('/api/custom-fields', customFieldRoutes);
+app.use('/api/customers', customerRoutes);
+app.use('/api/pricing-rules', pricingRuleRoutes);
+app.use('/api/quotations', quotationRoutes);
+app.use('/api/sales-orders', salesOrderRoutes);
 app.use('/api/search', require('./src/routes/searchRoutes'));
 
 // Serve uploaded files (local storage — dev mode)

@@ -78,7 +78,7 @@ The system features **OpsPilot**, an AI-powered conversational assistant that ca
 ### 🖥️ Asset Management
 - **GUAI System**: globally unique asset identifiers
 - Multi-location asset tracking with transfer workflows
-- QR code generation and scanning (`html5-qrcode`)
+- **Cloud-Synced QR Codes**: Real-time generation connecting directly to `coreops.tirthgoyani.in`
 - Depreciation calculators (Straight-line, Declining Balance)
 - Full maintenance history per asset
 - Smart auto-fill: AI infers manufacturer, model, serial number, warranty from asset name
@@ -112,7 +112,9 @@ The system features **OpsPilot**, an AI-powered conversational assistant that ca
 - PDF and Excel report export (`jsPDF`, `xlsx-js-style`)
 
 ### 📊 Analytics & Dashboards
-- Role-based dashboards with KPIs
+- **Granular 2D Grid System**: Fully customizable drag-and-drop dashboard layouts
+- **Widget Library**: Personalize and save your workspace by toggling specific operational widgets
+- **Live Actionable KPI Alerts**: Real-time visual triggers when predefined operational thresholds are breached
 - Asset distribution by category, status, and location
 - Financial trends (Recharts)
 - Maintenance analytics & ticket insights
@@ -136,6 +138,13 @@ The system features **OpsPilot**, an AI-powered conversational assistant that ca
 ## 🤖 OpsPilot AI Engine
 
 OpsPilot is the built-in AI assistant that **executes real ERP operations** through natural language.
+
+### 🧠 Smart Conversational Memory & Context
+Recent feature upgrades have transformed OpsPilot from a command-executer into a context-aware partner:
+- **Multi-Turn Pronoun Resolution**: Saying *"remove that TV"* or *"retire the last one"* automatically scans your recent session history and database footprint to target the exact asset without needing an explicit ID.
+- **Interactive Entity Prompting**: Instead of rejecting incomplete commands or using rigid defaults, OpsPilot dynamically asks follow-up questions (e.g., *"What was the purchase price?"*) while retaining your original intent in memory.
+- **Logical Safe-Deletes**: "Deleting" an asset via AI automatically maps to an enterprise-safe `RETIRED` status update rather than a destructive database drop.
+- **Strict Financial Validations**: Through LangChain & Zod, intent schemas strictly enforce exact numerical extractions (e.g., rejecting arbitrary percentages for budget allocations), ensuring iron-clad data integrity.
 
 ### Architecture: "LLM Thinks, Code Executes"
 
@@ -497,11 +506,11 @@ coreops-erp/
 | **🔧 Maintenance** | Maintenance, MyTickets, TicketDetails, TicketWizard, PreventiveMaintenance, MaintenanceAnalytics | `/api/maintenance` | Kanban, calendar, work logs, parts usage |
 | **📦 Inventory** | Inventory, InventoryDetail, StockOperations | `/api/inventory` | Dual-stream, stock movements, alerts |
 | **🏢 Vendors** | Vendors | `/api/vendors` | MTBF, scoring, contracts |
-| **📋 Purchase Orders** | PurchaseOrders, procurement/ | `/api/purchase-orders`, `/api/procurement` | Create, approve, 3-way matching |
+| **📋 Purchase Orders** | PurchaseOrders, procurement/ | `/api/purchase-orders`, `/procurement-ext` | Create, approve, 3-way matching, advanced RFQ + GRN routing |
 | **💰 Finance** | financial/ | `/api/finance`, `/api/gl` | Transactions, budgets, GL, reports |
 | **🏗️ Organizations** | Offices | `/api/offices` | Multi-location, branch management |
 | **👥 Users** | Users | `/api/auth` | User CRUD, role assignment |
-| **📄 Documents** | Documents, DocumentUpload, DocumentViewer | `/api/documents` | Upload, view, categorize |
+| **📄 Documents** | Documents, DocumentUpload, DocumentViewer | `/api/documents` | Upload, inline live previews (PDF/PNG), secure downloads |
 | **🔔 Notifications** | Notifications, NotificationPreferences | `/api/notifications` | Real-time, preferences, broadcast |
 | **🛡️ Audit** | AuditLogs | `/api/audit-logs` | Full activity trail |
 | **📊 Analytics** | Analytics | `/api/analytics` | Charts, KPIs, exports |

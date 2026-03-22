@@ -91,6 +91,12 @@ const AuditLogs = lazy(() => import('./pages/AuditLogs'));
 const AccessDenied = lazy(() => import('./pages/AccessDenied'));
 const NotFound = lazy(() => import('./pages/NotFound').then(m => ({ default: m.NotFound })));
 const WorkflowBuilder = lazy(() => import('./pages/WorkflowBuilder').then(m => ({ default: m.WorkflowBuilder })));
+
+// Phase 1: CRM & Sales
+const Customers = lazy(() => import('./pages/sales/Customers').then(m => ({ default: m.Customers })));
+const Quotations = lazy(() => import('./pages/sales/Quotations').then(m => ({ default: m.Quotations })));
+const SalesOrders = lazy(() => import('./pages/sales/SalesOrders').then(m => ({ default: m.SalesOrders })));
+
 import './index.css';
 
 /**
@@ -257,6 +263,11 @@ function App() {
 
               {/* Financial - Managers + Viewer */}
               <Route path="/financial" element={<RoleGuard allowedRoles={['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF', 'VIEWER']}><Financial /></RoleGuard>} />
+
+              {/* CRM & Sales */}
+              <Route path="/sales/customers" element={<RoleGuard allowedRoles={['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF']}><Customers /></RoleGuard>} />
+              <Route path="/sales/quotations" element={<RoleGuard allowedRoles={['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF']}><Quotations /></RoleGuard>} />
+              <Route path="/sales/orders" element={<RoleGuard allowedRoles={['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF']}><SalesOrders /></RoleGuard>} />
 
               {/* Phase 2 — GL, P&L, Cash Flow, Inventory Analytics */}
               <Route path="/gl" element={<RoleGuard allowedRoles={['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'VIEWER']}><GLDashboard /></RoleGuard>} />

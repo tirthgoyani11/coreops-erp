@@ -313,6 +313,28 @@ enum ScheduleFrequency {
   CUSTOM
 }
 
+enum SalesOrderStatus {
+  DRAFT
+  CONFIRMED
+  PROCESSING
+  SHIPPED
+  DELIVERED
+  CANCELLED
+}
+
+enum QuotationStatus {
+  DRAFT
+  SENT
+  ACCEPTED
+  REJECTED
+  EXPIRED
+}
+
+enum PricingRuleType {
+  PERCENTAGE
+  FLAT
+}
+
 // ─── MODELS ────────────────────────────────────────────────────
 
 model Office {
@@ -362,6 +384,12 @@ model Office {
   documents                    Document[]
   slaPolices                   SLAPolicy[]
   stocktakes                   Stocktake[]
+  // Phase 1: CRM
+  customers                    Customer[]
+  pricingRules                 PricingRule[]
+  quotations                   Quotation[]
+  salesOrders                  SalesOrder[]
+  arInvoices                   ARInvoice[]
 
   @@index([name, country])
   @@index([parentId])
@@ -378,7 +406,7 @@ model User {
   role                  UserRole            @default(STAFF)
   officeId              String?
   office                Office?             @relation(fields: [officeId], references: [id])
-  preferences           Json?               // Layout config: [{id: "slas", x:0, y:0, w:6, h:4}, ...]
+  preferences           Json? // Layout config: [{id: "slas", x:0, y:0, w:6, h:4}, ...]
   // Permissions (flattened)
   canApproveTickets     Boolean             @default(false)
   canManageAssets       Boolean             @default(false)
@@ -426,6 +454,9 @@ model User {
   expenseClaims         ExpenseClaim[]      @relation("ExpenseEmployee")
   uploadedDocuments     Document[]
   kpiAlerts             KpiAlert[]
+  // Phase 1: CRM
+  createdQuotations     Quotation[]         @relation("QuoteCreator")
+  createdSalesOrders    SalesOrder[]        @relation("SOCreator")
 
   @@index([role, officeId])
   @@index([officeId])
@@ -674,6 +705,8 @@ model Inventory {
   poItems           PurchaseOrderItem[]
   batches           InventoryBatch[]
   serializedUnits   SerializedUnit[]
+  quotationItems    QuotationItem[]
+  salesOrderItems   SalesOrderItem[]
 
   @@index([officeId, type])
   @@index([category])
@@ -1410,11 +1443,11 @@ model POAmendment {
 
 model WorkflowRule {
   id           String   @id @default(uuid())
-  entityType   String   // e.g., 'PURCHASE_ORDER', 'EXPENSE_CLAIM'
-  triggerEvent String   // e.g., 'ON_CREATE', 'ON_STATUS_CHANGE'
-  condition    Json     // e.g., { "field": "totalAmount", "operator": ">=", "value": 10000 }
-  actionType   String   // e.g., 'REQUIRE_APPROVAL'
-  actionValue  String   // e.g., 'CFO'
+  entityType   String // e.g., 'PURCHASE_ORDER', 'EXPENSE_CLAIM'
+  triggerEvent String // e.g., 'ON_CREATE', 'ON_STATUS_CHANGE'
+  condition    Json // e.g., { "field": "totalAmount", "operator": ">=", "value": 10000 }
+  actionType   String // e.g., 'REQUIRE_APPROVAL'
+  actionValue  String // e.g., 'CFO'
   isActive     Boolean  @default(true)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
@@ -1427,29 +1460,29 @@ model WorkflowRule {
 // ==========================================
 
 model CustomFieldDef {
-  id          String   @id @default(uuid())
-  entityType  String   // e.g., 'ASSET', 'VENDOR', 'TICKET'
-  name        String   // e.g., 'Warranty Provider'
-  type        String   // 'STRING', 'NUMBER', 'DATE', 'BOOLEAN', 'SELECT'
-  isRequired  Boolean  @default(false)
-  options     Json?    // Optional array of choices for 'SELECT' type
-  isActive    Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id         String   @id @default(uuid())
+  entityType String // e.g., 'ASSET', 'VENDOR', 'TICKET'
+  name       String // e.g., 'Warranty Provider'
+  type       String // 'STRING', 'NUMBER', 'DATE', 'BOOLEAN', 'SELECT'
+  isRequired Boolean  @default(false)
+  options    Json? // Optional array of choices for 'SELECT' type
+  isActive   Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 
-  values      CustomFieldValue[]
+  values CustomFieldValue[]
 
   @@unique([entityType, name])
 }
 
 model CustomFieldValue {
-  id          String         @id @default(uuid())
-  fieldDefId  String
-  fieldDef    CustomFieldDef @relation(fields: [fieldDefId], references: [id], onDelete: Cascade)
-  entityId    String         // The ID of the target resource (e.g., Asset UUID)
-  value       String         // Stored as string globally, parsed on frontend based on type
-  createdAt   DateTime       @default(now())
-  updatedAt   DateTime       @updatedAt
+  id         String         @id @default(uuid())
+  fieldDefId String
+  fieldDef   CustomFieldDef @relation(fields: [fieldDefId], references: [id], onDelete: Cascade)
+  entityId   String // The ID of the target resource (e.g., Asset UUID)
+  value      String // Stored as string globally, parsed on frontend based on type
+  createdAt  DateTime       @default(now())
+  updatedAt  DateTime       @updatedAt
 
   @@unique([fieldDefId, entityId])
   @@index([entityId])
@@ -1460,15 +1493,164 @@ model CustomFieldValue {
 // ==========================================
 
 model KpiAlert {
+  id         String   @id @default(uuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  metricName String // e.g., 'MAINTENANCE_SLA', 'OPEN_TICKETS'
+  condition  String // '>', '<', '=', '>=', '<='
+  threshold  Float // e.g., 95 (for 95%)
+  isActive   Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([userId])
+}
+
+// ==========================================
+// SALES & CRM (PHASE 1)
+// ==========================================
+
+model Customer {
   id          String   @id @default(uuid())
-  userId      String
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  metricName  String   // e.g., 'MAINTENANCE_SLA', 'OPEN_TICKETS'
-  condition   String   // '>', '<', '=', '>=', '<='
-  threshold   Float    // e.g., 95 (for 95%)
-  isActive    Boolean  @default(true)
+  name        String
+  email       String?
+  phone       String?
+  company     String?
+  address     String?
+  gstNumber   String?
+  creditLimit Float?   @default(0)
+  outstanding Float    @default(0)
+  status      String   @default("ACTIVE") // ACTIVE, INACTIVE, SUSPENDED
+  officeId    String
+  office      Office   @relation(fields: [officeId], references: [id])
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  @@index([userId])
+  quotations  Quotation[]
+  salesOrders SalesOrder[]
+  arInvoices  ARInvoice[]
+
+  @@index([officeId, status])
+  @@index([name])
+}
+
+model PricingRule {
+  id           String          @id @default(uuid())
+  name         String
+  type         PricingRuleType
+  value        Float // 10 for 10% or 100 for $100
+  applicableTo String? // 'ALL', 'SPECIFIC_CATEGORY', 'SPECIFIC_CUSTOMER'
+  referenceId  String? // categoryId or customerId based on above
+  validFrom    DateTime        @default(now())
+  validUntil   DateTime?
+  isActive     Boolean         @default(true)
+  officeId     String
+  office       Office          @relation(fields: [officeId], references: [id])
+  createdAt    DateTime        @default(now())
+
+  @@index([officeId, isActive])
+}
+
+model Quotation {
+  id              String          @id @default(uuid())
+  quotationNumber String          @unique
+  customerId      String
+  customer        Customer        @relation(fields: [customerId], references: [id])
+  officeId        String
+  office          Office          @relation(fields: [officeId], references: [id])
+  status          QuotationStatus @default(DRAFT)
+  totalAmount     Float           @default(0)
+  currency        String          @default("INR")
+  validUntil      DateTime?
+  notes           String?
+  createdById     String
+  createdBy       User            @relation("QuoteCreator", fields: [createdById], references: [id])
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  items       QuotationItem[]
+  salesOrders SalesOrder[]
+
+  @@index([customerId, status])
+  @@index([officeId])
+}
+
+model QuotationItem {
+  id          String     @id @default(uuid())
+  quotationId String
+  quotation   Quotation  @relation(fields: [quotationId], references: [id], onDelete: Cascade)
+  inventoryId String?
+  inventory   Inventory? @relation(fields: [inventoryId], references: [id])
+  description String
+  quantity    Int
+  unitPrice   Float
+  discount    Float      @default(0)
+  total       Float
+
+  @@index([quotationId])
+}
+
+model SalesOrder {
+  id               String           @id @default(uuid())
+  orderNumber      String           @unique
+  customerId       String
+  customer         Customer         @relation(fields: [customerId], references: [id])
+  officeId         String
+  office           Office           @relation(fields: [officeId], references: [id])
+  quotationId      String?
+  quotation        Quotation?       @relation(fields: [quotationId], references: [id])
+  status           SalesOrderStatus @default(DRAFT)
+  totalAmount      Float            @default(0)
+  currency         String           @default("INR")
+  expectedDelivery DateTime?
+  shippedDate      DateTime?
+  notes            String?
+  createdById      String
+  createdBy        User             @relation("SOCreator", fields: [createdById], references: [id])
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+
+  items      SalesOrderItem[]
+  arInvoices ARInvoice[]
+
+  @@index([customerId, status])
+  @@index([officeId])
+}
+
+model SalesOrderItem {
+  id           String     @id @default(uuid())
+  salesOrderId String
+  salesOrder   SalesOrder @relation(fields: [salesOrderId], references: [id], onDelete: Cascade)
+  inventoryId  String?
+  inventory    Inventory? @relation(fields: [inventoryId], references: [id])
+  description  String
+  quantity     Int
+  fulfilledQty Int        @default(0)
+  unitPrice    Float
+  discount     Float      @default(0)
+  total        Float
+
+  @@index([salesOrderId])
+}
+
+model ARInvoice {
+  id            String     @id @default(uuid())
+  invoiceNumber String     @unique
+  salesOrderId  String
+  salesOrder    SalesOrder @relation(fields: [salesOrderId], references: [id])
+  customerId    String
+  customer      Customer   @relation(fields: [customerId], references: [id])
+  officeId      String
+  office        Office     @relation(fields: [officeId], references: [id])
+  status        String     @default("DRAFT") // DRAFT, ISSUED, PARTIALLY_PAID, PAID, OVERDUE
+  totalAmount   Float
+  amountPaid    Float      @default(0)
+  currency      String     @default("INR")
+  dueDate       DateTime
+  paidDate      DateTime?
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+
+  @@index([customerId, status])
+  @@index([officeId])
 }

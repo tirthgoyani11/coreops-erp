@@ -14,6 +14,7 @@ import {
     DollarSign,
     BookOpen,
     Brain,
+    Users,
     type LucideIcon
 } from 'lucide-react';
 
@@ -209,8 +210,20 @@ export const NAV_ITEMS: NavItem[] = [
         subItems: [
             { label: 'Purchase Orders', path: '/purchase-orders', roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF'] },
             { label: 'Requisitions', path: '/procurement/requisitions', roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF'] },
-            { label: 'RFQs & Bidding', path: '/procurement/rfq', roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF'] },
+            { label: 'RFQ\'s & Bidding', path: '/procurement/rfq', roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF'] },
             { label: 'Goods Receipt', path: '/procurement/grn', roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF'] }
+        ]
+    },
+
+    // Sales & CRM Group
+    {
+        label: 'Sales & CRM',
+        icon: Users,
+        roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF'],
+        subItems: [
+            { label: 'Customers', path: '/sales/customers', roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF'] },
+            { label: 'Quotations', path: '/sales/quotations', roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF'] },
+            { label: 'Sales Orders', path: '/sales/orders', roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF'] }
         ]
     },
 

@@ -1,0 +1,80 @@
+# CoreOps ERP: Achieving "Top-Tier" Parity (The SAP/NetSuite Leap)
+
+This comprehensive implementation plan analyzes the current CoreOps baseline against industry titans (SAP S/4HANA, Oracle NetSuite, Workday) to define the exact architectural roadmap required to transform CoreOps into a true Tier-1 Enterprise suite.
+
+## The Gap Analysis: Where CoreOps Stands
+
+### What We HAVE (The Strong Foundation)
+- **Procure-to-Pay (P2P)**: Robust workflow handling Purchase Requisitions, RFQs, POs, and 3-Way Matching (GRN).
+- **Record-to-Report (R2R)**: Core General Ledger, Multi-currency, Tax engine, Bank Reconciliation, and P&L.
+- **Enterprise Asset Management (EAM)**: GUAI system, dual-stream inventory, full ticket lifecycles, and Cloud QR tracking.
+- **Next-Gen AI**: OpsPilot with multi-turn LangChain orchestration, dynamic Zod validation, and conversational extraction (outperforming legacy chatbot overlays in SAP/Oracle).
+
+### What We Need to IMPROVE (The Enterprise Polish)
+- **Compliance & Auditing**: Upgrade from action-level logs to strict **Field-Level Value Diffs** (SOC2/ISO compliance).
+- **Business Process Automation**: Replace hardcoded approval arrays with a visual, dynamic **Rule-based Workflow Engine** (matching SAP Business Workflow).
+- **Reporting Infrastructure**: Implement a drag-and-drop Universal Report Builder with scheduled email delivery and PDF/Excel templating.
+
+### What We Need to ADD (The "Tier-1" Missing Links)
+To match NetSuite and SAP, CoreOps fundamentally lacks the **Lead-to-Cash** and **Hire-to-Retire** domains, alongside multi-subsidiary financials.
+1. **Sales & CRM (Quote-to-Cash)**: Customer Master, Pricing Matrices, Sales Quotations, Sales Orders, and AR Invoicing.
+2. **Human Capital Management (HCM)**: Employee Master, Leave/Attendance Tracking, Payroll Runs, and Payslips.
+3. **Advanced Financial Consolidation**: Cost/Profit Centers, Intercompany Operations, and Dynamic Cash Flow Statements.
+4. **Security & Identity**: Corporate SSO (SAML/OAuth), MFA (TOTP), and rigorous Field-Level data masking based on RBAC.
+
+---
+
+## User Review Required
+> [!IMPORTANT]
+> This is a massive, multi-month roadmap. We must tackle these domains sequentially to prevent database migration locks or UI fragmentation. I recommend beginning with **Phase 1: Sales & CRM** (Quote-to-Cash) as it is the most critical missing stream for standard business operations. Please review the roadmap below and approve the first execution phase.
+
+---
+
+## Proposed Changes (Architecture Roadmap)
+
+### Phase 1: Sales & CRM (Quote-to-Cash)
+Implementing the primary revenue-generation pipeline to complement the existing procurement architecture.
+#### [MODIFY] schema.prisma
+- Add models: `Customer`, `PricingRule`, `Quotation`, `SalesOrder`, `SalesOrderItem`, `ARInvoice`.
+#### [NEW] backend/src/controllers/sales/
+- Endpoints for customer onboarding, quote generation, and order fulfillment (tying back to Inventory deduction and AR integration).
+#### [NEW] frontend/src/pages/sales/
+- Dashboards for CRM tracking, Quotation builders, and visual Sales Order funnels.
+
+### Phase 2: Human Capital Management (HCM)
+#### [MODIFY] schema.prisma
+- Add models: `Employee` (extending User), `Attendance`, `LeaveRequest`, `PayrollRun`, `Payslip`.
+#### [NEW] backend/src/controllers/hr/
+- Endpoints for executing payroll calculations, managing leave balances, and logging daily attendance.
+#### [NEW] frontend/src/pages/hr/
+- Employee Directory, Leave Request calendar, and Payroll Execution wizards.
+
+### Phase 3: Financial Depth & Consolidation
+#### [MODIFY] schema.prisma
+- Add models: `CostCenter`, `ProfitCenter`, `IntercompanyTransfer`.
+#### [MODIFY] backend/src/controllers/finance/glController.js
+- Inject Cost Center tracking into all Journal Entries. Generate Cash Flow Statement endpoints.
+#### [NEW] frontend/src/pages/finance/CostCenters.tsx
+- Matrix reporting views isolating profit margins by internal department branches.
+
+### Phase 4: Workflow Engine & Custom Fields (UDF)
+#### [MODIFY] schema.prisma
+- Add models: `WorkflowRule`, `CustomFieldSchema`, `CustomFieldValue`.
+#### [NEW] backend/src/services/workflowEngine.js
+- Dynamic rule evaluator intercepting Prisma hooks to trigger auto-approvals or block transitions.
+#### [NEW] frontend/src/pages/settings/WorkflowBuilder.tsx
+- Visual mapping tool for enterprise admins to define IF/THEN logic.
+
+### Phase 5: Enterprise Security & SSO
+#### [MODIFY] backend/src/middleware/authorize.js
+- Introduce Field-Level Security (stripping `salary` or `costPrice` from JSON objects if the user role mapping denies access).
+#### [NEW] backend/src/routes/auth/ssoRoutes.js
+- Integrate `passport-saml` for Google Workspace/Azure AD Active Directory syncing.
+
+## Verification Plan
+Each phase constitutes a discrete deployment block.
+### Automated Verification
+- Prisma schema validation for 1:N relations across the new domains.
+- Jest endpoint testing for isolated payroll computations and workflow triggers.
+### Manual Verification
+- Staging-environment deployment. User testing of the Quote-to-Cash pipeline (creating a Quote -> converting to Sales Order -> verifying auto-deduction of Dual-Stream inventory).
