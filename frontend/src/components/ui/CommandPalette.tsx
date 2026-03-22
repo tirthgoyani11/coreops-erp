@@ -129,7 +129,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({ isOpen, onClose 
         { id: 'nav-assets', type: 'Navigation', name: 'Assets', icon: Monitor, action: () => navigate('/assets') },
         { id: 'nav-inventory', type: 'Navigation', name: 'Inventory', icon: Package, action: () => navigate('/inventory') },
         { id: 'nav-tickets', type: 'Navigation', name: 'Maintenance Tickets', icon: Ticket, action: () => navigate('/maintenance') },
-        { id: 'nav-finance', type: 'Navigation', name: 'Finance & Invoices', icon: CreditCard, action: () => navigate('/finance') },
+        { id: 'nav-finance', type: 'Navigation', name: 'Finance Control Tower', icon: CreditCard, action: () => navigate('/financial') },
         { id: 'nav-predictive', type: 'Navigation', name: 'Predictive Maintenance AI', icon: Brain, action: () => navigate('/maintenance/predictive') },
         { id: 'nav-scanner', type: 'Navigation', name: 'AI Invoice Scanner', icon: Sparkles, action: () => navigate('/invoice-scanner') },
         

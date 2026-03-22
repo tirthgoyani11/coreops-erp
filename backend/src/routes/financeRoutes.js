@@ -8,6 +8,8 @@ const {
     getAPAging,
     getARAging,
     getGSTSummary,
+    getAutomationFeed,
+    intakeAISignal,
 } = require('../controllers/financeController');
 const verifyToken = require('../middleware/verifyToken');
 const authorize = require('../middleware/authorize');
@@ -28,6 +30,8 @@ router.route('/budgets')
 router.get('/ap-aging', getAPAging);
 router.get('/ar-aging', getARAging);
 router.get('/gst-summary', getGSTSummary);
+router.get('/automation-feed', getAutomationFeed);
+router.post('/automation/intake', authorize('SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF'), idempotencyMiddleware({ namespace: 'finance.automation.intake' }), intakeAISignal);
 
 module.exports = router;
 

@@ -163,6 +163,108 @@ async function materializeLinkedExpenseEntity({ tx, entityType, req, officeId, a
     return null;
 }
 
+function firstJsonObject(text) {
+    const src = String(text || '');
+    const match = src.match(/\{[\s\S]*\}/);
+    if (!match) return null;
+    try {
+        return JSON.parse(match[0]);
+    } catch {
+        return null;
+    }
+}
+
+function inferAmountFromText(text) {
+    const src = String(text || '');
+    const m = src.match(/(?:rs\.?|inr|₹)?\s*([0-9]{1,3}(?:,[0-9]{2,3})*(?:\.[0-9]{1,2})?|[0-9]+(?:\.[0-9]{1,2})?)/i);
+    if (!m?.[1]) return null;
+    const parsed = Number(String(m[1]).replace(/,/g, ''));
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+}
+
+async function createAutoRecordedTransaction({ req, officeId, input }) {
+    const type = String(input.type || 'EXPENSE').toUpperCase();
+    const category = String(input.category || 'AUTOMATION').toUpperCase();
+    const amount = Number(input.amount || 0);
+    const description = input.description || `${input.sourceModule || 'SYSTEM'} automated finance record`;
+    const referenceType = input.referenceType || 'MANUAL';
+    const referenceId = input.referenceId || null;
+    const linkedEntityType = normalizeEntityType(input.linkedEntityType);
+    const autoCreateEntity = input.autoCreateEntity !== false;
+
+    if (!['INCOME', 'EXPENSE'].includes(type)) {
+        throw new Error('type must be INCOME or EXPENSE');
+    }
+    if (!Number.isFinite(amount) || amount <= 0) {
+        throw new Error('amount must be a positive number');
+    }
+
+    let linkedEntity = null;
+
+    const transaction = await prisma.$transaction(async (tx) => {
+        let effectiveReferenceId = referenceId;
+        let effectiveReferenceType = referenceType;
+
+        if (type === 'EXPENSE' && autoCreateEntity && linkedEntityType) {
+            linkedEntity = await materializeLinkedExpenseEntity({
+                tx,
+                entityType: linkedEntityType,
+                req,
+                officeId,
+                amount,
+                referenceId: effectiveReferenceId,
+                category,
+                description,
+            });
+
+            if (linkedEntity?.referenceId) {
+                effectiveReferenceId = linkedEntity.referenceId;
+                effectiveReferenceType = 'MANUAL';
+            }
+        }
+
+        const created = await tx.transaction.create({
+            data: {
+                type,
+                category,
+                amount,
+                description,
+                referenceType: effectiveReferenceType,
+                referenceId: effectiveReferenceId,
+                date: input.date ? new Date(input.date) : new Date(),
+                officeId: officeId || null,
+                recordedById: req.user.id,
+                status: 'CLEARED',
+            },
+        });
+
+        await postTransactionToGL({ tx, transaction: created, userId: req.user.id });
+        return created;
+    });
+
+    const financeEvent = await publishEvent('finance.transaction.created', {
+        transactionId: transaction.id,
+        officeId,
+        amount,
+        category,
+        sourceModule: input.sourceModule || 'AUTOMATION',
+        referenceType,
+        referenceId,
+    }, {
+        source: 'finance.automation.intake',
+        officeId,
+        actorId: req.user?.id || null,
+    });
+
+    await evaluateEvent(financeEvent, {
+        source: 'finance.automation.intake',
+        officeId,
+        actorId: req.user?.id || null,
+    });
+
+    return { transaction, linkedEntity };
+}
+
 // @desc    Get All Transactions
 // @route   GET /api/finance/transactions
 exports.getTransactions = async (req, res) => {
@@ -606,6 +708,160 @@ exports.getGSTSummary = async (req, res) => {
         });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
+    }
+};
+
+// @desc    Finance automation feed and control-tower metrics
+// @route   GET /api/finance/automation-feed
+exports.getAutomationFeed = async (req, res) => {
+    try {
+        const officeWhere = req.user.role !== 'SUPER_ADMIN'
+            ? { officeId: req.user.office?.id || req.user.officeId }
+            : {};
+
+        const [recentTransactions, recentJournalEntries] = await Promise.all([
+            prisma.transaction.findMany({
+                where: officeWhere,
+                orderBy: { date: 'desc' },
+                take: 30,
+                include: {
+                    recordedBy: { select: { id: true, name: true } },
+                },
+            }),
+            prisma.journalEntry.findMany({
+                where: officeWhere,
+                orderBy: { date: 'desc' },
+                take: 20,
+                include: {
+                    createdBy: { select: { id: true, name: true } },
+                },
+            }),
+        ]);
+
+        const total = recentTransactions.length;
+        const autoCovered = recentTransactions.filter((t) => String(t.referenceType || '').toUpperCase() !== 'MANUAL').length;
+        const manual = total - autoCovered;
+        const autoCoveragePct = total > 0 ? Number(((autoCovered / total) * 100).toFixed(1)) : 0;
+
+        const byCategory = recentTransactions.reduce((acc, t) => {
+            const key = t.category || 'UNCATEGORIZED';
+            acc[key] = (acc[key] || 0) + Number(t.amount || 0);
+            return acc;
+        }, {});
+
+        const exceptionSignals = recentTransactions.filter((t) => {
+            const status = String(t.status || '').toUpperCase();
+            return ['PENDING', 'FAILED', 'REVERSED'].includes(status);
+        });
+
+        res.status(200).json({
+            success: true,
+            data: {
+                summary: {
+                    recentTransactionCount: total,
+                    autoRecordedCount: autoCovered,
+                    manualRecordedCount: manual,
+                    autoCoveragePct,
+                },
+                topCategoryFlow: Object.entries(byCategory)
+                    .map(([category, amount]) => ({ category, amount }))
+                    .sort((a, b) => Number(b.amount) - Number(a.amount))
+                    .slice(0, 8),
+                exceptions: exceptionSignals.slice(0, 10),
+                recentTransactions,
+                recentJournalEntries,
+                generatedAt: new Date().toISOString(),
+            },
+        });
+    } catch (error) {
+        res.status(500).json({ success: false, message: 'Server Error', error: error.message });
+    }
+};
+
+// @desc    AI + OCR-assisted intake and auto-record transaction
+// @route   POST /api/finance/automation/intake
+exports.intakeAISignal = async (req, res) => {
+    try {
+        const { text, image, signal, sourceModule, eventType } = req.body;
+        const officeId = await resolveOfficeIdForRequest(req);
+
+        if (!text && !image && !signal) {
+            return res.status(400).json({ success: false, message: 'Provide text, image, or structured signal payload' });
+        }
+
+        let extracted = { ...(signal || {}) };
+        let visionText = '';
+
+        if (image) {
+            const langchainService = require('../services/langchainService');
+            const vision = await langchainService.processVision(
+                image,
+                'Extract financial transaction details (amount, type, category, vendor, reference id, date). Return concise JSON if possible.'
+            );
+            visionText = String(vision?.text || '');
+            const parsedVision = firstJsonObject(visionText);
+            if (parsedVision && typeof parsedVision === 'object') {
+                extracted = { ...parsedVision, ...extracted };
+            }
+        }
+
+        if (text) {
+            const orchestrator = require('../services/orchestrator');
+            const aiPrompt = `Convert the following into strict JSON with keys type(INCOME|EXPENSE), category, amount, description, referenceType, referenceId, linkedEntityType. Text: ${text}`;
+            const aiResult = await orchestrator.processCommand(aiPrompt, {
+                userId: req.user.id,
+                officeId,
+                role: req.user.role,
+            });
+            const parsedText = firstJsonObject(aiResult?.response || '');
+            if (parsedText && typeof parsedText === 'object') {
+                extracted = { ...parsedText, ...extracted };
+            }
+        }
+
+        const fallbackDescription = [
+            text ? String(text).slice(0, 200) : '',
+            !text && visionText ? String(visionText).slice(0, 200) : '',
+        ].filter(Boolean).join(' | ');
+
+        const normalizedInput = {
+            type: extracted.type || (String(eventType || '').toLowerCase().includes('income') ? 'INCOME' : 'EXPENSE'),
+            category: extracted.category || 'AUTOMATION',
+            amount: extracted.amount || inferAmountFromText(text) || inferAmountFromText(visionText),
+            description: extracted.description || fallbackDescription || `${sourceModule || 'SYSTEM'} automated signal`,
+            referenceType: extracted.referenceType || 'MANUAL',
+            referenceId: extracted.referenceId || null,
+            linkedEntityType: extracted.linkedEntityType || null,
+            autoCreateEntity: extracted.autoCreateEntity !== false,
+            sourceModule: sourceModule || 'AI_OCR',
+            eventType: eventType || 'FINANCIAL_SIGNAL',
+        };
+
+        if (!normalizedInput.amount || Number(normalizedInput.amount) <= 0) {
+            return res.status(400).json({
+                success: false,
+                message: 'Unable to infer a valid positive amount from input. Please provide amount explicitly.',
+                extracted,
+            });
+        }
+
+        const result = await createAutoRecordedTransaction({
+            req,
+            officeId,
+            input: normalizedInput,
+        });
+
+        res.status(201).json({
+            success: true,
+            message: 'Financial record auto-created from AI/OCR signal',
+            data: {
+                ...result,
+                normalizedInput,
+                extracted,
+            },
+        });
+    } catch (error) {
+        res.status(500).json({ success: false, message: 'Server Error', error: error.message });
     }
 };
 
