@@ -132,3 +132,16 @@ input:-webkit-autofill:active {
   color: #fafafa;
   background-color: #18181b;
 }
+
+/* Global native select option readability across the app */
+select option,
+select optgroup {
+  color: #0f172a;
+  background-color: #ffffff;
+}
+
+.dark select option,
+.dark select optgroup {
+  color: #fafafa;
+  background-color: #18181b;
+}

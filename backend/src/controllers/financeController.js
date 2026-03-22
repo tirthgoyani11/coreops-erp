@@ -1,5 +1,167 @@
 const prisma = require('../config/prisma');
 const { postTransactionToGL } = require('../services/financePostingService');
+const { publishEvent } = require('../coreops/eventBus');
+const { evaluateEvent } = require('../coreops/automationEngine');
+
+function normalizeEntityType(value) {
+    const v = String(value || '').trim().toUpperCase();
+    if (['ASSET', 'FIXED_ASSET', 'CAPEX'].includes(v)) return 'ASSET';
+    if (['INVENTORY', 'STOCK', 'PRODUCT', 'SPARE'].includes(v)) return 'INVENTORY';
+    return null;
+}
+
+function inferEntityType(category, description) {
+    const text = `${String(category || '')} ${String(description || '')}`.toLowerCase();
+    if (/(asset|capex|equipment|machinery|laptop|server|vehicle|furniture)/.test(text)) return 'ASSET';
+    if (/(inventory|stock|material|raw|spare|item|product)/.test(text)) return 'INVENTORY';
+    return null;
+}
+
+async function resolveOfficeIdForRequest(req) {
+    let officeId = req.user.office?.id || req.user.officeId;
+    if (!officeId) {
+        const dbUser = await prisma.user.findUnique({ where: { id: req.user.id }, select: { officeId: true } });
+        officeId = dbUser?.officeId;
+    }
+    if (!officeId) {
+        const firstOffice = await prisma.office.findFirst({ select: { id: true } });
+        officeId = firstOffice?.id;
+    }
+    return officeId || null;
+}
+
+async function generateGuai(tx, officeId) {
+    const office = await tx.office.findUnique({
+        where: { id: officeId },
+        select: { countryCode: true, locationCode: true, code: true },
+    });
+    const countryCode = office?.countryCode || 'IN';
+    const locationCode = office?.locationCode || office?.code || 'HQ';
+
+    const counter = await tx.counter.upsert({
+        where: { name: 'asset_guai' },
+        update: { sequence: { increment: 1 } },
+        create: { name: 'asset_guai', prefix: 'GUAI', sequence: 1 },
+    });
+
+    const seq = String(counter.sequence).padStart(6, '0');
+    return `${countryCode}-${locationCode}-${seq}`;
+}
+
+async function materializeLinkedExpenseEntity({ tx, entityType, req, officeId, amount, referenceId, category, description }) {
+    const payloadAsset = req.body.asset || {};
+    const payloadInventory = req.body.inventory || {};
+
+    if (entityType === 'ASSET') {
+        if (referenceId) {
+            const existingAsset = await tx.asset.findUnique({ where: { id: referenceId }, select: { id: true } });
+            if (!existingAsset) throw new Error('Referenced asset not found');
+            return { entityType: 'ASSET', referenceId: existingAsset.id, created: false };
+        }
+
+        const office = await tx.office.findUnique({ where: { id: officeId }, select: { baseCurrency: true } });
+        const guai = await generateGuai(tx, officeId);
+        const asset = await tx.asset.create({
+            data: {
+                guai,
+                name: payloadAsset.name || description || `Asset ${Date.now().toString().slice(-6)}`,
+                category: String(payloadAsset.category || 'OTHER').toUpperCase(),
+                manufacturer: payloadAsset.manufacturer || null,
+                model: payloadAsset.model || null,
+                serialNumber: payloadAsset.serialNumber || null,
+                purchasePrice: Number(amount || 0),
+                purchaseDate: payloadAsset.purchaseDate ? new Date(payloadAsset.purchaseDate) : new Date(),
+                currency: String(office?.baseCurrency || 'INR').toUpperCase(),
+                purchaseOrderNumber: payloadAsset.purchaseOrderNumber || null,
+                invoiceNumber: payloadAsset.invoiceNumber || null,
+                vendorId: payloadAsset.vendorId || null,
+                officeId,
+                status: 'ACTIVE',
+                currentBookValue: Number(amount || 0),
+                createdById: req.user.id,
+            },
+            select: { id: true, guai: true, name: true },
+        });
+
+        return { entityType: 'ASSET', referenceId: asset.id, created: true, asset };
+    }
+
+    if (entityType === 'INVENTORY') {
+        const quantity = Math.max(1, Number(payloadInventory.quantity || req.body.quantity || 1));
+        const unitCost = Number(payloadInventory.unitCost || payloadInventory.costPrice || (Number(amount || 0) / quantity) || 0);
+
+        if (referenceId) {
+            const existingInventory = await tx.inventory.findUnique({ where: { id: referenceId } });
+            if (!existingInventory) throw new Error('Referenced inventory item not found');
+
+            const updated = await tx.inventory.update({
+                where: { id: referenceId },
+                data: {
+                    currentQuantity: { increment: quantity },
+                    lastPurchasePrice: unitCost > 0 ? unitCost : existingInventory.lastPurchasePrice,
+                    lastPurchaseDate: new Date(),
+                    unitCost: unitCost > 0 ? unitCost : existingInventory.unitCost,
+                    costPrice: unitCost > 0 ? unitCost : existingInventory.costPrice,
+                },
+                select: { id: true, name: true, sku: true },
+            });
+
+            await tx.stockMovement.create({
+                data: {
+                    inventoryId: updated.id,
+                    type: 'STOCK_IN',
+                    quantity,
+                    reason: 'Auto stock-in from finance expense transaction',
+                    reference: `FIN-${Date.now()}`,
+                    performedById: req.user.id,
+                },
+            });
+
+            return { entityType: 'INVENTORY', referenceId: updated.id, created: false, inventory: updated };
+        }
+
+        const generatedSku = payloadInventory.sku || `AUTO-${Date.now().toString().slice(-8)}`;
+        const createdInventory = await tx.inventory.create({
+            data: {
+                name: payloadInventory.name || description || `Inventory ${Date.now().toString().slice(-6)}`,
+                type: String(payloadInventory.type || 'PRODUCT').toUpperCase(),
+                description: payloadInventory.description || description || null,
+                sku: generatedSku,
+                partNumber: payloadInventory.partNumber || null,
+                category: payloadInventory.category || category || 'GENERAL',
+                subcategory: payloadInventory.subcategory || null,
+                officeId,
+                trackingType: payloadInventory.trackingType || 'QUANTITY',
+                currentQuantity: quantity,
+                reorderPoint: Number(payloadInventory.reorderPoint || 10),
+                reorderQuantity: Number(payloadInventory.reorderQuantity || 50),
+                minimumQuantity: Number(payloadInventory.minimumQuantity || 5),
+                unit: payloadInventory.unit || 'pieces',
+                unitCost: unitCost > 0 ? unitCost : null,
+                costPrice: unitCost > 0 ? unitCost : null,
+                pricingCurrency: payloadInventory.pricingCurrency || 'INR',
+                lastPurchasePrice: unitCost > 0 ? unitCost : null,
+                lastPurchaseDate: new Date(),
+            },
+            select: { id: true, name: true, sku: true },
+        });
+
+        await tx.stockMovement.create({
+            data: {
+                inventoryId: createdInventory.id,
+                type: 'STOCK_IN',
+                quantity,
+                reason: 'Auto stock-in from finance expense transaction',
+                reference: generatedSku,
+                performedById: req.user.id,
+            },
+        });
+
+        return { entityType: 'INVENTORY', referenceId: createdInventory.id, created: true, inventory: createdInventory };
+    }
+
+    return null;
+}
 
 // @desc    Get All Transactions
 // @route   GET /api/finance/transactions
@@ -53,7 +215,7 @@ exports.getTransactions = async (req, res) => {
 // @route   POST /api/finance/transactions
 exports.createTransaction = async (req, res) => {
     try {
-        const { type, category, amount, description, referenceType, referenceId, date } = req.body;
+        const { type, category, amount, description, referenceType, referenceId, date, linkedEntityType, autoCreateEntity } = req.body;
 
         // Input validation
         if (!type || !['INCOME', 'EXPENSE'].includes(type)) {
@@ -66,16 +228,7 @@ exports.createTransaction = async (req, res) => {
             return res.status(400).json({ success: false, message: 'amount must be a positive number' });
         }
 
-        // Resolve officeId robustly
-        let officeId = req.user.office?.id || req.user.officeId;
-        if (!officeId) {
-            const dbUser = await prisma.user.findUnique({ where: { id: req.user.id }, select: { officeId: true } });
-            officeId = dbUser?.officeId;
-        }
-        if (!officeId) {
-            const firstOffice = await prisma.office.findFirst({ select: { id: true } });
-            officeId = firstOffice?.id;
-        }
+        const officeId = await resolveOfficeIdForRequest(req);
 
         if (type === 'EXPENSE') {
             const { detectDuplicateTransaction } = require('../utils/anomaly');
@@ -86,15 +239,41 @@ exports.createTransaction = async (req, res) => {
         }
 
         let budgetWarning = null;
+        let linkedEntity = null;
+
         const transaction = await prisma.$transaction(async (tx) => {
+            const effectiveEntityType = normalizeEntityType(linkedEntityType || req.body.entityType || req.body.relatedEntityType) || inferEntityType(category, description);
+            const shouldAutoMaterialize = type === 'EXPENSE' && autoCreateEntity !== false && effectiveEntityType;
+
+            let effectiveReferenceId = referenceId || null;
+            let effectiveReferenceType = referenceType || 'MANUAL';
+
+            if (shouldAutoMaterialize) {
+                linkedEntity = await materializeLinkedExpenseEntity({
+                    tx,
+                    entityType: effectiveEntityType,
+                    req,
+                    officeId,
+                    amount: Number(amount),
+                    referenceId: effectiveReferenceId,
+                    category,
+                    description,
+                });
+
+                if (linkedEntity?.referenceId) {
+                    effectiveReferenceId = linkedEntity.referenceId;
+                    effectiveReferenceType = 'MANUAL';
+                }
+            }
+
             const createdTransaction = await tx.transaction.create({
                 data: {
                     type,
                     category,
                     amount,
                     description,
-                    referenceType: referenceType || 'MANUAL',
-                    referenceId,
+                    referenceType: effectiveReferenceType,
+                    referenceId: effectiveReferenceId,
                     date: date ? new Date(date) : new Date(),
                     officeId: officeId || null,
                     recordedById: req.user.id,
@@ -135,7 +314,32 @@ exports.createTransaction = async (req, res) => {
             return createdTransaction;
         });
 
-        res.status(201).json({ success: true, data: transaction, ...(budgetWarning ? { warning: budgetWarning } : {}) });
+        const expenseEventName = type === 'EXPENSE' ? 'finance.expense.created' : 'finance.income.created';
+        const financeEvent = await publishEvent(expenseEventName, {
+            transactionId: transaction.id,
+            officeId,
+            amount: Number(amount),
+            category,
+            linkedEntityType: linkedEntity?.entityType || null,
+            linkedEntityId: linkedEntity?.referenceId || null,
+        }, {
+            source: 'finance.transaction.controller',
+            officeId,
+            actorId: req.user?.id || null,
+        });
+
+        await evaluateEvent(financeEvent, {
+            source: 'finance.transaction.controller',
+            officeId,
+            actorId: req.user?.id || null,
+        });
+
+        res.status(201).json({
+            success: true,
+            data: transaction,
+            ...(linkedEntity ? { linkedEntity } : {}),
+            ...(budgetWarning ? { warning: budgetWarning } : {}),
+        });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
     }

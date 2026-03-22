@@ -1,6 +1,8 @@
 const prisma = require('../config/prisma');
 const { asyncHandler, AppError } = require('../utils/errorHandler');
 const { postARInvoiceToGL } = require('../services/financePostingService');
+const { publishEvent } = require('../coreops/eventBus');
+const { evaluateEvent } = require('../coreops/automationEngine');
 
 function resolveOfficeId(value) {
     if (!value) return null;
@@ -62,6 +64,24 @@ exports.createSalesOrder = asyncHandler(async (req, res, next) => {
         });
     }
 
+    const orderEvent = await publishEvent('sales.order.created', {
+        salesOrderId: salesOrder.id,
+        orderNumber: salesOrder.orderNumber,
+        officeId,
+        customerId,
+        totalAmount: salesOrder.totalAmount,
+    }, {
+        source: 'sales.order.controller',
+        officeId,
+        actorId: req.user?.id || null,
+    });
+
+    await evaluateEvent(orderEvent, {
+        source: 'sales.order.controller',
+        officeId,
+        actorId: req.user?.id || null,
+    });
+
     res.status(201).json({ success: true, data: salesOrder });
 });
 
@@ -96,13 +116,16 @@ exports.fulfillSalesOrder = asyncHandler(async (req, res, next) => {
     if (order.status === 'DELIVERED') return next(new AppError('Order already fulfilled', 400));
     if (order.arInvoices?.length) return next(new AppError('AR invoice already generated for this order', 400));
 
-    const { updatedOrder, invoice } = await prisma.$transaction(async (tx) => {
+    const { updatedOrder, invoice, lowStockSignals, totalCost } = await prisma.$transaction(async (tx) => {
+        const lowStockSignals = [];
+        let totalCost = 0;
+
         for (const item of order.items) {
             if (!item.inventoryId) continue;
 
             const inventory = await tx.inventory.findUnique({
                 where: { id: item.inventoryId },
-                select: { id: true, currentQuantity: true, name: true },
+                select: { id: true, currentQuantity: true, name: true, reorderPoint: true, reorderQuantity: true, officeId: true, unitCost: true, costPrice: true },
             });
 
             if (!inventory) {
@@ -128,6 +151,21 @@ exports.fulfillSalesOrder = asyncHandler(async (req, res, next) => {
                     performedById: req.user.id
                 }
             });
+
+            const unitCost = Number(inventory.unitCost || inventory.costPrice || 0);
+            totalCost += Number(item.quantity || 0) * unitCost;
+
+            const remainingQty = Number(inventory.currentQuantity || 0) - Number(item.quantity || 0);
+            if (remainingQty <= Number(inventory.reorderPoint || 0)) {
+                lowStockSignals.push({
+                    inventoryId: inventory.id,
+                    inventoryName: inventory.name,
+                    availableQty: remainingQty,
+                    reorderLevel: Number(inventory.reorderPoint || 0),
+                    suggestedQty: Number(inventory.reorderQuantity || 0),
+                    officeId: inventory.officeId,
+                });
+            }
         }
 
         const updatedOrder = await tx.salesOrder.update({
@@ -149,8 +187,77 @@ exports.fulfillSalesOrder = asyncHandler(async (req, res, next) => {
 
         await postARInvoiceToGL({ tx, invoice, userId: req.user.id });
 
-        return { updatedOrder, invoice };
+        return { updatedOrder, invoice, lowStockSignals, totalCost: Number(totalCost.toFixed(2)) };
     });
+
+    const officeId = order.officeId;
+
+    const salesConfirmedEvent = await publishEvent('sales.order.confirmed', {
+        salesOrderId: updatedOrder.id,
+        orderNumber: order.orderNumber,
+        customerId: order.customerId,
+        totalAmount: order.totalAmount,
+    }, {
+        source: 'sales.order.fulfillment',
+        officeId,
+        actorId: req.user?.id || null,
+    });
+
+    await evaluateEvent(salesConfirmedEvent, {
+        source: 'sales.order.fulfillment',
+        officeId,
+        actorId: req.user?.id || null,
+    });
+
+    const invoiceCreatedEvent = await publishEvent('finance.invoice.created', {
+        invoiceId: invoice.id,
+        invoiceNumber: invoice.invoiceNumber,
+        customerId: invoice.customerId,
+        amount: invoice.totalAmount,
+        officeId: invoice.officeId,
+    }, {
+        source: 'sales.order.fulfillment',
+        officeId,
+        actorId: req.user?.id || null,
+    });
+
+    await evaluateEvent(invoiceCreatedEvent, {
+        source: 'sales.order.fulfillment',
+        officeId,
+        actorId: req.user?.id || null,
+    });
+
+    const saleOutcomeEvent = await publishEvent('inventory.sale.fulfilled', {
+        salesOrderId: updatedOrder.id,
+        orderNumber: order.orderNumber,
+        officeId,
+        revenueAmount: Number(order.totalAmount || 0),
+        costAmount: Number(totalCost || 0),
+        profitAmount: Number((Number(order.totalAmount || 0) - Number(totalCost || 0)).toFixed(2)),
+    }, {
+        source: 'sales.order.fulfillment',
+        officeId,
+        actorId: req.user?.id || null,
+    });
+
+    await evaluateEvent(saleOutcomeEvent, {
+        source: 'sales.order.fulfillment',
+        officeId,
+        actorId: req.user?.id || null,
+    });
+
+    for (const signal of lowStockSignals) {
+        const lowStockEvent = await publishEvent('inventory.low_stock.detected', signal, {
+            source: 'sales.order.fulfillment',
+            officeId: signal.officeId || officeId,
+            actorId: req.user?.id || null,
+        });
+        await evaluateEvent(lowStockEvent, {
+            source: 'sales.order.fulfillment',
+            officeId: signal.officeId || officeId,
+            actorId: req.user?.id || null,
+        });
+    }
 
     res.status(200).json({ success: true, data: updatedOrder, invoiceGenerated: invoice });
 });

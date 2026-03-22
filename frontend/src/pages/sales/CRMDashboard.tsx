@@ -29,6 +29,34 @@ type SalesOrder = {
     createdAt?: string;
 };
 
+type Campaign = {
+    id: string;
+    name: string;
+    status: string;
+    budgetAmount: number;
+};
+
+type SalesTerritory = {
+    id: string;
+    code: string;
+    name: string;
+    status: string;
+};
+
+type AccountPlan = {
+    id: string;
+    planName: string;
+    status: string;
+    customer?: { name?: string };
+};
+
+type PartnerChannel = {
+    id: string;
+    channelName: string;
+    status: string;
+    partnerType?: string;
+};
+
 export function CRMDashboard() {
     const navigate = useNavigate();
 
@@ -36,20 +64,32 @@ export function CRMDashboard() {
     const [customers, setCustomers] = useState<Customer[]>([]);
     const [quotations, setQuotations] = useState<Quotation[]>([]);
     const [orders, setOrders] = useState<SalesOrder[]>([]);
+    const [campaigns, setCampaigns] = useState<Campaign[]>([]);
+    const [territories, setTerritories] = useState<SalesTerritory[]>([]);
+    const [accountPlans, setAccountPlans] = useState<AccountPlan[]>([]);
+    const [partnerChannels, setPartnerChannels] = useState<PartnerChannel[]>([]);
 
     useEffect(() => {
         const load = async () => {
             setLoading(true);
             try {
-                const [c, q, s] = await Promise.allSettled([
+                const [c, q, s, cam, ter, plans, channels] = await Promise.allSettled([
                     api.get('/customers', { params: { limit: 200 } }),
                     api.get('/quotations', { params: { limit: 200 } }),
                     api.get('/sales-orders', { params: { limit: 200 } }),
+                    api.get('/crm/campaigns'),
+                    api.get('/crm/territories'),
+                    api.get('/crm/account-plans'),
+                    api.get('/crm/partner-channels'),
                 ]);
 
                 setCustomers(c.status === 'fulfilled' ? (c.value.data?.data || []) : []);
                 setQuotations(q.status === 'fulfilled' ? (q.value.data?.data || []) : []);
                 setOrders(s.status === 'fulfilled' ? (s.value.data?.data || []) : []);
+                setCampaigns(cam.status === 'fulfilled' ? (cam.value.data?.data || []) : []);
+                setTerritories(ter.status === 'fulfilled' ? (ter.value.data?.data || []) : []);
+                setAccountPlans(plans.status === 'fulfilled' ? (plans.value.data?.data || []) : []);
+                setPartnerChannels(channels.status === 'fulfilled' ? (channels.value.data?.data || []) : []);
             } finally {
                 setLoading(false);
             }
@@ -65,6 +105,7 @@ export function CRMDashboard() {
         const orderValue = orders.reduce((sum, o) => sum + Number(o.totalAmount || 0), 0);
         const deliveredOrders = orders.filter((o) => o.status === 'DELIVERED').length;
         const conversionRate = quotations.length > 0 ? (acceptedQuotes / quotations.length) * 100 : 0;
+        const campaignBudget = campaigns.reduce((sum, c) => sum + Number(c.budgetAmount || 0), 0);
 
         return {
             totalCustomers: customers.length,
@@ -76,8 +117,13 @@ export function CRMDashboard() {
             deliveredOrders,
             orderValue,
             conversionRate,
+            campaigns: campaigns.length,
+            territories: territories.length,
+            accountPlans: accountPlans.length,
+            partnerChannels: partnerChannels.length,
+            campaignBudget,
         };
-    }, [customers, quotations, orders]);
+    }, [customers, quotations, orders, campaigns, territories, accountPlans, partnerChannels]);
 
     const recentQuotes = [...quotations]
         .sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime())
@@ -120,6 +166,29 @@ export function CRMDashboard() {
                     <p className="text-xs text-[var(--text-muted)] uppercase tracking-wider">Conversion</p>
                     <p className="text-2xl font-bold text-emerald-400 mt-1">{summary.conversionRate.toFixed(1)}%</p>
                     <p className="text-xs text-[var(--text-secondary)] mt-1">Delivered Orders: {summary.deliveredOrders}</p>
+                </div>
+            </section>
+
+            <section className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+                <div className="rounded-xl border border-[var(--border-color)] bg-[var(--bg-card)] p-4">
+                    <p className="text-xs text-[var(--text-muted)] uppercase tracking-wider">Campaigns</p>
+                    <p className="text-2xl font-bold text-[var(--text-primary)] mt-1">{summary.campaigns}</p>
+                    <p className="text-xs text-[var(--text-secondary)] mt-1">Budget: {formatCurrency(summary.campaignBudget)}</p>
+                </div>
+                <div className="rounded-xl border border-[var(--border-color)] bg-[var(--bg-card)] p-4">
+                    <p className="text-xs text-[var(--text-muted)] uppercase tracking-wider">Territories</p>
+                    <p className="text-2xl font-bold text-[var(--text-primary)] mt-1">{summary.territories}</p>
+                    <p className="text-xs text-[var(--text-secondary)] mt-1">Active market coverage</p>
+                </div>
+                <div className="rounded-xl border border-[var(--border-color)] bg-[var(--bg-card)] p-4">
+                    <p className="text-xs text-[var(--text-muted)] uppercase tracking-wider">Account Plans</p>
+                    <p className="text-2xl font-bold text-[var(--text-primary)] mt-1">{summary.accountPlans}</p>
+                    <p className="text-xs text-[var(--text-secondary)] mt-1">Strategic customer plans</p>
+                </div>
+                <div className="rounded-xl border border-[var(--border-color)] bg-[var(--bg-card)] p-4">
+                    <p className="text-xs text-[var(--text-muted)] uppercase tracking-wider">Partner Channels</p>
+                    <p className="text-2xl font-bold text-[var(--text-primary)] mt-1">{summary.partnerChannels}</p>
+                    <p className="text-xs text-[var(--text-secondary)] mt-1">Distribution + alliance network</p>
                 </div>
             </section>
 
@@ -179,6 +248,43 @@ export function CRMDashboard() {
                                 </div>
                             ))
                         )}
+                    </div>
+                </div>
+            </section>
+
+            <section className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+                <div className="rounded-xl border border-[var(--border-color)] bg-[var(--bg-card)] p-4">
+                    <h2 className="text-base font-semibold text-[var(--text-primary)] mb-3">Campaign Operations</h2>
+                    <div className="space-y-2">
+                        {campaigns.slice(0, 5).map((item) => (
+                            <div key={item.id} className="rounded-lg border border-[var(--border-color)] bg-[var(--bg-overlay)] p-3 flex items-center justify-between">
+                                <div>
+                                    <p className="text-sm font-medium text-[var(--text-primary)]">{item.name}</p>
+                                    <p className="text-xs text-[var(--text-secondary)]">{item.status}</p>
+                                </div>
+                                <p className="text-sm font-semibold text-[var(--text-primary)]">{formatCurrency(Number(item.budgetAmount || 0))}</p>
+                            </div>
+                        ))}
+                        {campaigns.length === 0 ? <p className="text-sm text-[var(--text-secondary)]">No campaigns available yet.</p> : null}
+                    </div>
+                </div>
+
+                <div className="rounded-xl border border-[var(--border-color)] bg-[var(--bg-card)] p-4">
+                    <h2 className="text-base font-semibold text-[var(--text-primary)] mb-3">Account Plans and Partners</h2>
+                    <div className="space-y-2">
+                        {accountPlans.slice(0, 3).map((item) => (
+                            <div key={item.id} className="rounded-lg border border-[var(--border-color)] bg-[var(--bg-overlay)] p-3">
+                                <p className="text-sm font-medium text-[var(--text-primary)]">{item.planName}</p>
+                                <p className="text-xs text-[var(--text-secondary)]">{item.customer?.name || 'Customer'} • {item.status}</p>
+                            </div>
+                        ))}
+                        {partnerChannels.slice(0, 3).map((item) => (
+                            <div key={item.id} className="rounded-lg border border-[var(--border-color)] bg-[var(--bg-overlay)] p-3">
+                                <p className="text-sm font-medium text-[var(--text-primary)]">{item.channelName}</p>
+                                <p className="text-xs text-[var(--text-secondary)]">{item.partnerType || 'Partner'} • {item.status}</p>
+                            </div>
+                        ))}
+                        {accountPlans.length === 0 && partnerChannels.length === 0 ? <p className="text-sm text-[var(--text-secondary)]">No account plans or partner channels available yet.</p> : null}
                     </div>
                 </div>
             </section>

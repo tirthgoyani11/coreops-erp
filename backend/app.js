@@ -46,6 +46,8 @@ const quotationRoutes = require('./src/routes/quotationRoutes');
 const salesOrderRoutes = require('./src/routes/salesOrderRoutes');
 const apInvoiceRoutes = require('./src/routes/apInvoiceRoutes');
 const hcmRoutes = require('./src/routes/hcmRoutes');
+const coreopsRoutes = require('./src/routes/coreopsRoutes');
+const crmPhase2Routes = require('./src/routes/crmPhase2Routes');
 
 // Services
 const currencyService = require('./src/services/currencyService');
@@ -60,7 +62,9 @@ if (process.env.NODE_ENV === 'production') {
 // Request ID middleware
 app.use((req, res, next) => {
     req.id = req.headers['x-request-id'] || uuidv4();
+    req.traceId = req.headers['x-trace-id'] || req.id;
     res.setHeader('X-Request-ID', req.id);
+    res.setHeader('X-Trace-ID', req.traceId);
     next();
 });
 
@@ -97,7 +101,7 @@ app.use(
         },
         credentials: true,
         methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-        allowedHeaders: ['Content-Type', 'Authorization', 'X-Request-ID', 'Cache-Control', 'Pragma'],
+        allowedHeaders: ['Content-Type', 'Authorization', 'X-Request-ID', 'X-Trace-ID', 'X-Idempotency-Key', 'Cache-Control', 'Pragma'],
     })
 );
 
@@ -184,6 +188,8 @@ app.use('/api/quotations', quotationRoutes);
 app.use('/api/sales-orders', salesOrderRoutes);
 app.use('/api/ap-invoices', apInvoiceRoutes);
 app.use('/api/hcm', hcmRoutes);
+app.use('/api/crm', crmPhase2Routes);
+app.use('/api/coreops', coreopsRoutes);
 app.use('/api/search', require('./src/routes/searchRoutes'));
 
 // Serve uploaded files (local storage — dev mode)

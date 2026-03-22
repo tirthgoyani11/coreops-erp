@@ -1,5 +1,6 @@
 const jwt = require('jsonwebtoken');
 const prisma = require('../config/prisma');
+const { setContextValue } = require('./context');
 
 /**
  * Verify JWT Token Middleware (Prisma version)
@@ -58,6 +59,9 @@ const verifyToken = async (req, res, next) => {
         // The full office object is accessible via req.user.office
 
         req.user = safeUser;
+        setContextValue('userId', safeUser.id || null);
+        setContextValue('officeId', safeUser.officeId || null);
+        setContextValue('userRole', safeUser.role || null);
         next();
     } catch (error) {
         if (error.name === 'JsonWebTokenError') {

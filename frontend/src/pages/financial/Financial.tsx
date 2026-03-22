@@ -14,7 +14,7 @@ import {
 import api from '../../lib/api';
 import { formatCurrency } from '../../lib/utils';
 
-type WorkspaceView = 'overview' | 'ap' | 'matching' | 'tax' | 'capital';
+type WorkspaceView = 'overview' | 'ap' | 'matching' | 'tax' | 'capital' | 'enterprise';
 
 type APInvoice = {
     id: string;
@@ -71,16 +71,56 @@ type APAging = {
     };
 };
 
+type IntercompanyEntry = {
+    id: string;
+    fromOfficeId?: string | null;
+    toOfficeId?: string | null;
+    amount: number;
+    status: string;
+};
+
+type RevenueSchedule = {
+    id: string;
+    scheduleNumber?: string;
+    contractRef?: string | null;
+    totalAmount: number;
+    recognizedAmount?: number;
+    status: string;
+    milestones?: Array<{
+        index: number;
+        milestoneCode?: string;
+        amount: number;
+        status: string;
+    }>;
+};
+
+type CloseCockpit = {
+    runId?: string;
+    runNumber?: string;
+    status: string;
+    isReadyToClose: boolean;
+    tasks: Array<{
+        key: string;
+        label?: string;
+        status: string;
+    }>;
+};
+
 function getViewFromPath(pathname: string): WorkspaceView {
     if (pathname.endsWith('/ap-invoices')) return 'ap';
     if (pathname.endsWith('/matching')) return 'matching';
     if (pathname.endsWith('/tax')) return 'tax';
     if (pathname.endsWith('/working-capital')) return 'capital';
+    if (pathname.endsWith('/enterprise-close')) return 'enterprise';
     return 'overview';
 }
 
 function dateInputValue(date: Date): string {
     return date.toISOString().slice(0, 10);
+}
+
+function makeIdempotencyKey(prefix: string): string {
+    return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
 export function Financial() {
@@ -97,6 +137,29 @@ export function Financial() {
     const [gstSummary, setGstSummary] = useState<Record<string, GSTRow>>({});
     const [netPayable, setNetPayable] = useState(0);
     const [pageError, setPageError] = useState<string | null>(null);
+    const [phase1Busy, setPhase1Busy] = useState(false);
+
+    const [intercompanyEntries, setIntercompanyEntries] = useState<IntercompanyEntry[]>([]);
+    const [revenueSchedules, setRevenueSchedules] = useState<RevenueSchedule[]>([]);
+    const [closeCockpit, setCloseCockpit] = useState<CloseCockpit | null>(null);
+
+    const [icForm, setIcForm] = useState({
+        fromOfficeId: '',
+        toOfficeId: '',
+        amount: 0,
+        description: 'Intercompany transfer',
+        profitCenter: '',
+        costCenter: '',
+    });
+
+    const [revRecForm, setRevRecForm] = useState({
+        officeId: '',
+        contractRef: '',
+        customerRef: '',
+        totalAmount: 0,
+        periods: 12,
+        frequency: 'MONTHLY',
+    });
 
     const [taxFrom, setTaxFrom] = useState<string>(dateInputValue(new Date(new Date().getFullYear(), new Date().getMonth(), 1)));
     const [taxTo, setTaxTo] = useState<string>(dateInputValue(new Date()));
@@ -109,12 +172,24 @@ export function Financial() {
         setPageError(null);
 
         try {
-            const [apRes, matchingRes, apAgingRes, taxRes, gstRes] = await Promise.allSettled([
+            const [
+                apRes,
+                matchingRes,
+                apAgingRes,
+                taxRes,
+                gstRes,
+                intercompanyRes,
+                revRecRes,
+                closeCockpitRes,
+            ] = await Promise.allSettled([
                 api.get('/ap-invoices', { params: { limit: 100, page: 1 } }),
                 api.get('/ap-invoices/matching/report'),
                 api.get('/ap-invoices/aging'),
                 api.get('/finance-ext/tax-reconciliation', { params: { startDate: new Date(taxFrom).toISOString(), endDate: new Date(taxTo).toISOString() } }),
                 api.get('/finance-ext/gst-reconciliation', { params: { startDate: new Date(taxFrom).toISOString(), endDate: new Date(taxTo).toISOString() } }),
+                api.get('/finance-ext/intercompany/entries'),
+                api.get('/finance-ext/revenue-recognition/schedules'),
+                api.get('/finance-ext/close-cockpit'),
             ]);
 
             if (apRes.status === 'fulfilled' && apRes.value.data?.success) {
@@ -150,12 +225,33 @@ export function Financial() {
                 setNetPayable(0);
             }
 
+            if (intercompanyRes.status === 'fulfilled' && intercompanyRes.value.data?.success) {
+                setIntercompanyEntries(intercompanyRes.value.data.data || []);
+            } else {
+                setIntercompanyEntries([]);
+            }
+
+            if (revRecRes.status === 'fulfilled' && revRecRes.value.data?.success) {
+                setRevenueSchedules(revRecRes.value.data.data || []);
+            } else {
+                setRevenueSchedules([]);
+            }
+
+            if (closeCockpitRes.status === 'fulfilled' && closeCockpitRes.value.data?.success) {
+                setCloseCockpit(closeCockpitRes.value.data.data || null);
+            } else {
+                setCloseCockpit(null);
+            }
+
             const allFailed =
                 apRes.status === 'rejected' &&
                 matchingRes.status === 'rejected' &&
                 apAgingRes.status === 'rejected' &&
                 taxRes.status === 'rejected' &&
-                gstRes.status === 'rejected';
+                gstRes.status === 'rejected' &&
+                intercompanyRes.status === 'rejected' &&
+                revRecRes.status === 'rejected' &&
+                closeCockpitRes.status === 'rejected';
 
             if (allFailed) {
                 setPageError('Unable to load financial workspace data right now.');
@@ -219,12 +315,117 @@ export function Financial() {
         await fetchWorkspace();
     };
 
+    const createIntercompanyEntry = async () => {
+        if (!icForm.fromOfficeId || !icForm.toOfficeId || Number(icForm.amount) <= 0) {
+            setPageError('Intercompany requires fromOfficeId, toOfficeId, and amount.');
+            return;
+        }
+        setPhase1Busy(true);
+        try {
+            await api.post('/finance-ext/intercompany/entries', icForm, {
+                headers: { 'x-idempotency-key': makeIdempotencyKey('ic-create') },
+            });
+            await fetchWorkspace();
+        } catch (error: any) {
+            setPageError(error?.response?.data?.message || 'Failed to create intercompany entry.');
+        } finally {
+            setPhase1Busy(false);
+        }
+    };
+
+    const runConsolidation = async () => {
+        setPhase1Busy(true);
+        try {
+            const now = new Date();
+            await api.post('/finance-ext/consolidation/run', {
+                month: now.getMonth() + 1,
+                year: now.getFullYear(),
+            }, {
+                headers: { 'x-idempotency-key': makeIdempotencyKey('consolidation-run') },
+            });
+            await fetchWorkspace();
+        } catch (error: any) {
+            setPageError(error?.response?.data?.message || 'Failed to run consolidation.');
+        } finally {
+            setPhase1Busy(false);
+        }
+    };
+
+    const createRevenueSchedule = async () => {
+        if (!revRecForm.officeId || Number(revRecForm.totalAmount) <= 0) {
+            setPageError('Revenue schedule requires officeId and positive totalAmount.');
+            return;
+        }
+        setPhase1Busy(true);
+        try {
+            await api.post('/finance-ext/revenue-recognition/schedules', revRecForm, {
+                headers: { 'x-idempotency-key': makeIdempotencyKey('revrec-create') },
+            });
+            await fetchWorkspace();
+        } catch (error: any) {
+            setPageError(error?.response?.data?.message || 'Failed to create revenue schedule.');
+        } finally {
+            setPhase1Busy(false);
+        }
+    };
+
+    const recognizeRevenueMilestone = async (scheduleId: string) => {
+        setPhase1Busy(true);
+        try {
+            await api.post(`/finance-ext/revenue-recognition/schedules/${scheduleId}/recognize`, {}, {
+                headers: { 'x-idempotency-key': makeIdempotencyKey(`revrec-recognize-${scheduleId}`) },
+            });
+            await fetchWorkspace();
+        } catch (error: any) {
+            setPageError(error?.response?.data?.message || 'Failed to recognize milestone.');
+        } finally {
+            setPhase1Busy(false);
+        }
+    };
+
+    const approveCloseTask = async (taskKey: string) => {
+        setPhase1Busy(true);
+        try {
+            const now = new Date();
+            await api.post(`/finance-ext/close-cockpit/tasks/${taskKey}/approve`, {
+                month: now.getMonth() + 1,
+                year: now.getFullYear(),
+            }, {
+                headers: { 'x-idempotency-key': makeIdempotencyKey(`close-task-${taskKey}`) },
+            });
+            await fetchWorkspace();
+        } catch (error: any) {
+            setPageError(error?.response?.data?.message || 'Failed to update close task.');
+        } finally {
+            setPhase1Busy(false);
+        }
+    };
+
+    const finalizeClose = async () => {
+        setPhase1Busy(true);
+        try {
+            const now = new Date();
+            await api.post('/finance-ext/close-cockpit/finalize', {
+                month: now.getMonth() + 1,
+                year: now.getFullYear(),
+            }, {
+                headers: { 'x-idempotency-key': makeIdempotencyKey('close-finalize') },
+            });
+            await fetchWorkspace();
+        } catch (error: any) {
+            setPageError(error?.response?.data?.message || 'Failed to finalize period close.');
+        } finally {
+            setPhase1Busy(false);
+        }
+    };
+
     const tabs: Array<{ key: WorkspaceView; label: string; path: string; icon: any }> = [
         { key: 'overview', label: 'Overview', path: '/financial', icon: Landmark },
         { key: 'ap', label: 'AP Invoices', path: '/financial/ap-invoices', icon: Receipt },
         { key: 'matching', label: '3-Way Matching', path: '/financial/matching', icon: GitCompare },
         { key: 'tax', label: 'Tax Reconciliation', path: '/financial/tax', icon: FileSpreadsheet },
         { key: 'capital', label: 'Working Capital', path: '/financial/working-capital', icon: ShieldCheck },
+        { key: 'enterprise', label: 'Enterprise Close', path: '/financial/enterprise-close', icon: Calculator },
     ];
 
     return (
@@ -234,7 +435,7 @@ export function Financial() {
                     <div>
                         <h1 className="text-2xl font-bold text-[var(--text-primary)]">Finance Operations Workspace</h1>
                         <p className="text-sm text-[var(--text-secondary)] mt-1">
-                            Unified AP posting, 3-way matching, tax compliance, and working capital controls.
+                            Unified AP posting, 3-way matching, tax compliance, working capital, and enterprise close controls.
                         </p>
                     </div>
                     <button
@@ -598,6 +799,106 @@ export function Financial() {
                         </div>
                     </div>
                 </section>
+            )}
+
+            {!loading && activeView === 'enterprise' && (
+                <div className="space-y-4">
+                    <section className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div className="rounded-xl border border-[var(--border-color)] bg-[var(--bg-card)] p-4">
+                            <p className="text-xs text-[var(--text-muted)] uppercase tracking-wider">Intercompany Entries</p>
+                            <p className="text-2xl font-bold text-[var(--text-primary)] mt-1">{intercompanyEntries.length}</p>
+                        </div>
+                        <div className="rounded-xl border border-[var(--border-color)] bg-[var(--bg-card)] p-4">
+                            <p className="text-xs text-[var(--text-muted)] uppercase tracking-wider">Revenue Schedules</p>
+                            <p className="text-2xl font-bold text-[var(--text-primary)] mt-1">{revenueSchedules.length}</p>
+                        </div>
+                        <div className="rounded-xl border border-[var(--border-color)] bg-[var(--bg-card)] p-4">
+                            <p className="text-xs text-[var(--text-muted)] uppercase tracking-wider">Close Status</p>
+                            <p className="text-2xl font-bold text-[var(--text-primary)] mt-1">{closeCockpit?.status || 'N/A'}</p>
+                        </div>
+                    </section>
+
+                    <section className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+                        <div className="rounded-xl border border-[var(--border-color)] bg-[var(--bg-card)] p-4 space-y-3">
+                            <h2 className="text-base font-semibold text-[var(--text-primary)]">Intercompany Posting</h2>
+                            <div className="grid grid-cols-2 gap-2">
+                                <input value={icForm.fromOfficeId} onChange={(e) => setIcForm((p) => ({ ...p, fromOfficeId: e.target.value }))} placeholder="From Office ID" className="px-3 py-2 rounded-lg border border-[var(--border-color)] bg-[var(--bg-overlay)] text-sm" />
+                                <input value={icForm.toOfficeId} onChange={(e) => setIcForm((p) => ({ ...p, toOfficeId: e.target.value }))} placeholder="To Office ID" className="px-3 py-2 rounded-lg border border-[var(--border-color)] bg-[var(--bg-overlay)] text-sm" />
+                                <input type="number" value={icForm.amount} onChange={(e) => setIcForm((p) => ({ ...p, amount: Number(e.target.value || 0) }))} placeholder="Amount" className="px-3 py-2 rounded-lg border border-[var(--border-color)] bg-[var(--bg-overlay)] text-sm" />
+                                <input value={icForm.profitCenter} onChange={(e) => setIcForm((p) => ({ ...p, profitCenter: e.target.value }))} placeholder="Profit Center" className="px-3 py-2 rounded-lg border border-[var(--border-color)] bg-[var(--bg-overlay)] text-sm" />
+                            </div>
+                            <input value={icForm.costCenter} onChange={(e) => setIcForm((p) => ({ ...p, costCenter: e.target.value }))} placeholder="Cost Center" className="px-3 py-2 rounded-lg border border-[var(--border-color)] bg-[var(--bg-overlay)] text-sm w-full" />
+                            <button onClick={() => void createIntercompanyEntry()} disabled={phase1Busy} className="px-4 py-2 rounded-lg bg-[var(--primary)] text-black text-sm font-medium disabled:opacity-50">Create Intercompany Entry</button>
+                        </div>
+
+                        <div className="rounded-xl border border-[var(--border-color)] bg-[var(--bg-card)] p-4 space-y-3">
+                            <h2 className="text-base font-semibold text-[var(--text-primary)]">Consolidation & Close</h2>
+                            <button onClick={() => void runConsolidation()} disabled={phase1Busy} className="px-4 py-2 rounded-lg border border-[var(--border-color)] bg-[var(--bg-overlay)] text-sm font-medium disabled:opacity-50">Run Consolidation</button>
+                            <div className="space-y-2">
+                                {(closeCockpit?.tasks || []).map((task) => (
+                                    <div key={task.key} className="rounded-lg border border-[var(--border-color)] bg-[var(--bg-overlay)] p-3 flex items-center justify-between">
+                                        <div>
+                                            <p className="text-sm font-medium text-[var(--text-primary)]">{task.label || task.key}</p>
+                                            <p className="text-xs text-[var(--text-secondary)]">{task.status}</p>
+                                        </div>
+                                        <button onClick={() => void approveCloseTask(task.key)} disabled={phase1Busy || task.status === 'COMPLETED'} className="px-3 py-1.5 rounded-lg border border-[var(--border-color)] text-xs disabled:opacity-50">Approve</button>
+                                    </div>
+                                ))}
+                            </div>
+                            <button onClick={() => void finalizeClose()} disabled={phase1Busy || !closeCockpit?.isReadyToClose} className="px-4 py-2 rounded-lg bg-[var(--primary)] text-black text-sm font-medium disabled:opacity-50">Finalize Period Close</button>
+                        </div>
+                    </section>
+
+                    <section className="rounded-xl border border-[var(--border-color)] bg-[var(--bg-card)] p-4 space-y-3">
+                        <h2 className="text-base font-semibold text-[var(--text-primary)]">Revenue Recognition</h2>
+                        <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                            <input value={revRecForm.officeId} onChange={(e) => setRevRecForm((p) => ({ ...p, officeId: e.target.value }))} placeholder="Office ID" className="px-3 py-2 rounded-lg border border-[var(--border-color)] bg-[var(--bg-overlay)] text-sm" />
+                            <input value={revRecForm.contractRef} onChange={(e) => setRevRecForm((p) => ({ ...p, contractRef: e.target.value }))} placeholder="Contract Ref" className="px-3 py-2 rounded-lg border border-[var(--border-color)] bg-[var(--bg-overlay)] text-sm" />
+                            <input value={revRecForm.customerRef} onChange={(e) => setRevRecForm((p) => ({ ...p, customerRef: e.target.value }))} placeholder="Customer Ref" className="px-3 py-2 rounded-lg border border-[var(--border-color)] bg-[var(--bg-overlay)] text-sm" />
+                            <input type="number" value={revRecForm.totalAmount} onChange={(e) => setRevRecForm((p) => ({ ...p, totalAmount: Number(e.target.value || 0) }))} placeholder="Total Amount" className="px-3 py-2 rounded-lg border border-[var(--border-color)] bg-[var(--bg-overlay)] text-sm" />
+                            <input type="number" value={revRecForm.periods} onChange={(e) => setRevRecForm((p) => ({ ...p, periods: Number(e.target.value || 1) }))} placeholder="Periods" className="px-3 py-2 rounded-lg border border-[var(--border-color)] bg-[var(--bg-overlay)] text-sm" />
+                            <select value={revRecForm.frequency} onChange={(e) => setRevRecForm((p) => ({ ...p, frequency: e.target.value }))} className="px-3 py-2 rounded-lg border border-[var(--border-color)] bg-[var(--bg-overlay)] text-sm">
+                                <option value="MONTHLY">MONTHLY</option>
+                                <option value="QUARTERLY">QUARTERLY</option>
+                                <option value="WEEKLY">WEEKLY</option>
+                            </select>
+                        </div>
+                        <button onClick={() => void createRevenueSchedule()} disabled={phase1Busy} className="px-4 py-2 rounded-lg bg-[var(--primary)] text-black text-sm font-medium disabled:opacity-50">Create Revenue Schedule</button>
+
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-sm">
+                                <thead className="bg-[var(--bg-overlay)] text-[var(--text-secondary)]">
+                                    <tr>
+                                        <th className="text-left p-3">Schedule</th>
+                                        <th className="text-left p-3">Contract</th>
+                                        <th className="text-left p-3">Status</th>
+                                        <th className="text-right p-3">Total</th>
+                                        <th className="text-right p-3">Recognized</th>
+                                        <th className="text-right p-3">Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {revenueSchedules.length === 0 ? (
+                                        <tr><td colSpan={6} className="p-6 text-center text-[var(--text-muted)]">No revenue schedules available.</td></tr>
+                                    ) : (
+                                        revenueSchedules.map((schedule) => (
+                                            <tr key={schedule.id} className="border-t border-[var(--border-color)]">
+                                                <td className="p-3 text-[var(--text-primary)] font-medium">{schedule.scheduleNumber || schedule.id}</td>
+                                                <td className="p-3 text-[var(--text-secondary)]">{schedule.contractRef || '-'}</td>
+                                                <td className="p-3 text-[var(--text-secondary)]">{schedule.status}</td>
+                                                <td className="p-3 text-right text-[var(--text-primary)]">{formatCurrency(schedule.totalAmount || 0)}</td>
+                                                <td className="p-3 text-right text-[var(--text-primary)]">{formatCurrency(schedule.recognizedAmount || 0)}</td>
+                                                <td className="p-3 text-right">
+                                                    <button onClick={() => void recognizeRevenueMilestone(schedule.id)} disabled={phase1Busy} className="px-3 py-1.5 rounded-lg border border-[var(--border-color)] text-xs disabled:opacity-50">Recognize Next</button>
+                                                </td>
+                                            </tr>
+                                        ))
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
+                    </section>
+                </div>
             )}
         </div>
     );

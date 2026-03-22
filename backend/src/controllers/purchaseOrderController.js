@@ -1,5 +1,13 @@
 const prisma = require('../config/prisma');
 const { postTransactionToGL } = require('../services/financePostingService');
+const { publishEvent } = require('../coreops/eventBus');
+const { evaluateEvent } = require('../coreops/automationEngine');
+
+function inferInventoryType(itemName, itemDescription) {
+    const txt = `${String(itemName || '')} ${String(itemDescription || '')}`.toLowerCase();
+    if (/(spare|part|bearing|belt|filter|consumable|seal|bolt|nut)/.test(txt)) return 'SPARE';
+    return 'PRODUCT';
+}
 
 // @desc    Create new PO
 // @route   POST /api/purchase-orders
@@ -243,11 +251,15 @@ exports.receiveGoods = async (req, res) => {
     try {
         const { receivedItems, grnReference } = req.body;
 
+        if (!Array.isArray(receivedItems) || receivedItems.length === 0) {
+            return res.status(400).json({ success: false, message: 'receivedItems must be a non-empty array' });
+        }
+
         // Use a transaction for atomicity
         const result = await prisma.$transaction(async (tx) => {
             const po = await tx.purchaseOrder.findUnique({
                 where: { id: req.params.id },
-                include: { items: true },
+                include: { items: true, vendor: { select: { id: true, name: true } } },
             });
 
             if (!po) throw new Error('PO not found');
@@ -257,11 +269,29 @@ exports.receiveGoods = async (req, res) => {
 
             let allReceived = true;
 
+            const dateToken = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+            const grnCount = await tx.goodsReceipt.count();
+            const grnNumber = `GRN-${dateToken}-${String(grnCount + 1).padStart(4, '0')}`;
+
+            const grn = await tx.goodsReceipt.create({
+                data: {
+                    grnNumber,
+                    purchaseOrderId: po.id,
+                    receivedById: req.user.id,
+                    officeId: po.officeId,
+                    status: 'DRAFT',
+                    notes: grnReference || null,
+                },
+            });
+
+            const createdInventoryIds = [];
+
             for (const rec of receivedItems) {
                 const poItem = po.items.find(i => i.id === rec.itemId);
                 if (!poItem) continue;
 
                 const qtyToReceive = Number(rec.quantityReceived);
+                if (!Number.isFinite(qtyToReceive) || qtyToReceive <= 0) continue;
 
                 if (poItem.receivedQuantity + qtyToReceive > poItem.quantity) {
                     throw new Error(`Cannot receive more than ordered for ${poItem.name}`);
@@ -270,6 +300,51 @@ exports.receiveGoods = async (req, res) => {
                 const newReceivedQty = poItem.receivedQuantity + qtyToReceive;
                 if (newReceivedQty < poItem.quantity) allReceived = false;
 
+                let inventoryId = poItem.inventoryId;
+
+                // If PO line is custom (no linked inventory), create a new inventory master row so receipt is always reflected.
+                if (!inventoryId) {
+                    const inferredType = inferInventoryType(poItem.name, poItem.description);
+                    const invCount = await tx.inventory.count();
+                    const skuPrefix = inferredType === 'SPARE' ? 'SPR' : 'PRD';
+                    const generatedSku = `${skuPrefix}-${String(invCount + 1).padStart(5, '0')}`;
+
+                    const createdInventory = await tx.inventory.create({
+                        data: {
+                            type: inferredType,
+                            name: poItem.name,
+                            description: poItem.description || null,
+                            sku: generatedSku,
+                            category: inferredType === 'SPARE' ? 'SPARE_PARTS' : 'PROCUREMENT',
+                            officeId: po.officeId,
+                            trackingType: 'QUANTITY',
+                            currentQuantity: 0,
+                            reorderPoint: inferredType === 'SPARE' ? 5 : 10,
+                            reorderQuantity: inferredType === 'SPARE' ? 20 : 50,
+                            minimumQuantity: inferredType === 'SPARE' ? 2 : 5,
+                            unit: 'pieces',
+                            unitCost: Number(poItem.unitPrice || 0),
+                            costPrice: Number(poItem.unitPrice || 0),
+                            pricingCurrency: po.currency || 'INR',
+                            primaryVendorId: po.vendorId,
+                            storageBin: rec.bin || null,
+                            storageShelf: rec.shelf || null,
+                            lastPurchasePrice: Number(poItem.unitPrice || 0),
+                            lastPurchaseDate: new Date(),
+                            lastRestockDate: new Date(),
+                            notes: `Auto-created from PO ${po.poNumber}`,
+                        },
+                    });
+
+                    inventoryId = createdInventory.id;
+                    createdInventoryIds.push(createdInventory.id);
+
+                    await tx.purchaseOrderItem.update({
+                        where: { id: poItem.id },
+                        data: { inventoryId },
+                    });
+                }
+
                 // Update PO item
                 await tx.purchaseOrderItem.update({
                     where: { id: poItem.id },
@@ -277,44 +352,91 @@ exports.receiveGoods = async (req, res) => {
                 });
 
                 // Update Inventory
-                if (poItem.inventoryId) {
-                    await tx.inventory.update({
-                        where: { id: poItem.inventoryId },
-                        data: {
-                            currentQuantity: { increment: qtyToReceive },
-                            lastRestockDate: new Date(),
-                            ...(rec.bin && { storageBin: rec.bin }),
-                            ...(rec.shelf && { storageShelf: rec.shelf }),
-                        },
-                    });
+                await tx.inventory.update({
+                    where: { id: inventoryId },
+                    data: {
+                        currentQuantity: { increment: qtyToReceive },
+                        lastRestockDate: new Date(),
+                        lastPurchasePrice: Number(poItem.unitPrice || 0),
+                        lastPurchaseDate: new Date(),
+                        unitCost: Number(poItem.unitPrice || 0),
+                        costPrice: Number(poItem.unitPrice || 0),
+                        ...(rec.bin && { storageBin: rec.bin }),
+                        ...(rec.shelf && { storageShelf: rec.shelf }),
+                    },
+                });
 
-                    await tx.stockMovement.create({
-                        data: {
-                            inventoryId: poItem.inventoryId,
-                            type: 'STOCK_IN',
-                            quantity: qtyToReceive,
-                            reason: 'PURCHASE_ORDER',
-                            reference: po.poNumber,
-                            performedById: req.user.id,
-                        },
-                    });
-                }
+                await tx.stockMovement.create({
+                    data: {
+                        inventoryId,
+                        type: 'STOCK_IN',
+                        quantity: qtyToReceive,
+                        reason: `PO receipt ${po.poNumber}`,
+                        reference: grnNumber,
+                        performedById: req.user.id,
+                    },
+                });
+
+                await tx.gRNItem.create({
+                    data: {
+                        grnId: grn.id,
+                        poItemId: poItem.id,
+                        quantityReceived: qtyToReceive,
+                        quantityAccepted: qtyToReceive,
+                        quantityRejected: 0,
+                        batchNumber: rec.batchNumber || null,
+                    },
+                });
             }
+
+            // Recalculate from database to avoid stale in-memory PO items.
+            const latestItems = await tx.purchaseOrderItem.findMany({ where: { purchaseOrderId: po.id } });
+            allReceived = latestItems.every((item) => Number(item.receivedQuantity || 0) >= Number(item.quantity || 0));
+
+            await tx.goodsReceipt.update({
+                where: { id: grn.id },
+                data: { status: allReceived ? 'ACCEPTED' : 'PARTIAL' },
+            });
 
             const updatedPO = await tx.purchaseOrder.update({
                 where: { id: req.params.id },
                 data: {
                     status: allReceived ? 'RECEIVED' : 'PARTIALLY_RECEIVED',
                     deliveryDate: new Date(),
-                    ...(grnReference && { grnReference }),
+                    grnReference: grnReference || grnNumber,
                 },
-                include: { items: true },
+                include: {
+                    items: { include: { inventory: { select: { id: true, name: true, type: true, currentQuantity: true } } } },
+                    vendor: { select: { id: true, name: true } },
+                },
             });
 
-            return updatedPO;
+            return { updatedPO, grn, createdInventoryIds };
         });
 
-        res.status(200).json({ success: true, data: result });
+        const receiptEvent = await publishEvent('procurement.goods.received', {
+            purchaseOrderId: result.updatedPO.id,
+            poNumber: result.updatedPO.poNumber,
+            officeId: result.updatedPO.officeId,
+            vendorId: result.updatedPO.vendorId,
+            vendorName: result.updatedPO.vendor?.name || null,
+            grnId: result.grn.id,
+            grnNumber: result.grn.grnNumber,
+            status: result.updatedPO.status,
+            autoCreatedInventoryIds: result.createdInventoryIds,
+        }, {
+            source: 'procurement.po.receive',
+            officeId: result.updatedPO.officeId,
+            actorId: req.user?.id || null,
+        });
+
+        await evaluateEvent(receiptEvent, {
+            source: 'procurement.po.receive',
+            officeId: result.updatedPO.officeId,
+            actorId: req.user?.id || null,
+        });
+
+        res.status(200).json({ success: true, data: result.updatedPO, grn: result.grn });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
     }

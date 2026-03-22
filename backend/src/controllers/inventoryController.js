@@ -1,5 +1,8 @@
 const prisma = require('../config/prisma');
 const aiService = require('../services/aiService');
+const { postTransactionToGL } = require('../services/financePostingService');
+const { publishEvent } = require('../coreops/eventBus');
+const { evaluateEvent } = require('../coreops/automationEngine');
 
 function resolveUserOfficeId(user) {
     const oid = user.office?.id || user.officeId;
@@ -66,6 +69,81 @@ exports.getInventory = async (req, res) => {
     }
 };
 
+// @desc    Delete inventory item
+// @route   DELETE /api/inventory/:id
+// @access  Private (Admin/Manager only)
+exports.deleteItem = async (req, res) => {
+    try {
+        const item = await getScopedInventoryItem(req.params.id, req.user);
+        if (!item) return res.status(404).json({ success: false, message: 'Item not found' });
+
+        // Check if item has active stock movements or dependencies
+        const movements = await prisma.stockMovement.count({
+            where: { inventoryId: item.id },
+        });
+
+        if (movements > 0) {
+            return res.status(400).json({
+                success: false,
+                message: `Cannot delete item with ${movements} stock movement(s). Archive instead.`,
+            });
+        }
+
+        // Check for spare part usage
+        const spareUsage = await prisma.sparePartUsage.count({
+            where: { inventoryId: item.id },
+        });
+
+        if (spareUsage > 0) {
+            return res.status(400).json({
+                success: false,
+                message: `Cannot delete item used in ${spareUsage} maintenance ticket(s).`,
+            });
+        }
+
+        // Safe to delete
+        const deleted = await prisma.$transaction(async (tx) => {
+            // Delete any related serial units or batches first
+            await tx.serialUnit.deleteMany({ where: { inventoryId: item.id } });
+            await tx.batch.deleteMany({ where: { inventoryId: item.id } });
+
+            // Delete the inventory item
+            const result = await tx.inventory.delete({
+                where: { id: item.id },
+            });
+
+            return result;
+        });
+
+        // Publish audit event
+        publishEvent('INVENTORY_ITEM_DELETED', {
+            itemId: deleted.id,
+            sku: deleted.sku,
+            name: deleted.name,
+            deletedBy: req.user.id,
+        });
+
+        res.status(200).json({
+            success: true,
+            message: `Item "${deleted.sku}" deleted successfully`,
+            data: {
+                id: deleted.id,
+                sku: deleted.sku,
+                name: deleted.name,
+            },
+        });
+    } catch (error) {
+        // Handle constraint violations
+        if (error.code === 'P2003') {
+            return res.status(400).json({
+                success: false,
+                message: 'Cannot delete item due to existing references. Please archive instead.',
+            });
+        }
+        res.status(500).json({ success: false, message: 'Server Error', error: error.message });
+    }
+};
+
 // @desc    Get single inventory item
 // @route   GET /api/inventory/:id
 // @access  Private
@@ -116,29 +194,89 @@ exports.createItem = async (req, res) => {
             finalSku = `${prefix}-${String(count + 1).padStart(5, '0')}`;
         }
 
-        const item = await prisma.inventory.create({
-            data: {
-                name,
-                type: type?.toUpperCase() || 'PRODUCT',
-                description,
-                sku: finalSku,
-                partNumber,
-                category,
-                subcategory,
-                officeId: resolvedOfficeId,
-                trackingType: trackingType || 'QUANTITY',
-                currentQuantity: Number(currentQuantity) || 0,
-                reorderPoint: Number(reorderPoint) || 10,
-                reorderQuantity: Number(reorderQuantity) || 50,
-                maxQuantity: maxQuantity ? Number(maxQuantity) : null,
-                minimumQuantity: Number(minimumQuantity) || 5,
-                unit: unit || 'pieces',
-                costPrice: costPrice ? Number(costPrice) : null,
-                sellingPrice: sellingPrice ? Number(sellingPrice) : null,
-                unitCost: unitCost ? Number(unitCost) : null,
-                pricingCurrency: pricingCurrency || 'INR',
-                notes,
-            },
+        const openingQty = Number(currentQuantity) || 0;
+        const resolvedUnitCost = Number(unitCost || costPrice || 0) || 0;
+        const openingStockValue = Number((openingQty * resolvedUnitCost).toFixed(2));
+        const shouldCreateExpenseEntry = req.body.skipAutoExpenseEntry !== true && openingStockValue > 0;
+
+        const item = await prisma.$transaction(async (tx) => {
+            const createdItem = await tx.inventory.create({
+                data: {
+                    name,
+                    type: type?.toUpperCase() || 'PRODUCT',
+                    description,
+                    sku: finalSku,
+                    partNumber,
+                    category,
+                    subcategory,
+                    officeId: resolvedOfficeId,
+                    trackingType: trackingType || 'QUANTITY',
+                    currentQuantity: openingQty,
+                    reorderPoint: Number(reorderPoint) || 10,
+                    reorderQuantity: Number(reorderQuantity) || 50,
+                    maxQuantity: maxQuantity ? Number(maxQuantity) : null,
+                    minimumQuantity: Number(minimumQuantity) || 5,
+                    unit: unit || 'pieces',
+                    costPrice: costPrice ? Number(costPrice) : null,
+                    sellingPrice: sellingPrice ? Number(sellingPrice) : null,
+                    unitCost: unitCost ? Number(unitCost) : null,
+                    pricingCurrency: pricingCurrency || 'INR',
+                    notes,
+                },
+            });
+
+            if (openingQty > 0) {
+                await tx.stockMovement.create({
+                    data: {
+                        inventoryId: createdItem.id,
+                        type: 'STOCK_IN',
+                        quantity: openingQty,
+                        reason: 'Opening stock on inventory creation',
+                        reference: createdItem.sku || createdItem.id,
+                        performedById: req.user.id,
+                    },
+                });
+            }
+
+            if (shouldCreateExpenseEntry) {
+                const expenseTx = await tx.transaction.create({
+                    data: {
+                        type: 'EXPENSE',
+                        category: 'INVENTORY_PURCHASE',
+                        amount: openingStockValue,
+                        currency: pricingCurrency || 'INR',
+                        date: new Date(),
+                        description: `Inventory opening stock - ${createdItem.name} (${openingQty} ${createdItem.unit})`,
+                        referenceType: 'MANUAL',
+                        referenceId: createdItem.id,
+                        officeId: resolvedOfficeId,
+                        recordedById: req.user.id,
+                        status: 'CLEARED',
+                    },
+                });
+
+                await postTransactionToGL({ tx, transaction: expenseTx, userId: req.user.id });
+            }
+
+            return createdItem;
+        });
+
+        const inventoryCreatedEvent = await publishEvent('inventory.item.created', {
+            inventoryId: item.id,
+            name: item.name,
+            officeId: item.officeId,
+            openingQuantity: openingQty,
+            openingValue: openingStockValue,
+        }, {
+            source: 'inventory.controller',
+            officeId: item.officeId,
+            actorId: req.user?.id || null,
+        });
+
+        await evaluateEvent(inventoryCreatedEvent, {
+            source: 'inventory.controller',
+            officeId: item.officeId,
+            actorId: req.user?.id || null,
         });
 
         res.status(201).json({ success: true, data: item });
@@ -230,13 +368,42 @@ exports.adjustStock = async (req, res) => {
                 },
             });
 
-            return await tx.inventory.findUnique({
-                where: { id: req.params.id },
-                include: { stockMovements: { orderBy: { date: 'desc' }, take: 5 } },
-            });
+            return {
+                item: await tx.inventory.findUnique({
+                    where: { id: req.params.id },
+                    include: { stockMovements: { orderBy: { date: 'desc' }, take: 5 } },
+                }),
+                movement: {
+                    type: movementType,
+                    quantity: qty,
+                    unitCost: Number(item.unitCost || item.costPrice || 0),
+                    movementValue: Number((qty * Number(item.unitCost || item.costPrice || 0)).toFixed(2)),
+                },
+            };
         });
 
-        res.status(200).json({ success: true, data: result });
+        const adjustedEvent = await publishEvent('inventory.stock.adjusted', {
+            inventoryId: req.params.id,
+            officeId: result.item?.officeId || null,
+            movementType: result.movement.type,
+            quantity: result.movement.quantity,
+            unitCost: result.movement.unitCost,
+            movementValue: result.movement.movementValue,
+            reason: notes || reason || null,
+            reference: reference || null,
+        }, {
+            source: 'inventory.controller',
+            officeId: result.item?.officeId || null,
+            actorId: req.user?.id || null,
+        });
+
+        await evaluateEvent(adjustedEvent, {
+            source: 'inventory.controller',
+            officeId: result.item?.officeId || null,
+            actorId: req.user?.id || null,
+        });
+
+        res.status(200).json({ success: true, data: result.item });
     } catch (error) {
         const message = error?.message || 'Server Error';
         if (message === 'Item not found') {
@@ -950,3 +1117,195 @@ exports.fixToReorderPoint = async (req, res) => {
     }
 };
 
+// @desc    Bulk route inventory items to spare parts or purchase order
+// @route   POST /api/inventory/bulk-route
+// @access  Private (Manager/Admin)
+exports.bulkRouteItems = async (req, res) => {
+    try {
+        const { itemIds, destination } = req.body;
+
+        if (!Array.isArray(itemIds) || itemIds.length === 0) {
+            return res.status(400).json({ success: false, message: 'itemIds must be a non-empty array' });
+        }
+
+        if (!['SPARE', 'PURCHASE_ORDER'].includes(destination)) {
+            return res.status(400).json({ success: false, message: 'destination must be SPARE or PURCHASE_ORDER' });
+        }
+
+        const userOfficeId = resolveUserOfficeId(req.user);
+
+        // Fetch all items with office scope
+        const items = await prisma.inventory.findMany({
+            where: {
+                id: { in: itemIds },
+                ...(req.user.role !== 'SUPER_ADMIN' && { officeId: userOfficeId }),
+            },
+        });
+
+        if (items.length !== itemIds.length) {
+            return res.status(400).json({ success: false, message: 'Some items not found or access denied' });
+        }
+
+        let result = { routed: 0, poId: null };
+
+        if (destination === 'SPARE') {
+            // Route all selected items to spare parts type
+            await prisma.inventory.updateMany({
+                where: { id: { in: itemIds } },
+                data: { type: 'SPARE' },
+            });
+            result.routed = items.length;
+        } else if (destination === 'PURCHASE_ORDER') {
+            // Create a purchase order for selected items
+            const poNumber = `PO-${Date.now()}`;
+            
+            // Try to find vendor from user's primary vendor or default
+            let vendorId = null;
+            const vendor = await prisma.vendor.findFirst({
+                where: { officeId: userOfficeId },
+            });
+            vendorId = vendor?.id;
+
+            if (!vendorId) {
+                // Create a placeholder vendor if none exists
+                const newVendor = await prisma.vendor.create({
+                    data: {
+                        name: 'General Vendor',
+                        vendorCode: 'GEN-001',
+                        officeId: userOfficeId,
+                        email: 'vendor@company.com',
+                        status: 'ACTIVE',
+                    },
+                });
+                vendorId = newVendor.id;
+            }
+
+            const poItems = items.map(item => ({
+                name: item.name,
+                description: item.description || null,
+                quantity: item.reorderQuantity || 50,
+                unitPrice: item.costPrice || item.unitCost || 100,
+                totalPrice: (item.reorderQuantity || 50) * (item.costPrice || item.unitCost || 100),
+                inventoryId: item.id,
+            }));
+
+            const subtotal = poItems.reduce((sum, item) => sum + item.totalPrice, 0);
+            const taxAmount = Math.round(subtotal * 0.18); // 18% GST
+            const totalAmount = subtotal + taxAmount;
+
+            const po = await prisma.purchaseOrder.create({
+                data: {
+                    poNumber,
+                    vendorId,
+                    officeId: userOfficeId,
+                    requestedById: req.user.id,
+                    status: 'DRAFT',
+                    subtotal,
+                    taxAmount,
+                    totalAmount,
+                    items: {
+                        create: poItems,
+                    },
+                },
+                include: { items: true },
+            });
+
+            result.poId = po.id;
+            result.routed = items.length;
+
+            // Publish event for audit/workflow
+            publishEvent('PURCHASE_ORDER_CREATED', {
+                poId: po.id,
+                poNumber: po.poNumber,
+                itemCount: poItems.length,
+                totalAmount,
+                createdBy: req.user.id,
+            });
+        }
+
+        res.status(200).json({
+            success: true,
+            message: `${result.routed} item(s) routed to ${destination === 'SPARE' ? 'spare parts' : 'purchase order'}`,
+            data: result,
+        });
+    } catch (error) {
+        res.status(500).json({ success: false, message: 'Server Error', error: error.message });
+    }
+};
+
+// @desc    AI multimodal processing (image + text) for inventory operations
+// @route   POST /api/inventory/ai-multimodal
+// @access  Private
+exports.aiMultimodal = async (req, res) => {
+    try {
+        const { image, text } = req.body;
+
+        if (!image && !text) {
+            return res.status(400).json({ success: false, message: 'Please provide image or text input' });
+        }
+
+        const langchainService = require('../services/langchainService');
+        const orchestrator = require('../services/orchestrator');
+
+        let extractedData = null;
+        let suggestion = null;
+        let confidenceScore = 0.8;
+
+        // If image is provided, perform vision analysis
+        if (image) {
+            try {
+                const visionResult = await langchainService.processVision(image, text || 'Extract inventory data from this image');
+                extractedData = visionResult.text;
+            } catch (err) {
+                console.error('Vision processing failed:', err);
+            }
+        }
+
+        // Combine image insights with text for AI recommendation
+        const prompt = `You are an inventory operations assistant. 
+${extractedData ? `Image Analysis:\n${extractedData}\n\n` : ''}
+User Request: ${text || 'Analyze the provided image for inventory operations'}
+
+Based on the above, provide:
+1. Summary of extracted data or observations
+2. Recommended action (create item, update stock, create PO, etc.)
+3. Any warnings or notes
+
+Respond in JSON format: { "summary": "", "recommendation": "", "action": "" }`;
+
+        // Get AI suggestion
+        try {
+            const aiResult = await orchestrator.processCommand(prompt, {
+                userId: req.user.id,
+                officeId: resolveUserOfficeId(req.user),
+                role: req.user.role,
+            });
+
+            if (aiResult?.response) {
+                // Try to parse structured response
+                try {
+                    const parsed = JSON.parse(aiResult.response);
+                    suggestion = parsed.recommendation;
+                    confidenceScore = 0.85;
+                } catch {
+                    suggestion = aiResult.response;
+                }
+            }
+        } catch (err) {
+            console.error('AI suggestion failed:', err);
+            suggestion = 'Please review the extracted data and perform manual action';
+        }
+
+        res.status(200).json({
+            success: true,
+            data: {
+                extractedData,
+                suggestion,
+                confidenceScore,
+                source: 'multimodal-ai',
+            },
+        });
+    } catch (error) {
+        res.status(500).json({ success: false, message: 'Server Error', error: error.message });
+    }
+};

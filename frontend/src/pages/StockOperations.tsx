@@ -35,6 +35,8 @@ export function StockOperations() {
     const [reference, setReference] = useState(''); // PO number, WO number
     const [loading, setLoading] = useState(false);
 
+    const canCreateFromCustomName = operationType === 'IN' && !selectedItem && searchQuery.trim().length >= 2;
+
     // Pre-load item if ID provided
     useEffect(() => {
         const itemId = searchParams.get('item');
@@ -70,13 +72,44 @@ export function StockOperations() {
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!selectedItem || !quantity || !reason) {
+        if (!quantity || !reason) {
             toast.error('Please fill in all required fields');
+            return;
+        }
+
+        if (!selectedItem && operationType !== 'IN') {
+            toast.error('Please select an inventory item for this operation');
+            return;
+        }
+
+        if (!selectedItem && operationType === 'IN' && !canCreateFromCustomName) {
+            toast.error('Enter a valid item name (min 2 characters) to create inventory');
             return;
         }
 
         setLoading(true);
         try {
+            if (!selectedItem && canCreateFromCustomName) {
+                const createRes = await api.post('/inventory', {
+                    name: searchQuery.trim(),
+                    type: 'PRODUCT',
+                    currentQuantity: Number(quantity),
+                    unit: 'pieces',
+                    notes: reference
+                        ? `${reason} | Ref: ${reference}`
+                        : reason,
+                });
+
+                const createdItem = createRes?.data?.data;
+                toast.success('New inventory item created and stocked in successfully');
+                if (createdItem?.id) {
+                    navigate(`/inventory/${createdItem.id}`);
+                } else {
+                    navigate('/inventory');
+                }
+                return;
+            }
+
             // Determine endpoint based on type
             // const endpoint = `/inventory/${selectedItem.id}/${operationType.toLowerCase()}`;
             // Payload varies slightly? Assuming unified or specific endpoints
@@ -192,6 +225,11 @@ export function StockOperations() {
                                         ))}
                                     </div>
                                 )}
+                                {operationType === 'IN' && searchQuery.trim().length >= 2 && searchResults.length === 0 && (
+                                    <p className="mt-2 text-xs text-green-600 dark:text-green-400">
+                                        New item will be created with name "{searchQuery.trim()}" on confirm.
+                                    </p>
+                                )}
                             </div>
                         ) : (
                             <div className="flex items-center justify-between p-3 border border-gray-200 dark:border-gray-800 rounded-md bg-gray-50 dark:bg-gray-900/50">
@@ -239,7 +277,7 @@ export function StockOperations() {
                     </div>
 
                     <div className="pt-4">
-                        <Button type="submit" className="w-full" disabled={loading || !selectedItem}>
+                        <Button type="submit" className="w-full" disabled={loading || (!selectedItem && !canCreateFromCustomName)}>
                             {loading ? 'Processing...' : 'Confirm Operation'}
                         </Button>
                     </div>

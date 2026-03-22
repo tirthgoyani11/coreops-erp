@@ -1,6 +1,8 @@
 const prisma = require('../config/prisma');
 const { asyncHandler, AppError } = require('../utils/errorHandler');
 const { calculatePayslipPreview } = require('../services/payrollEngineService');
+const { publishEvent } = require('../coreops/eventBus');
+const { evaluateEvent } = require('../coreops/automationEngine');
 
 function resolveOfficeId(value) {
   if (!value) return null;
@@ -113,6 +115,28 @@ exports.createLeaveRequest = asyncHandler(async (req, res, next) => {
       totalDays,
       reason: reason || null,
     },
+  });
+
+  const officeId = resolveOfficeId(req.user?.officeId);
+  const leaveEvent = await publishEvent('hcm.leave.submitted', {
+    leaveRequestId: leaveRequest.id,
+    employeeId,
+    leaveType,
+    startDate: start.toISOString(),
+    endDate: end.toISOString(),
+    totalDays,
+    policyLimit: Number(req.body.policyLimit || 3),
+    officeId,
+  }, {
+    source: 'hcm.leave.controller',
+    officeId,
+    actorId: req.user?.id || null,
+  });
+
+  await evaluateEvent(leaveEvent, {
+    source: 'hcm.leave.controller',
+    officeId,
+    actorId: req.user?.id || null,
   });
 
   res.status(201).json({ success: true, data: leaveRequest });

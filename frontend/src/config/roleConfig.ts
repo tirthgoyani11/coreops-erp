@@ -247,6 +247,7 @@ export const NAV_ITEMS: NavItem[] = [
             { label: 'Balance Sheet', path: '/balance-sheet', roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'VIEWER'] },
             { label: 'Profit & Loss', path: '/profit-loss', roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'VIEWER'] },
             { label: 'Cash Flow', path: '/cash-flow', roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'VIEWER'] },
+            { label: 'Enterprise Close & Consolidation', path: '/financial/enterprise-close', roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER'] },
             { label: 'Exception Center', path: '/finance/exception-center', roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF'] },
             { label: 'Bank Reconciliation', path: '/bank-reconciliation', roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER'] },
             { label: 'Year End Close', path: '/year-end-close', roles: ['SUPER_ADMIN'] },

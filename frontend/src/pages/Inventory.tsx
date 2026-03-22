@@ -11,6 +11,7 @@ import {
     AlertTriangle,
     Brain,
     Loader2,
+    Image,
 } from 'lucide-react';
 
 // Components
@@ -29,6 +30,7 @@ import { PageHeader } from '../components/ui/PageHeader';
 
 // Views
 import { InventoryTableView } from '../components/inventory/InventoryTableView';
+import { InventoryMultimodalAI } from '../components/inventory/InventoryMultimodalAI';
 
 export function Inventory() {
     const { hasPermission } = useAuthStore();
@@ -37,6 +39,10 @@ export function Inventory() {
     const [activeTab, setActiveTab] = useState('products'); // products | spares
     const [items, setItems] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [selectedItems, setSelectedItems] = useState<string[]>([]);
+    const [showRouting, setShowRouting] = useState(false);
+    const [routingLoading, setRoutingLoading] = useState(false);
+    const [showMultimodal, setShowMultimodal] = useState(false);
     const [filters, setFilters] = useState({
         search: '',
         category: 'all',
@@ -138,6 +144,56 @@ export function Inventory() {
         }
     };
 
+    const handleRouteToSpare = async () => {
+        if (selectedItems.length === 0) {
+            toast.error('Please select items first');
+            return;
+        }
+        setRoutingLoading(true);
+        try {
+            await api.post('/inventory/bulk-route', {
+                itemIds: selectedItems,
+                destination: 'SPARE',
+            });
+            toast.success(`${selectedItems.length} item(s) routed to spare parts`);
+            setSelectedItems([]);
+            setShowRouting(false);
+            await fetchInventory();
+        } catch (error: any) {
+            const msg = error?.response?.data?.message || 'Failed to route items';
+            toast.error(msg);
+        } finally {
+            setRoutingLoading(false);
+        }
+    };
+
+    const handleRouteToPO = async () => {
+        if (selectedItems.length === 0) {
+            toast.error('Please select items first');
+            return;
+        }
+        setRoutingLoading(true);
+        try {
+            const result = await api.post('/inventory/bulk-route', {
+                itemIds: selectedItems,
+                destination: 'PURCHASE_ORDER',
+            });
+            toast.success(`Purchase order created for ${selectedItems.length} item(s)`);
+            setSelectedItems([]);
+            setShowRouting(false);
+            if (result.data?.data?.poId) {
+                navigate(`/purchase-orders/${result.data.data.poId}`);
+            } else {
+                await fetchInventory();
+            }
+        } catch (error: any) {
+            const msg = error?.response?.data?.message || 'Failed to create purchase order';
+            toast.error(msg);
+        } finally {
+            setRoutingLoading(false);
+        }
+    };
+
     return (
         <div className="space-y-6">
             <PageHeader 
@@ -145,18 +201,27 @@ export function Inventory() {
                 subtitle="Track products, spare parts, and stock levels"
                 icon={Package}
                 actions={
-                    hasPermission('inventory.create') && (
-                        <>
-                            <Button variant="outline" onClick={() => navigate('/inventory/operations')}>
-                                <ArrowUpRight className="w-4 h-4 mr-2" />
-                                Stock Op
-                            </Button>
-                            <Button onClick={() => navigate('/inventory/new')}>
-                                <Plus className="w-4 h-4 mr-2" />
-                                Add Item
-                            </Button>
-                        </>
-                    )
+                    <div className="flex gap-2">
+                        <Button variant={showMultimodal ? "default" : "outline"} onClick={() => setShowMultimodal(!showMultimodal)}>
+                            <Image className="w-4 h-4 mr-2" />
+                            AI Vision
+                        </Button>
+                        <Button variant={showRouting ? "default" : "outline"} onClick={() => setShowRouting(!showRouting)}>
+                            {selectedItems.length > 0 ? `${selectedItems.length} Selected` : 'Select Items'}
+                        </Button>
+                        {hasPermission('inventory.manage') && (
+                            <>
+                                <Button variant="outline" onClick={() => navigate('/inventory/operations')}>
+                                    <ArrowUpRight className="w-4 h-4 mr-2" />
+                                    Stock Op
+                                </Button>
+                                <Button onClick={() => navigate('/inventory/operations?type=IN')}>
+                                    <Plus className="w-4 h-4 mr-2" />
+                                    Add Inventory
+                                </Button>
+                            </>
+                        )}
+                    </div>
                 }
             />
 
@@ -203,6 +268,44 @@ export function Inventory() {
                     </div>
                 </div>
             </Card>
+
+            {/* Routing Panel */}
+            {showRouting && (
+                <Card className="p-4 border-2 border-blue-500/50 bg-blue-50/50 dark:bg-blue-950/20">
+                    <div className="flex items-center justify-between">
+                        <div>
+                            <h3 className="font-semibold text-[var(--text-primary)] mb-1">Route Selected Items</h3>
+                            <p className="text-sm text-[var(--text-muted)]">Select {selectedItems.length > 0 ? `${selectedItems.length} item(s)` : 'items'} to route to spare parts or create purchase order</p>
+                        </div>
+                        <div className="flex gap-2">
+                            <Button
+                                variant="outline"
+                                onClick={handleRouteToSpare}
+                                disabled={selectedItems.length === 0 || routingLoading}
+                            >
+                                Route to Spares
+                            </Button>
+                            <Button
+                                onClick={handleRouteToPO}
+                                disabled={selectedItems.length === 0 || routingLoading}
+                            >
+                                {routingLoading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Plus className="w-4 h-4 mr-2" />}
+                                Create PO
+                            </Button>
+                        </div>
+                    </div>
+                </Card>
+            )}
+
+            {/* Multimodal AI Panel */}
+            {showMultimodal && (
+                <Card className="p-4 border-2 border-cyan-500/50 bg-gradient-to-r from-cyan-50/50 to-blue-50/50 dark:from-cyan-950/20 dark:to-blue-950/20">
+                    <InventoryMultimodalAI onTaskComplete={() => {
+                        fetchInventory();
+                        loadInventoryIntelligence();
+                    }} />
+                </Card>
+            )}
 
             {/* Intelligence Layer */}
             <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
@@ -332,7 +435,14 @@ export function Inventory() {
                         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600"></div>
                     </div>
                 ) : (
-                    <InventoryTableView items={filteredItems} type={activeTab} onRefresh={fetchInventory} />
+                    <InventoryTableView 
+                        items={filteredItems} 
+                        type={activeTab} 
+                        onRefresh={fetchInventory}
+                        enableSelection={showRouting}
+                        selectedItems={selectedItems}
+                        onSelectionChange={setSelectedItems}
+                    />
                 )}
             </div>
         </div>

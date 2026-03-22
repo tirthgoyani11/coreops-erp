@@ -36,6 +36,7 @@
 - [OpsPilot AI Engine](#-opspilot-ai-engine)
 - [Tech Stack](#-tech-stack)
 - [Architecture](#-architecture)
+- [Master Architecture Blueprint](#-master-architecture-blueprint)
 - [Getting Started](#-getting-started)
 - [Environment Variables](#-environment-variables)
 - [Project Structure](#-project-structure)
@@ -57,6 +58,17 @@
 **CoreOps ERP** is a full-stack enterprise resource planning system with **AI at its core** — not bolted on as an afterthought. It manages assets, maintenance, inventory, procurement, vendors, finances, users, offices, documents, and analytics across multi-location organizations.
 
 The system features **OpsPilot**, an AI-powered conversational assistant that can execute real ERP operations — creating assets, generating purchase orders, pulling financial reports, and more — through natural language commands.
+
+## 🧭 Master Architecture Blueprint
+
+Use [ARCHITECTURE.md](ARCHITECTURE.md) as the single source of truth for:
+
+- Actual current system coverage.
+- Target architecture and design principles.
+- Gap analysis between implemented and planned capabilities.
+- Execution sequence and architecture governance.
+
+For the data-model blueprint and top-tier ERP schema roadmap, use [docs/data-schema-top-tier-improvement-plan.md](docs/data-schema-top-tier-improvement-plan.md).
 
 ### What Makes CoreOps Different?
 

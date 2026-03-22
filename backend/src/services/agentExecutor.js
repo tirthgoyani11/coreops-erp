@@ -8,6 +8,7 @@
 const prisma = require('../config/prisma');
 const logger = require('../utils/logger');
 const { postTransactionToGL } = require('./financePostingService');
+const QRCode = require('qrcode');
 
 // ─── Secret Field Sanitizer ──────────────────────────────────────
 // Strips sensitive fields from any object/array before showing to AI/user.
@@ -426,7 +427,7 @@ async function createAsset(entities, context) {
         if (assignee) assignedToId = assignee.id;
     }
 
-    const asset = await prisma.asset.create({
+    let asset = await prisma.asset.create({
         data: {
             guai: 'ASSET-' + Date.now().toString().slice(-8),
             name,
@@ -448,6 +449,15 @@ async function createAsset(entities, context) {
             createdById: context.userId,
         }
     });
+
+    // Keep AI-created assets aligned with API-created assets by generating QR code.
+    try {
+        const qrData = `${process.env.FRONTEND_URL || 'https://coreops.tirthgoyani.in'}/assets/${asset.id}`;
+        const qrCode = await QRCode.toDataURL(qrData);
+        asset = await prisma.asset.update({ where: { id: asset.id }, data: { qrCode } });
+    } catch (qrError) {
+        logger.warn(`Failed to generate QR code for AI-created asset ${asset.id}: ${qrError.message}`);
+    }
 
     // Build rich response
     let msg = `🖥️ **Asset Created Successfully!**\n\n`;

@@ -6,6 +6,7 @@ const logger = require('./src/utils/logger');
 const socketServer = require('./src/config/socketServer');
 const prisma = require('./src/config/prisma');
 const { startSchedulers, stopSchedulers } = require('./src/services/schedulerService');
+const { startOutboxProcessor, stopOutboxProcessor } = require('./src/coreops/outboxProcessor');
 
 const PORT = Number(process.env.PORT || 5000);
 const MAX_PORT_RETRY = Number(process.env.MAX_PORT_RETRY || PORT + 5);
@@ -79,6 +80,7 @@ const startServer = async () => {
 
             // Start automated schedulers (preventive maintenance + SLA)
             startSchedulers();
+            startOutboxProcessor();
         });
 
         // Graceful shutdown handler
@@ -95,6 +97,7 @@ const startServer = async () => {
 
                 try {
                     stopSchedulers();
+                    stopOutboxProcessor();
                     await prisma.$disconnect();
                     logger.info('Prisma connection closed');
                     process.exit(0);

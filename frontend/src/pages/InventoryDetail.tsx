@@ -29,7 +29,7 @@ export function InventoryDetail() {
     const [loading, setLoading] = useState(true);
     const [insights, setInsights] = useState<any>(null);
     const [insightsLoading, setInsightsLoading] = useState(true);
-    const [actionLoading, setActionLoading] = useState<'REORDER' | 'FIX_ROP' | null>(null);
+    const [actionLoading, setActionLoading] = useState<'REORDER' | 'FIX_ROP' | 'DELETE' | null>(null);
 
     const formatMovementType = (type: string) => String(type || '').toUpperCase();
     const movementBadgeVariant = (type: string) => {
@@ -113,6 +113,26 @@ export function InventoryDetail() {
         }
     };
 
+    const handleDelete = async () => {
+        const confirmed = window.confirm(
+            `Are you sure you want to delete "${item.name}" (SKU: ${item.sku})?\n\nThis action cannot be undone.`
+        );
+
+        if (!confirmed) return;
+
+        setActionLoading('DELETE');
+        try {
+            await api.delete(`/inventory/${item.id}`);
+            toast.success(`Item "${item.sku}" deleted successfully`);
+            navigate('/inventory');
+        } catch (error: any) {
+            const msg = error?.response?.data?.message || 'Failed to delete item';
+            toast.error(msg);
+        } finally {
+            setActionLoading(null);
+        }
+    };
+
     return (
         <div className="space-y-6 max-w-5xl mx-auto">
             <style>
@@ -174,9 +194,22 @@ export function InventoryDetail() {
                     <Button variant="outline">
                         <Edit className="w-4 h-4 mr-2" /> Edit
                     </Button>
-                    {/* Only admins might delete */}
-                    <Button variant="destructive">
-                        <Trash2 className="w-4 h-4 mr-2" /> Delete
+                    <Button 
+                        variant="destructive"
+                        onClick={handleDelete}
+                        disabled={actionLoading === 'DELETE'}
+                    >
+                        {actionLoading === 'DELETE' ? (
+                            <>
+                                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                Deleting...
+                            </>
+                        ) : (
+                            <>
+                                <Trash2 className="w-4 h-4 mr-2" />
+                                Delete
+                            </>
+                        )}
                     </Button>
                 </div>
             </div>

@@ -8,8 +8,10 @@ const yearEndController = require('../controllers/yearEndController');
 const expenseController = require('../controllers/expenseController');
 const orchestrationController = require('../controllers/orchestrationController');
 const financeRebuildController = require('../controllers/financeRebuildController');
+const financePhase1Controller = require('../controllers/financePhase1Controller');
 const prisma = require('../config/prisma');
 const { asyncHandler } = require('../utils/errorHandler');
+const { idempotencyMiddleware } = require('../middleware/idempotency');
 
 router.use(verifyToken);
 
@@ -52,5 +54,19 @@ router.post('/bank-statements/:id/reconcile', bankReconController.reconcileMatch
 // ── Year End Closing ──────────────────────────────────
 router.get('/year-end', authorize('SUPER_ADMIN', 'ADMIN'), yearEndController.getYearEndPreview);
 router.post('/year-end', authorize('SUPER_ADMIN'), yearEndController.closeYear);
+
+// ── Phase 1: Enterprise Finance Control Plane ─────────
+router.get('/intercompany/entries', financePhase1Controller.getIntercompanyEntries);
+router.post('/intercompany/entries', idempotencyMiddleware({ namespace: 'finance.phase1.intercompany.create' }), financePhase1Controller.createIntercompanyEntry);
+
+router.post('/consolidation/run', idempotencyMiddleware({ namespace: 'finance.phase1.consolidation.run' }), financePhase1Controller.runConsolidation);
+
+router.get('/revenue-recognition/schedules', financePhase1Controller.getRevenueRecognitionSchedules);
+router.post('/revenue-recognition/schedules', idempotencyMiddleware({ namespace: 'finance.phase1.revrec.schedule.create' }), financePhase1Controller.createRevenueRecognitionSchedule);
+router.post('/revenue-recognition/schedules/:id/recognize', idempotencyMiddleware({ namespace: 'finance.phase1.revrec.milestone.recognize' }), financePhase1Controller.recognizeRevenueMilestone);
+
+router.get('/close-cockpit', financePhase1Controller.getCloseCockpit);
+router.post('/close-cockpit/tasks/:taskKey/approve', idempotencyMiddleware({ namespace: 'finance.phase1.close.task.approve' }), financePhase1Controller.approveCloseCockpitTask);
+router.post('/close-cockpit/finalize', idempotencyMiddleware({ namespace: 'finance.phase1.close.finalize' }), financePhase1Controller.finalizePeriodClose);
 
 module.exports = router;

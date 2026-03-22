@@ -266,6 +266,8 @@ function App() {
               <Route path="/financial/matching" element={<RoleGuard allowedRoles={['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF', 'VIEWER']}><Financial /></RoleGuard>} />
               <Route path="/financial/tax" element={<RoleGuard allowedRoles={['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF', 'VIEWER']}><Financial /></RoleGuard>} />
               <Route path="/financial/working-capital" element={<RoleGuard allowedRoles={['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF', 'VIEWER']}><Financial /></RoleGuard>} />
+              <Route path="/financial/enterprise-close" element={<RoleGuard allowedRoles={['SUPER_ADMIN', 'ADMIN', 'MANAGER']}><Financial /></RoleGuard>} />
+              <Route path="/financial/phase1-control-plane" element={<Navigate to="/financial" replace />} />
 
               {/* CRM & Sales */}
               <Route path="/sales/dashboard" element={<RoleGuard allowedRoles={['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF']}><CRMDashboard /></RoleGuard>} />
@@ -289,6 +291,8 @@ function App() {
               <Route path="/finance/ap-aging" element={<Navigate to="/financial/working-capital" replace />} />
               <Route path="/finance/ar-aging" element={<Navigate to="/financial/working-capital" replace />} />
               <Route path="/finance/working-capital" element={<Navigate to="/financial/working-capital" replace />} />
+              <Route path="/finance/enterprise-close" element={<Navigate to="/financial/enterprise-close" replace />} />
+              <Route path="/finance/phase1-control-plane" element={<Navigate to="/financial" replace />} />
               <Route path="/finance/exception-center" element={<RoleGuard allowedRoles={['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF']}><ExceptionCenter /></RoleGuard>} />
 
               {/* Analytics - Not for Technician */}

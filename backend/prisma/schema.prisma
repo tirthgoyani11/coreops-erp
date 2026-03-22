@@ -385,6 +385,158 @@ enum PayslipStatus {
   PAID
 }
 
+enum FiscalPeriodStatus {
+  OPEN
+  SOFT_CLOSED
+  CLOSED
+  LOCKED
+}
+
+enum PeriodCloseRunStatus {
+  DRAFT
+  IN_PROGRESS
+  COMPLETED
+  FAILED
+  FINALIZED
+}
+
+enum PeriodCloseTaskStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  BLOCKED
+  SKIPPED
+}
+
+enum ConsolidationRunStatus {
+  PENDING
+  RUNNING
+  COMPLETED
+  FAILED
+}
+
+enum RevenueContractStatus {
+  DRAFT
+  ACTIVE
+  ON_HOLD
+  COMPLETED
+  CANCELLED
+}
+
+enum RevenueScheduleStatus {
+  PLANNED
+  RECOGNIZING
+  COMPLETED
+  PAUSED
+}
+
+enum RecruitmentPositionStatus {
+  OPEN
+  ON_HOLD
+  CLOSED
+  CANCELLED
+}
+
+enum CandidateStage {
+  APPLIED
+  SCREENING
+  INTERVIEW
+  OFFER
+  HIRED
+  REJECTED
+}
+
+enum PerformanceGoalStatus {
+  DRAFT
+  ACTIVE
+  AT_RISK
+  COMPLETED
+  CANCELLED
+}
+
+enum PerformanceReviewStatus {
+  DRAFT
+  SUBMITTED
+  ACKNOWLEDGED
+  FINALIZED
+}
+
+enum CampaignStatus {
+  DRAFT
+  ACTIVE
+  PAUSED
+  COMPLETED
+  CANCELLED
+}
+
+enum TerritoryStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum AccountPlanStatus {
+  DRAFT
+  ACTIVE
+  REVIEW
+  COMPLETED
+}
+
+enum PartnerChannelStatus {
+  ACTIVE
+  ON_HOLD
+  INACTIVE
+}
+
+enum ObjectiveStatus {
+  DRAFT
+  ACTIVE
+  AT_RISK
+  COMPLETED
+  CANCELLED
+}
+
+enum KeyResultStatus {
+  NOT_STARTED
+  ON_TRACK
+  AT_RISK
+  ACHIEVED
+}
+
+enum LearningCourseStatus {
+  ACTIVE
+  ARCHIVED
+}
+
+enum LearningEnrollmentStatus {
+  REQUESTED
+  APPROVED
+  REJECTED
+  IN_PROGRESS
+  COMPLETED
+}
+
+enum WorkforcePlanStatus {
+  DRAFT
+  APPROVED
+  IN_PROGRESS
+  COMPLETED
+}
+
+enum SelfServiceRequestType {
+  PROFILE_UPDATE
+  SHIFT_CHANGE
+  LEAVE_ADJUSTMENT
+  TRAINING_REQUEST
+  OTHER
+}
+
+enum SelfServiceRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
+}
+
 // ─── MODELS ────────────────────────────────────────────────────
 
 model Office {
@@ -395,6 +547,12 @@ model Office {
   parentId                     String?
   parent                       Office?              @relation("OfficeHierarchy", fields: [parentId], references: [id])
   children                     Office[]             @relation("OfficeHierarchy")
+  tenantId                     String?
+  legalEntityId                String?
+  businessUnitId               String?
+  tenant                       Tenant?              @relation(fields: [tenantId], references: [id])
+  legalEntity                  LegalEntity?         @relation(fields: [legalEntityId], references: [id])
+  businessUnit                 BusinessUnit?        @relation(fields: [businessUnitId], references: [id])
   // Address
   street                       String?
   city                         String?
@@ -443,10 +601,27 @@ model Office {
   apInvoices                   APInvoice[]
   employees                    Employee[]
   payrollRuns                  PayrollRun[]
+  costCenters                  CostCenter[]
+  profitCenters                ProfitCenter[]
+  dimensionSets                DimensionSet[]
+  periodCloseRuns              PeriodCloseRun[]
+  consolidationRuns            ConsolidationRun[]
+  revenueContracts             RevenueContract[]
+  recruitmentPositions         RecruitmentPosition[]
+  crmCampaigns                 Campaign[]
+  salesTerritories             SalesTerritory[]
+  accountPlans                 AccountPlan[]
+  partnerChannels              PartnerChannel[]
+  learningCourses              LearningCourse[]
+  workforcePlans               WorkforcePlan[]
+  selfServiceRequests          SelfServiceRequest[]
 
   @@index([name, country])
   @@index([parentId])
   @@index([type, isActive])
+  @@index([tenantId, isActive])
+  @@index([legalEntityId])
+  @@index([businessUnitId])
 }
 
 model User {
@@ -459,6 +634,10 @@ model User {
   role                  UserRole            @default(STAFF)
   officeId              String?
   office                Office?             @relation(fields: [officeId], references: [id])
+  tenantId              String?
+  legalEntityId         String?
+  tenant                Tenant?             @relation(fields: [tenantId], references: [id])
+  legalEntity           LegalEntity?        @relation(fields: [legalEntityId], references: [id])
   preferences           Json? // Layout config: [{id: "slas", x:0, y:0, w:6, h:4}, ...]
   // Permissions (flattened)
   canApproveTickets     Boolean             @default(false)
@@ -520,10 +699,28 @@ model User {
   employeeProfile       Employee?
   approvedLeaveRequests LeaveRequest[]      @relation("LeaveApprover")
   processedPayrollRuns  PayrollRun[]        @relation("PayrollProcessor")
+  ownedPeriodCloseTasks PeriodCloseTask[]
+  createdRecruitmentPositions RecruitmentPosition[] @relation("RecruitmentPositionCreator")
+  performanceGoalsCreated PerformanceGoal[] @relation("PerformanceGoalCreator")
+  performanceReviewsGiven PerformanceReview[] @relation("PerformanceReviewer")
+  ownedCampaigns         Campaign[]          @relation("CampaignOwner")
+  managedTerritories     SalesTerritory[]    @relation("TerritoryManager")
+  accountPlansOwned      AccountPlan[]       @relation("AccountPlanOwner")
+  ownedPartnerChannels   PartnerChannel[]    @relation("PartnerChannelOwner")
+  objectivesCreated      EmployeeObjective[] @relation("ObjectiveCreator")
+  keyResultUpdates       ObjectiveKeyResult[] @relation("KeyResultUpdater")
+  createdLearningCourses LearningCourse[]    @relation("LearningCourseCreator")
+  learningRequests       LearningEnrollment[] @relation("LearningRequestedBy")
+  learningApprovals      LearningEnrollment[] @relation("LearningApprovedBy")
+  workforcePlansCreated  WorkforcePlan[]     @relation("WorkforcePlanCreator")
+  selfServiceRequestsRaised SelfServiceRequest[] @relation("SelfServiceRequestedBy")
+  selfServiceRequestsApproved SelfServiceRequest[] @relation("SelfServiceApprovedBy")
 
   @@index([role, officeId])
   @@index([officeId])
   @@index([isActive])
+  @@index([tenantId, role])
+  @@index([legalEntityId])
 }
 
 model Employee {
@@ -549,6 +746,11 @@ model Employee {
   attendances    Attendance[]
   leaveRequests  LeaveRequest[]
   payslips       Payslip[]
+  performanceGoals PerformanceGoal[]
+  performanceReviews PerformanceReview[]
+  objectives     EmployeeObjective[]
+  learningEnrollments LearningEnrollment[]
+  selfServiceRequests SelfServiceRequest[]
 
   @@index([officeId, status])
   @@index([department])
@@ -637,6 +839,86 @@ model Payslip {
   @@index([payrollRunId])
 }
 
+model RecruitmentPosition {
+  id            String                    @id @default(uuid())
+  positionCode  String                    @unique
+  officeId      String
+  office        Office                    @relation(fields: [officeId], references: [id])
+  title         String
+  department    String?
+  employmentType EmploymentType           @default(FULL_TIME)
+  targetHires   Int                       @default(1)
+  openingsFilled Int                      @default(0)
+  status        RecruitmentPositionStatus @default(OPEN)
+  createdById   String?
+  createdBy     User?                     @relation("RecruitmentPositionCreator", fields: [createdById], references: [id])
+  createdAt     DateTime                  @default(now())
+  updatedAt     DateTime                  @updatedAt
+  applications  CandidateApplication[]
+
+  @@index([officeId, status])
+  @@index([department])
+}
+
+model CandidateApplication {
+  id                 String           @id @default(uuid())
+  recruitmentPositionId String
+  recruitmentPosition RecruitmentPosition @relation(fields: [recruitmentPositionId], references: [id], onDelete: Cascade)
+  fullName           String
+  email              String?
+  phone              String?
+  source             String?
+  stage              CandidateStage   @default(APPLIED)
+  score              Float?
+  resumeUrl          String?
+  notes              String?
+  appliedAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+
+  @@index([recruitmentPositionId, stage])
+  @@index([appliedAt])
+}
+
+model PerformanceGoal {
+  id            String               @id @default(uuid())
+  employeeId    String
+  employee      Employee             @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  createdById   String?
+  createdBy     User?                @relation("PerformanceGoalCreator", fields: [createdById], references: [id])
+  title         String
+  description   String?
+  targetValue   Float?
+  currentValue  Float                @default(0)
+  weight        Float                @default(1)
+  status        PerformanceGoalStatus @default(ACTIVE)
+  dueDate       DateTime?
+  createdAt     DateTime             @default(now())
+  updatedAt     DateTime             @updatedAt
+
+  @@index([employeeId, status])
+  @@index([dueDate])
+}
+
+model PerformanceReview {
+  id            String                 @id @default(uuid())
+  employeeId    String
+  employee      Employee               @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  reviewerId    String?
+  reviewer      User?                  @relation("PerformanceReviewer", fields: [reviewerId], references: [id])
+  periodStart   DateTime
+  periodEnd     DateTime
+  rating        Float?
+  summary       String?
+  status        PerformanceReviewStatus @default(DRAFT)
+  submittedAt   DateTime?
+  acknowledgedAt DateTime?
+  createdAt     DateTime               @default(now())
+  updatedAt     DateTime               @updatedAt
+
+  @@index([employeeId, status])
+  @@index([periodStart, periodEnd])
+}
+
 model RefreshToken {
   id        String   @id @default(uuid())
   token     String   @unique
@@ -650,27 +932,27 @@ model RefreshToken {
 }
 
 model Vendor {
-  id                String           @id @default(uuid())
-  name              String
-  vendorCode        String           @unique
-  contactPerson     String?
-  email             String?
-  phone             String?
-  address           String?
-  gstNumber         String?
-  panNumber         String?
-  bankDetails       Json? // { bankName, accountNumber, ifscCode }
-  rating            Float?           @default(0)
-  isBlacklisted     Boolean          @default(false)
-  notes             String?
-  officeId          String?
-  createdAt         DateTime         @default(now())
-  updatedAt         DateTime         @updatedAt
+  id             String           @id @default(uuid())
+  name           String
+  vendorCode     String           @unique
+  contactPerson  String?
+  email          String?
+  phone          String?
+  address        String?
+  gstNumber      String?
+  panNumber      String?
+  bankDetails    Json? // { bankName, accountNumber, ifscCode }
+  rating         Float?           @default(0)
+  isBlacklisted  Boolean          @default(false)
+  notes          String?
+  officeId       String?
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
   // Relations
-  purchaseOrders    PurchaseOrder[]
-  apInvoices        APInvoice[] // Link to AP invoices from this vendor
-  assets            Asset[]
-  contracts         VendorContract[]
+  purchaseOrders PurchaseOrder[]
+  apInvoices     APInvoice[] // Link to AP invoices from this vendor
+  assets         Asset[]
+  contracts      VendorContract[]
 
   @@index([name])
   @@index([isBlacklisted])
@@ -948,6 +1230,12 @@ model PurchaseOrder {
   vendor               Vendor              @relation(fields: [vendorId], references: [id])
   officeId             String
   office               Office              @relation(fields: [officeId], references: [id])
+  tenantId             String?
+  legalEntityId        String?
+  fiscalPeriodId       String?
+  fiscalPeriod         FiscalPeriod?       @relation(fields: [fiscalPeriodId], references: [id])
+  dimensionSetId       String?
+  dimensionSet         DimensionSet?       @relation(fields: [dimensionSetId], references: [id])
   requestedById        String
   requestedBy          User                @relation("PORequester", fields: [requestedById], references: [id])
   status               POStatus            @default(DRAFT)
@@ -980,6 +1268,10 @@ model PurchaseOrder {
   @@index([officeId, status])
   @@index([status])
   @@index([createdAt(sort: Desc)])
+  @@index([fiscalPeriodId])
+  @@index([dimensionSetId])
+  @@index([tenantId])
+  @@index([legalEntityId])
 }
 
 model PurchaseOrderItem {
@@ -1000,45 +1292,71 @@ model PurchaseOrderItem {
 }
 
 model Transaction {
-  id            String             @id @default(uuid())
-  type          TransactionType
-  category      String
-  amount        Float
-  currency      String             @default("INR")
-  date          DateTime           @default(now())
-  description   String?
-  referenceType ReferenceType      @default(MANUAL)
-  referenceId   String?
-  officeId      String?
-  office        Office?            @relation(fields: [officeId], references: [id])
-  recordedById  String?
-  recordedBy    User?              @relation(fields: [recordedById], references: [id])
-  status        TransactionStatus  @default(CLEARED)
-  glAccountId   String?
-  glAccount     GLAccount?         @relation(fields: [glAccountId], references: [id])
-  journalLines  JournalEntryLine[]
-  createdAt     DateTime           @default(now())
+  id             String             @id @default(uuid())
+  type           TransactionType
+  category       String
+  amount         Float
+  currency       String             @default("INR")
+  date           DateTime           @default(now())
+  description    String?
+  referenceType  ReferenceType      @default(MANUAL)
+  referenceId    String?
+  officeId       String?
+  office         Office?            @relation(fields: [officeId], references: [id])
+  tenantId       String?
+  legalEntityId  String?
+  fiscalPeriodId String?
+  fiscalPeriod   FiscalPeriod?      @relation(fields: [fiscalPeriodId], references: [id])
+  costCenterId   String?
+  costCenter     CostCenter?        @relation(fields: [costCenterId], references: [id])
+  profitCenterId String?
+  profitCenter   ProfitCenter?      @relation(fields: [profitCenterId], references: [id])
+  dimensionSetId String?
+  dimensionSet   DimensionSet?      @relation(fields: [dimensionSetId], references: [id])
+  recordedById   String?
+  recordedBy     User?              @relation(fields: [recordedById], references: [id])
+  status         TransactionStatus  @default(CLEARED)
+  glAccountId    String?
+  glAccount      GLAccount?         @relation(fields: [glAccountId], references: [id])
+  journalLines   JournalEntryLine[]
+  createdAt      DateTime           @default(now())
 
   @@index([officeId, date(sort: Desc)])
   @@index([type, category])
   @@index([status])
   @@index([glAccountId])
+  @@index([fiscalPeriodId])
+  @@index([costCenterId])
+  @@index([profitCenterId])
+  @@index([dimensionSetId])
+  @@index([tenantId])
+  @@index([legalEntityId])
 }
 
 model Budget {
-  id        String   @id @default(uuid())
-  officeId  String
-  office    Office   @relation(fields: [officeId], references: [id])
-  category  String
-  month     Int
-  year      Int
-  limit     Float    @default(0)
-  spent     Float    @default(0)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id             String        @id @default(uuid())
+  officeId       String
+  office         Office        @relation(fields: [officeId], references: [id])
+  tenantId       String?
+  legalEntityId  String?
+  fiscalPeriodId String?
+  fiscalPeriod   FiscalPeriod? @relation(fields: [fiscalPeriodId], references: [id])
+  dimensionSetId String?
+  dimensionSet   DimensionSet? @relation(fields: [dimensionSetId], references: [id])
+  category       String
+  month          Int
+  year           Int
+  limit          Float         @default(0)
+  spent          Float         @default(0)
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
 
   @@unique([officeId, category, month, year])
   @@index([officeId, year, month])
+  @@index([fiscalPeriodId])
+  @@index([dimensionSetId])
+  @@index([tenantId])
+  @@index([legalEntityId])
 }
 
 model Document {
@@ -1197,74 +1515,112 @@ enum JournalStatus {
 }
 
 model GLAccount {
-  id              String              @id @default(uuid())
-  code            String              @unique // "1000", "2100", "4000"
-  name            String // "Cash", "Accounts Receivable"
-  type            GLAccountType
-  parentId        String?
-  parent          GLAccount?          @relation("GLHierarchy", fields: [parentId], references: [id])
-  children        GLAccount[]         @relation("GLHierarchy")
-  description     String?
-  isActive        Boolean             @default(true)
-  balance         Float               @default(0) // running balance
-  normalSide      String              @default("DEBIT") // DEBIT or CREDIT
-  officeId        String?
-  office          Office?             @relation(fields: [officeId], references: [id])
-  journalLines    JournalEntryLine[]
-  transactions    Transaction[]
-  apInvoiceLines  APInvoiceLine[]  // Link to AP invoice lines
-  arInvoiceLines  ARInvoiceLine[]  // Link to AR invoice lines
-  createdAt       DateTime            @default(now())
-  updatedAt       DateTime            @updatedAt
-  bankStatements  BankStatement[]
+  id             String             @id @default(uuid())
+  code           String             @unique // "1000", "2100", "4000"
+  name           String // "Cash", "Accounts Receivable"
+  type           GLAccountType
+  parentId       String?
+  parent         GLAccount?         @relation("GLHierarchy", fields: [parentId], references: [id])
+  children       GLAccount[]        @relation("GLHierarchy")
+  description    String?
+  isActive       Boolean            @default(true)
+  balance        Float              @default(0) // running balance
+  normalSide     String             @default("DEBIT") // DEBIT or CREDIT
+  officeId       String?
+  office         Office?            @relation(fields: [officeId], references: [id])
+  tenantId       String?
+  legalEntityId  String?
+  journalLines   JournalEntryLine[]
+  transactions   Transaction[]
+  apInvoiceLines APInvoiceLine[] // Link to AP invoice lines
+  arInvoiceLines ARInvoiceLine[] // Link to AR invoice lines
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+  bankStatements BankStatement[]
 
   @@index([type])
   @@index([parentId])
   @@index([officeId])
+  @@index([tenantId])
+  @@index([legalEntityId])
 }
 
 model JournalEntry {
-  id            String             @id @default(uuid())
-  entryNumber   String             @unique // "JE-2026-0001"
-  date          DateTime           @default(now())
-  description   String?
-  reference     String? // PO number, invoice ID, etc.
-  referenceType String? // "PURCHASE_ORDER", "INVOICE", "MANUAL"
-  status        JournalStatus      @default(DRAFT)
-  totalAmount   Float              @default(0) // total of one side
-  officeId      String?
-  office        Office?            @relation(fields: [officeId], references: [id])
-  createdById   String?
-  createdBy     User?              @relation("JournalEntryCreator", fields: [createdById], references: [id])
-  lines         JournalEntryLine[]
-  apInvoices    APInvoice[] // Link to AP invoices posted from this JE
-  apPayments    ApPayment[] // Link to AP payments posted from this JE
-  arPayments    ArPayment[] // Link to AR payments posted from this JE
-  createdAt     DateTime           @default(now())
-  updatedAt     DateTime           @updatedAt
+  id                        String                    @id @default(uuid())
+  entryNumber               String                    @unique // "JE-2026-0001"
+  date                      DateTime                  @default(now())
+  description               String?
+  reference                 String? // PO number, invoice ID, etc.
+  referenceType             String? // "PURCHASE_ORDER", "INVOICE", "MANUAL"
+  status                    JournalStatus             @default(DRAFT)
+  totalAmount               Float                     @default(0) // total of one side
+  officeId                  String?
+  office                    Office?                   @relation(fields: [officeId], references: [id])
+  tenantId                  String?
+  legalEntityId             String?
+  fiscalPeriodId            String?
+  fiscalPeriod              FiscalPeriod?             @relation(fields: [fiscalPeriodId], references: [id])
+  periodCloseRunId          String?
+  periodCloseRun            PeriodCloseRun?           @relation(fields: [periodCloseRunId], references: [id])
+  consolidationRunId        String?
+  consolidationRun          ConsolidationRun?         @relation(fields: [consolidationRunId], references: [id])
+  costCenterId              String?
+  costCenter                CostCenter?               @relation(fields: [costCenterId], references: [id])
+  profitCenterId            String?
+  profitCenter              ProfitCenter?             @relation(fields: [profitCenterId], references: [id])
+  dimensionSetId            String?
+  dimensionSet              DimensionSet?             @relation(fields: [dimensionSetId], references: [id])
+  sourceReferenceType       String?
+  sourceReferenceId         String?
+  createdById               String?
+  createdBy                 User?                     @relation("JournalEntryCreator", fields: [createdById], references: [id])
+  lines                     JournalEntryLine[]
+  apInvoices                APInvoice[] // Link to AP invoices posted from this JE
+  apPayments                ApPayment[] // Link to AP payments posted from this JE
+  arPayments                ArPayment[] // Link to AR payments posted from this JE
+  eliminationEntries        EliminationEntry[]
+  revenueRecognitionEntries RevenueRecognitionEntry[]
+  createdAt                 DateTime                  @default(now())
+  updatedAt                 DateTime                  @updatedAt
 
   @@index([date(sort: Desc)])
   @@index([status])
   @@index([officeId, date(sort: Desc)])
   @@index([referenceType, reference])
+  @@index([fiscalPeriodId])
+  @@index([periodCloseRunId])
+  @@index([consolidationRunId])
+  @@index([dimensionSetId])
+  @@index([tenantId])
+  @@index([legalEntityId])
+  @@index([sourceReferenceType, sourceReferenceId])
 }
 
 model JournalEntryLine {
-  id             String       @id @default(uuid())
+  id             String        @id @default(uuid())
   journalEntryId String
-  journalEntry   JournalEntry @relation(fields: [journalEntryId], references: [id], onDelete: Cascade)
+  journalEntry   JournalEntry  @relation(fields: [journalEntryId], references: [id], onDelete: Cascade)
   accountId      String
-  account        GLAccount    @relation(fields: [accountId], references: [id])
-  debit          Float        @default(0)
-  credit         Float        @default(0)
+  account        GLAccount     @relation(fields: [accountId], references: [id])
+  costCenterId   String?
+  costCenter     CostCenter?   @relation(fields: [costCenterId], references: [id])
+  profitCenterId String?
+  profitCenter   ProfitCenter? @relation(fields: [profitCenterId], references: [id])
+  dimensionSetId String?
+  dimensionSet   DimensionSet? @relation(fields: [dimensionSetId], references: [id])
+  debit          Float         @default(0)
+  credit         Float         @default(0)
   description    String?
   transactionId  String? // link back to source transaction
-  transaction    Transaction? @relation(fields: [transactionId], references: [id])
-  createdAt      DateTime     @default(now())
+  transaction    Transaction?  @relation(fields: [transactionId], references: [id])
+  createdAt      DateTime      @default(now())
 
   @@index([journalEntryId])
   @@index([accountId])
   @@index([transactionId])
+  @@index([costCenterId])
+  @@index([profitCenterId])
+  @@index([dimensionSetId])
 }
 
 // ─── AI OPERATION (Explainability Audit Trail) ──────────────────
@@ -1583,7 +1939,7 @@ model GoodsReceipt {
   status          String        @default("DRAFT") // DRAFT, INSPECTING, ACCEPTED, PARTIAL, REJECTED
   receivedDate    DateTime      @default(now())
   items           GRNItem[]
-  apInvoices      APInvoice[]   // 3-way matching: GRN linked to AP Invoices
+  apInvoices      APInvoice[] // 3-way matching: GRN linked to AP Invoices
   notes           String?
   createdAt       DateTime      @default(now())
 
@@ -1711,6 +2067,8 @@ model Customer {
   quotations  Quotation[]
   salesOrders SalesOrder[]
   arInvoices  ARInvoice[]
+  revenueContracts RevenueContract[]
+  accountPlans AccountPlan[]
 
   @@index([officeId, status])
   @@index([name])
@@ -1816,27 +2174,37 @@ model SalesOrderItem {
 }
 
 model ARInvoice {
-  id            String     @id @default(uuid())
-  invoiceNumber String     @unique
-  salesOrderId  String
-  salesOrder    SalesOrder @relation(fields: [salesOrderId], references: [id])
-  customerId    String
-  customer      Customer   @relation(fields: [customerId], references: [id])
-  officeId      String
-  office        Office     @relation(fields: [officeId], references: [id])
-  status        String     @default("DRAFT") // DRAFT, ISSUED, PARTIALLY_PAID, PAID, OVERDUE
-  totalAmount   Float
-  amountPaid    Float      @default(0)
-  currency      String     @default("INR")
-  dueDate       DateTime
-  paidDate      DateTime?
-  createdAt     DateTime   @default(now())
-  updatedAt     DateTime   @updatedAt
-  lines         ARInvoiceLine[]
-  payments      ArPayment[]
+  id             String          @id @default(uuid())
+  invoiceNumber  String          @unique
+  salesOrderId   String
+  salesOrder     SalesOrder      @relation(fields: [salesOrderId], references: [id])
+  customerId     String
+  customer       Customer        @relation(fields: [customerId], references: [id])
+  officeId       String
+  office         Office          @relation(fields: [officeId], references: [id])
+  tenantId       String?
+  legalEntityId  String?
+  fiscalPeriodId String?
+  fiscalPeriod   FiscalPeriod?   @relation(fields: [fiscalPeriodId], references: [id])
+  dimensionSetId String?
+  dimensionSet   DimensionSet?   @relation(fields: [dimensionSetId], references: [id])
+  status         String          @default("DRAFT") // DRAFT, ISSUED, PARTIALLY_PAID, PAID, OVERDUE
+  totalAmount    Float
+  amountPaid     Float           @default(0)
+  currency       String          @default("INR")
+  dueDate        DateTime
+  paidDate       DateTime?
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  lines          ARInvoiceLine[]
+  payments       ArPayment[]
 
   @@index([customerId, status])
   @@index([officeId])
+  @@index([fiscalPeriodId])
+  @@index([dimensionSetId])
+  @@index([tenantId])
+  @@index([legalEntityId])
 }
 
 // ─── AP INVOICES (Accounts Payable) ─────────────────────────────
@@ -1862,73 +2230,83 @@ enum InvoiceMatchStatus {
 }
 
 model APInvoice {
-  id                String               @id @default(uuid())
-  invoiceNumber     String               @unique
-  poId              String?
-  po                PurchaseOrder?       @relation(fields: [poId], references: [id])
-  grnId             String?
-  grn               GoodsReceipt?        @relation(fields: [grnId], references: [id])
-  vendorId          String
-  vendor            Vendor               @relation(fields: [vendorId], references: [id])
-  officeId          String
-  office            Office               @relation(fields: [officeId], references: [id])
-  status            APInvoiceStatus      @default(DRAFT)
-  matchStatus       InvoiceMatchStatus   @default(UNMATCHED)
+  id             String             @id @default(uuid())
+  invoiceNumber  String             @unique
+  poId           String?
+  po             PurchaseOrder?     @relation(fields: [poId], references: [id])
+  grnId          String?
+  grn            GoodsReceipt?      @relation(fields: [grnId], references: [id])
+  vendorId       String
+  vendor         Vendor             @relation(fields: [vendorId], references: [id])
+  officeId       String
+  office         Office             @relation(fields: [officeId], references: [id])
+  tenantId       String?
+  legalEntityId  String?
+  fiscalPeriodId String?
+  fiscalPeriod   FiscalPeriod?      @relation(fields: [fiscalPeriodId], references: [id])
+  dimensionSetId String?
+  dimensionSet   DimensionSet?      @relation(fields: [dimensionSetId], references: [id])
+  status         APInvoiceStatus    @default(DRAFT)
+  matchStatus    InvoiceMatchStatus @default(UNMATCHED)
   // Amounts
-  subtotal          Float                @default(0)
-  taxAmount         Float                @default(0)
-  totalAmount       Float                @default(0)
-  amountPaid        Float                @default(0)
-  currency          String               @default("INR")
+  subtotal       Float              @default(0)
+  taxAmount      Float              @default(0)
+  totalAmount    Float              @default(0)
+  amountPaid     Float              @default(0)
+  currency       String             @default("INR")
   // Dates
-  invoiceDate       DateTime
-  dueDate           DateTime
-  paidDate          DateTime?
+  invoiceDate    DateTime
+  dueDate        DateTime
+  paidDate       DateTime?
   // GL Integration
-  journalEntryId    String?
-  journalEntry      JournalEntry?        @relation(fields: [journalEntryId], references: [id])
+  journalEntryId String?
+  journalEntry   JournalEntry?      @relation(fields: [journalEntryId], references: [id])
   // Metadata
-  description       String?
-  notes             String?
-  attachments       String[]
-  createdById       String?
-  createdBy         User?                @relation("APInvoiceCreator", fields: [createdById], references: [id])
-  approvedById      String?
-  approvedBy        User?                @relation("APInvoiceApprover", fields: [approvedById], references: [id])
-  approvalDate      DateTime?
-  createdAt         DateTime             @default(now())
-  updatedAt         DateTime             @updatedAt
+  description    String?
+  notes          String?
+  attachments    String[]
+  createdById    String?
+  createdBy      User?              @relation("APInvoiceCreator", fields: [createdById], references: [id])
+  approvedById   String?
+  approvedBy     User?              @relation("APInvoiceApprover", fields: [approvedById], references: [id])
+  approvalDate   DateTime?
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
   // Relations
-  lines             APInvoiceLine[]
-  payments          ApPayment[]
-  matchLog          InvoiceMatchLog[]
+  lines          APInvoiceLine[]
+  payments       ApPayment[]
+  matchLog       InvoiceMatchLog[]
 
   @@index([vendorId, status])
   @@index([officeId, invoiceDate(sort: Desc)])
   @@index([status, dueDate])
   @@index([matchStatus])
   @@index([poId])
+  @@index([fiscalPeriodId])
+  @@index([dimensionSetId])
+  @@index([tenantId])
+  @@index([legalEntityId])
 }
 
 model APInvoiceLine {
-  id                String     @id @default(uuid())
-  invoiceId         String
-  invoice           APInvoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
-  description       String
-  quantity          Int
-  unitPrice         Float
-  lineAmount        Float      @default(0)
+  id          String     @id @default(uuid())
+  invoiceId   String
+  invoice     APInvoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  description String
+  quantity    Int
+  unitPrice   Float
+  lineAmount  Float      @default(0)
   // Tax per line
-  taxCode           String? // "GST18", "IGST12", etc.
-  taxRate           Float      @default(0)
-  taxAmount         Float      @default(0)
+  taxCode     String? // "GST18", "IGST12", etc.
+  taxRate     Float      @default(0)
+  taxAmount   Float      @default(0)
   // GL Account mapping
-  glAccountId       String?
-  glAccount         GLAccount? @relation(fields: [glAccountId], references: [id])
+  glAccountId String?
+  glAccount   GLAccount? @relation(fields: [glAccountId], references: [id])
   // 3-way matching
-  poItemId          String?
-  grnItemId         String?
-  createdAt         DateTime   @default(now())
+  poItemId    String?
+  grnItemId   String?
+  createdAt   DateTime   @default(now())
 
   @@index([invoiceId])
   @@index([glAccountId])
@@ -1978,28 +2356,28 @@ enum PaymentMethod {
 }
 
 model ApPayment {
-  id                String        @id @default(uuid())
-  paymentNumber     String        @unique
-  invoiceId         String
-  invoice           APInvoice     @relation(fields: [invoiceId], references: [id])
-  amount            Float
-  currency          String        @default("INR")
-  paymentDate       DateTime
-  method            PaymentMethod @default(BANK_TRANSFER)
-  reference         String? // Check number, transaction ID, etc.
-  status            PaymentStatus @default(DRAFT)
+  id             String        @id @default(uuid())
+  paymentNumber  String        @unique
+  invoiceId      String
+  invoice        APInvoice     @relation(fields: [invoiceId], references: [id])
+  amount         Float
+  currency       String        @default("INR")
+  paymentDate    DateTime
+  method         PaymentMethod @default(BANK_TRANSFER)
+  reference      String? // Check number, transaction ID, etc.
+  status         PaymentStatus @default(DRAFT)
   // GL Integration
-  journalEntryId    String?
-  journalEntry      JournalEntry? @relation(fields: [journalEntryId], references: [id])
+  journalEntryId String?
+  journalEntry   JournalEntry? @relation(fields: [journalEntryId], references: [id])
   // Metadata
-  notes             String?
-  createdById       String?
-  createdBy         User?         @relation("APPaymentCreator", fields: [createdById], references: [id])
-  approvedById      String?
-  approvedBy        User?         @relation("APPaymentApprover", fields: [approvedById], references: [id])
-  approvalDate      DateTime?
-  createdAt         DateTime      @default(now())
-  updatedAt         DateTime      @updatedAt
+  notes          String?
+  createdById    String?
+  createdBy      User?         @relation("APPaymentCreator", fields: [createdById], references: [id])
+  approvedById   String?
+  approvedBy     User?         @relation("APPaymentApprover", fields: [approvedById], references: [id])
+  approvalDate   DateTime?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
 
   @@index([invoiceId, status])
   @@index([paymentDate(sort: Desc)])
@@ -2007,28 +2385,28 @@ model ApPayment {
 }
 
 model ArPayment {
-  id                String        @id @default(uuid())
-  paymentNumber     String        @unique
-  invoiceId         String
-  invoice           ARInvoice     @relation(fields: [invoiceId], references: [id])
-  amount            Float
-  currency          String        @default("INR")
-  paymentDate       DateTime
-  method            PaymentMethod @default(BANK_TRANSFER)
-  reference         String? // Check number, transaction ID, etc.
-  status            PaymentStatus @default(DRAFT)
+  id             String        @id @default(uuid())
+  paymentNumber  String        @unique
+  invoiceId      String
+  invoice        ARInvoice     @relation(fields: [invoiceId], references: [id])
+  amount         Float
+  currency       String        @default("INR")
+  paymentDate    DateTime
+  method         PaymentMethod @default(BANK_TRANSFER)
+  reference      String? // Check number, transaction ID, etc.
+  status         PaymentStatus @default(DRAFT)
   // GL Integration
-  journalEntryId    String?
-  journalEntry      JournalEntry? @relation(fields: [journalEntryId], references: [id])
+  journalEntryId String?
+  journalEntry   JournalEntry? @relation(fields: [journalEntryId], references: [id])
   // Metadata
-  notes             String?
-  createdById       String?
-  createdBy         User?         @relation("ARPaymentCreator", fields: [createdById], references: [id])
-  approvedById      String?
-  approvedBy        User?         @relation("ARPaymentApprover", fields: [approvedById], references: [id])
-  approvalDate      DateTime?
-  createdAt         DateTime      @default(now())
-  updatedAt         DateTime      @updatedAt
+  notes          String?
+  createdById    String?
+  createdBy      User?         @relation("ARPaymentCreator", fields: [createdById], references: [id])
+  approvedById   String?
+  approvedBy     User?         @relation("ARPaymentApprover", fields: [approvedById], references: [id])
+  approvalDate   DateTime?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
 
   @@index([invoiceId, status])
   @@index([paymentDate(sort: Desc)])
@@ -2038,16 +2416,602 @@ model ArPayment {
 // ─── 3-WAY MATCHING LOG ─────────────────────────────────────────
 
 model InvoiceMatchLog {
-  id           String   @id @default(uuid())
-  invoiceId    String
-  invoice      APInvoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
-  matchType    String   // "PO_MATCH", "GRN_MATCH", "PRICE_VARIANCE", "QTY_VARIANCE"
-  status       String   // "SUCCESS", "MISMATCH", "TOLERANCE_EXCEEDED"
-  variance     Float? // qty or price difference
+  id             String    @id @default(uuid())
+  invoiceId      String
+  invoice        APInvoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  matchType      String // "PO_MATCH", "GRN_MATCH", "PRICE_VARIANCE", "QTY_VARIANCE"
+  status         String // "SUCCESS", "MISMATCH", "TOLERANCE_EXCEEDED"
+  variance       Float? // qty or price difference
   toleranceLimit Float? // max allowed variance
-  notes        String?
-  createdAt    DateTime @default(now())
+  notes          String?
+  createdAt      DateTime  @default(now())
 
   @@index([invoiceId])
   @@index([status])
+}
+
+// ─── ENTERPRISE BOUNDARY LAYER (Tier-1 Foundation) ─────────────
+
+model Tenant {
+  id              String           @id @default(uuid())
+  code            String           @unique
+  name            String
+  isActive        Boolean          @default(true)
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  legalEntities   LegalEntity[]
+  businessUnits   BusinessUnit[]
+  offices         Office[]
+  users           User[]
+  fiscalCalendars FiscalCalendar[]
+  accountingBooks AccountingBook[]
+
+  @@index([isActive])
+}
+
+model LegalEntity {
+  id              String           @id @default(uuid())
+  tenantId        String
+  tenant          Tenant           @relation(fields: [tenantId], references: [id])
+  code            String
+  name            String
+  countryCode     String?
+  baseCurrency    String           @default("INR")
+  taxRegistration String?
+  isActive        Boolean          @default(true)
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  businessUnits   BusinessUnit[]
+  offices         Office[]
+  users           User[]
+  fiscalCalendars FiscalCalendar[]
+  accountingBooks AccountingBook[]
+  revenueContracts RevenueContract[]
+  sourceEliminationEntries EliminationEntry[] @relation("EliminationSourceLegalEntity")
+  targetEliminationEntries EliminationEntry[] @relation("EliminationTargetLegalEntity")
+
+  @@unique([tenantId, code])
+  @@index([tenantId, isActive])
+}
+
+model BusinessUnit {
+  id            String         @id @default(uuid())
+  tenantId      String
+  tenant        Tenant         @relation(fields: [tenantId], references: [id])
+  legalEntityId String
+  legalEntity   LegalEntity    @relation(fields: [legalEntityId], references: [id])
+  code          String
+  name          String
+  parentId      String?
+  parent        BusinessUnit?  @relation("BusinessUnitHierarchy", fields: [parentId], references: [id])
+  children      BusinessUnit[] @relation("BusinessUnitHierarchy")
+  isActive      Boolean        @default(true)
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  offices       Office[]
+
+  @@unique([legalEntityId, code])
+  @@index([tenantId, legalEntityId])
+  @@index([parentId])
+}
+
+model FiscalCalendar {
+  id             String         @id @default(uuid())
+  tenantId       String
+  tenant         Tenant         @relation(fields: [tenantId], references: [id])
+  legalEntityId  String?
+  legalEntity    LegalEntity?   @relation(fields: [legalEntityId], references: [id])
+  name           String
+  yearStartMonth Int            @default(1)
+  isActive       Boolean        @default(true)
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  periods        FiscalPeriod[]
+
+  @@index([tenantId, isActive])
+  @@index([legalEntityId])
+}
+
+model AccountingBook {
+  id            String         @id @default(uuid())
+  tenantId      String
+  tenant        Tenant         @relation(fields: [tenantId], references: [id])
+  legalEntityId String
+  legalEntity   LegalEntity    @relation(fields: [legalEntityId], references: [id])
+  code          String
+  name          String
+  baseCurrency  String         @default("INR")
+  isPrimary     Boolean        @default(false)
+  isActive      Boolean        @default(true)
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  periods       FiscalPeriod[]
+
+  @@unique([legalEntityId, code])
+  @@index([tenantId, legalEntityId])
+}
+
+model FiscalPeriod {
+  id                String             @id @default(uuid())
+  fiscalCalendarId  String?
+  fiscalCalendar    FiscalCalendar?    @relation(fields: [fiscalCalendarId], references: [id])
+  accountingBookId  String?
+  accountingBook    AccountingBook?    @relation(fields: [accountingBookId], references: [id])
+  code              String
+  periodName        String?
+  startDate         DateTime
+  endDate           DateTime
+  status            FiscalPeriodStatus @default(OPEN)
+  isAdjustment      Boolean            @default(false)
+  closedAt          DateTime?
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  periodCloseRuns   PeriodCloseRun[]
+  consolidationRuns ConsolidationRun[]
+  revenueSchedules  RevenueSchedule[]
+  purchaseOrders    PurchaseOrder[]
+  transactions      Transaction[]
+  journalEntries    JournalEntry[]
+  budgets           Budget[]
+  apInvoices        APInvoice[]
+  arInvoices        ARInvoice[]
+
+  @@index([startDate, endDate])
+  @@index([status])
+  @@index([fiscalCalendarId])
+  @@index([accountingBookId])
+}
+
+// ─── FINANCE DIMENSION & CLOSE CONTROL LAYER ───────────────────
+
+model CostCenter {
+  id             String             @id @default(uuid())
+  code           String             @unique
+  name           String
+  officeId       String?
+  office         Office?            @relation(fields: [officeId], references: [id])
+  isActive       Boolean            @default(true)
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+  transactions   Transaction[]
+  journalEntries JournalEntry[]
+  journalLines   JournalEntryLine[]
+
+  @@index([officeId, isActive])
+}
+
+model ProfitCenter {
+  id             String             @id @default(uuid())
+  code           String             @unique
+  name           String
+  officeId       String?
+  office         Office?            @relation(fields: [officeId], references: [id])
+  isActive       Boolean            @default(true)
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+  transactions   Transaction[]
+  journalEntries JournalEntry[]
+  journalLines   JournalEntryLine[]
+
+  @@index([officeId, isActive])
+}
+
+model DimensionSet {
+  id             String             @id @default(uuid())
+  code           String             @unique
+  name           String
+  officeId       String?
+  office         Office?            @relation(fields: [officeId], references: [id])
+  isActive       Boolean            @default(true)
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+  items          DimensionSetItem[]
+  purchaseOrders PurchaseOrder[]
+  transactions   Transaction[]
+  journalEntries JournalEntry[]
+  journalLines   JournalEntryLine[]
+  budgets        Budget[]
+  apInvoices     APInvoice[]
+  arInvoices     ARInvoice[]
+
+  @@index([officeId, isActive])
+}
+
+model DimensionSetItem {
+  id             String       @id @default(uuid())
+  dimensionSetId String
+  dimensionSet   DimensionSet @relation(fields: [dimensionSetId], references: [id], onDelete: Cascade)
+  key            String
+  value          String
+  sortOrder      Int          @default(0)
+  createdAt      DateTime     @default(now())
+
+  @@unique([dimensionSetId, key])
+  @@index([dimensionSetId])
+}
+
+model PeriodCloseRun {
+  id             String               @id @default(uuid())
+  runNumber      String               @unique
+  fiscalPeriodId String
+  fiscalPeriod   FiscalPeriod         @relation(fields: [fiscalPeriodId], references: [id])
+  officeId       String?
+  office         Office?              @relation(fields: [officeId], references: [id])
+  status         PeriodCloseRunStatus @default(DRAFT)
+  startedAt      DateTime?
+  completedAt    DateTime?
+  finalizedAt    DateTime?
+  notes          String?
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
+  tasks          PeriodCloseTask[]
+  journalEntries JournalEntry[]
+
+  @@index([fiscalPeriodId, status])
+  @@index([officeId])
+}
+
+model PeriodCloseTask {
+  id               String                @id @default(uuid())
+  periodCloseRunId String
+  periodCloseRun   PeriodCloseRun        @relation(fields: [periodCloseRunId], references: [id], onDelete: Cascade)
+  taskCode         String
+  taskName         String
+  status           PeriodCloseTaskStatus @default(PENDING)
+  ownerUserId      String?
+  ownerUser        User?                 @relation(fields: [ownerUserId], references: [id])
+  dueDate          DateTime?
+  completedAt      DateTime?
+  notes            String?
+  createdAt        DateTime              @default(now())
+  updatedAt        DateTime              @updatedAt
+
+  @@index([periodCloseRunId, status])
+  @@index([ownerUserId])
+}
+
+model ConsolidationRun {
+  id                 String                 @id @default(uuid())
+  runNumber          String                 @unique
+  fiscalPeriodId     String
+  fiscalPeriod       FiscalPeriod           @relation(fields: [fiscalPeriodId], references: [id])
+  officeId           String?
+  office             Office?                @relation(fields: [officeId], references: [id])
+  status             ConsolidationRunStatus @default(PENDING)
+  startedAt          DateTime?
+  completedAt        DateTime?
+  notes              String?
+  createdAt          DateTime               @default(now())
+  updatedAt          DateTime               @updatedAt
+  eliminationEntries EliminationEntry[]
+  journalEntries     JournalEntry[]
+
+  @@index([fiscalPeriodId, status])
+  @@index([officeId])
+}
+
+model EliminationEntry {
+  id                  String           @id @default(uuid())
+  consolidationRunId  String
+  consolidationRun    ConsolidationRun @relation(fields: [consolidationRunId], references: [id], onDelete: Cascade)
+  journalEntryId      String?
+  journalEntry        JournalEntry?    @relation(fields: [journalEntryId], references: [id])
+  sourceLegalEntityId String?
+  sourceLegalEntity   LegalEntity?     @relation("EliminationSourceLegalEntity", fields: [sourceLegalEntityId], references: [id])
+  targetLegalEntityId String?
+  targetLegalEntity   LegalEntity?     @relation("EliminationTargetLegalEntity", fields: [targetLegalEntityId], references: [id])
+  description         String?
+  amount              Float
+  currency            String           @default("INR")
+  createdAt           DateTime         @default(now())
+
+  @@index([consolidationRunId])
+  @@index([journalEntryId])
+  @@index([sourceLegalEntityId])
+  @@index([targetLegalEntityId])
+}
+
+// ─── REVENUE RECOGNITION CONTRACT LAYER ────────────────────────
+
+model RevenueContract {
+  id             String                  @id @default(uuid())
+  contractNumber String                  @unique
+  customerId     String?
+  customer       Customer?               @relation(fields: [customerId], references: [id])
+  officeId       String?
+  office         Office?                 @relation(fields: [officeId], references: [id])
+  legalEntityId  String?
+  legalEntity    LegalEntity?            @relation(fields: [legalEntityId], references: [id])
+  contractTitle  String?
+  startDate      DateTime
+  endDate        DateTime?
+  totalValue     Float                   @default(0)
+  currency       String                  @default("INR")
+  status         RevenueContractStatus   @default(DRAFT)
+  createdAt      DateTime                @default(now())
+  updatedAt      DateTime                @updatedAt
+  obligations    PerformanceObligation[]
+  schedules      RevenueSchedule[]
+
+  @@index([customerId])
+  @@index([officeId])
+  @@index([legalEntityId])
+  @@index([status])
+}
+
+model PerformanceObligation {
+  id                String            @id @default(uuid())
+  revenueContractId String
+  revenueContract   RevenueContract   @relation(fields: [revenueContractId], references: [id], onDelete: Cascade)
+  code              String
+  name              String
+  allocationPercent Float?
+  allocatedAmount   Float             @default(0)
+  isSatisfied       Boolean           @default(false)
+  satisfiedAt       DateTime?
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+  revenueSchedules  RevenueSchedule[]
+
+  @@unique([revenueContractId, code])
+  @@index([revenueContractId])
+}
+
+model RevenueSchedule {
+  id                      String                    @id @default(uuid())
+  scheduleNumber          String                    @unique
+  revenueContractId       String
+  revenueContract         RevenueContract           @relation(fields: [revenueContractId], references: [id], onDelete: Cascade)
+  performanceObligationId String?
+  performanceObligation   PerformanceObligation?    @relation(fields: [performanceObligationId], references: [id])
+  fiscalPeriodId          String?
+  fiscalPeriod            FiscalPeriod?             @relation(fields: [fiscalPeriodId], references: [id])
+  startDate               DateTime
+  endDate                 DateTime?
+  totalAmount             Float                     @default(0)
+  recognizedAmount        Float                     @default(0)
+  status                  RevenueScheduleStatus     @default(PLANNED)
+  createdAt               DateTime                  @default(now())
+  updatedAt               DateTime                  @updatedAt
+  lines                   RevenueScheduleLine[]
+  recognitionEntries      RevenueRecognitionEntry[]
+
+  @@index([revenueContractId])
+  @@index([performanceObligationId])
+  @@index([fiscalPeriodId])
+  @@index([status])
+}
+
+model RevenueScheduleLine {
+  id                String                @id @default(uuid())
+  revenueScheduleId String
+  revenueSchedule   RevenueSchedule       @relation(fields: [revenueScheduleId], references: [id], onDelete: Cascade)
+  milestoneCode     String?
+  recognitionDate   DateTime
+  amount            Float
+  status            RevenueScheduleStatus @default(PLANNED)
+  createdAt         DateTime              @default(now())
+
+  @@index([revenueScheduleId, recognitionDate])
+}
+
+model RevenueRecognitionEntry {
+  id                String          @id @default(uuid())
+  revenueScheduleId String
+  revenueSchedule   RevenueSchedule @relation(fields: [revenueScheduleId], references: [id], onDelete: Cascade)
+  journalEntryId    String?
+  journalEntry      JournalEntry?   @relation(fields: [journalEntryId], references: [id])
+  recognizedAt      DateTime        @default(now())
+  amount            Float
+  currency          String          @default("INR")
+  notes             String?
+  createdAt         DateTime        @default(now())
+
+  @@index([revenueScheduleId])
+  @@index([journalEntryId])
+}
+
+model Campaign {
+  id            String         @id @default(uuid())
+  officeId      String
+  office        Office         @relation(fields: [officeId], references: [id])
+  ownerUserId   String?
+  ownerUser     User?          @relation("CampaignOwner", fields: [ownerUserId], references: [id])
+  name          String
+  objective     String?
+  budgetAmount  Float          @default(0)
+  leadTarget    Int            @default(0)
+  revenueTarget Float          @default(0)
+  startDate     DateTime?
+  endDate       DateTime?
+  status        CampaignStatus @default(DRAFT)
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  @@index([officeId, status])
+  @@index([ownerUserId])
+}
+
+model SalesTerritory {
+  id            String          @id @default(uuid())
+  officeId      String
+  office        Office          @relation(fields: [officeId], references: [id])
+  code          String
+  name          String
+  region        String?
+  managerUserId String?
+  managerUser   User?           @relation("TerritoryManager", fields: [managerUserId], references: [id])
+  status        TerritoryStatus @default(ACTIVE)
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+
+  @@unique([officeId, code])
+  @@index([officeId, status])
+  @@index([managerUserId])
+}
+
+model AccountPlan {
+  id              String            @id @default(uuid())
+  officeId        String
+  office          Office            @relation(fields: [officeId], references: [id])
+  customerId      String
+  customer        Customer          @relation(fields: [customerId], references: [id])
+  ownerUserId     String?
+  ownerUser       User?             @relation("AccountPlanOwner", fields: [ownerUserId], references: [id])
+  planName        String
+  strategicGoals  String?
+  nextQuarterPlan String?
+  riskLevel       String?
+  reviewDate      DateTime?
+  status          AccountPlanStatus @default(DRAFT)
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  @@index([officeId, status])
+  @@index([customerId])
+  @@index([ownerUserId])
+}
+
+model PartnerChannel {
+  id             String               @id @default(uuid())
+  officeId       String
+  office         Office               @relation(fields: [officeId], references: [id])
+  ownerUserId    String?
+  ownerUser      User?                @relation("PartnerChannelOwner", fields: [ownerUserId], references: [id])
+  channelName    String
+  partnerType    String?
+  contactName    String?
+  contactEmail   String?
+  commissionRate Float                @default(0)
+  status         PartnerChannelStatus @default(ACTIVE)
+  notes          String?
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
+
+  @@index([officeId, status])
+  @@index([ownerUserId])
+}
+
+model EmployeeObjective {
+  id            String          @id @default(uuid())
+  employeeId    String
+  employee      Employee        @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  createdById   String?
+  createdBy     User?           @relation("ObjectiveCreator", fields: [createdById], references: [id])
+  title         String
+  description   String?
+  startDate     DateTime?
+  dueDate       DateTime?
+  progress      Float           @default(0)
+  status        ObjectiveStatus @default(ACTIVE)
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+  keyResults    ObjectiveKeyResult[]
+
+  @@index([employeeId, status])
+  @@index([dueDate])
+}
+
+model ObjectiveKeyResult {
+  id               String          @id @default(uuid())
+  objectiveId      String
+  objective        EmployeeObjective @relation(fields: [objectiveId], references: [id], onDelete: Cascade)
+  title            String
+  unit             String?
+  targetValue      Float?
+  currentValue     Float           @default(0)
+  lastUpdatedById  String?
+  lastUpdatedBy    User?           @relation("KeyResultUpdater", fields: [lastUpdatedById], references: [id])
+  status           KeyResultStatus @default(NOT_STARTED)
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+
+  @@index([objectiveId, status])
+}
+
+model LearningCourse {
+  id            String               @id @default(uuid())
+  officeId      String
+  office        Office               @relation(fields: [officeId], references: [id])
+  createdById   String?
+  createdBy     User?                @relation("LearningCourseCreator", fields: [createdById], references: [id])
+  title         String
+  provider      String?
+  description   String?
+  durationHours Float                @default(0)
+  status        LearningCourseStatus @default(ACTIVE)
+  createdAt     DateTime             @default(now())
+  updatedAt     DateTime             @updatedAt
+  enrollments   LearningEnrollment[]
+
+  @@index([officeId, status])
+  @@index([createdById])
+}
+
+model LearningEnrollment {
+  id            String                   @id @default(uuid())
+  courseId      String
+  course        LearningCourse           @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  employeeId    String
+  employee      Employee                 @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  requestedById String?
+  requestedBy   User?                    @relation("LearningRequestedBy", fields: [requestedById], references: [id])
+  approvedById  String?
+  approvedBy    User?                    @relation("LearningApprovedBy", fields: [approvedById], references: [id])
+  status        LearningEnrollmentStatus @default(REQUESTED)
+  requestedAt   DateTime                 @default(now())
+  approvedAt    DateTime?
+  completionAt  DateTime?
+  score         Float?
+  notes         String?
+  createdAt     DateTime                 @default(now())
+  updatedAt     DateTime                 @updatedAt
+
+  @@unique([courseId, employeeId])
+  @@index([employeeId, status])
+  @@index([approvedById])
+}
+
+model WorkforcePlan {
+  id               String             @id @default(uuid())
+  officeId         String
+  office           Office             @relation(fields: [officeId], references: [id])
+  createdById      String?
+  createdBy        User?              @relation("WorkforcePlanCreator", fields: [createdById], references: [id])
+  department       String?
+  plannedHeadcount Int                @default(0)
+  currentHeadcount Int                @default(0)
+  hiringNeeded     Int                @default(0)
+  targetDate       DateTime?
+  status           WorkforcePlanStatus @default(DRAFT)
+  notes            String?
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+
+  @@index([officeId, status])
+  @@index([department])
+}
+
+model SelfServiceRequest {
+  id            String                   @id @default(uuid())
+  officeId      String
+  office        Office                   @relation(fields: [officeId], references: [id])
+  employeeId    String
+  employee      Employee                 @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  requestedById String?
+  requestedBy   User?                    @relation("SelfServiceRequestedBy", fields: [requestedById], references: [id])
+  approvedById  String?
+  approvedBy    User?                    @relation("SelfServiceApprovedBy", fields: [approvedById], references: [id])
+  requestType   SelfServiceRequestType
+  title         String
+  details       String?
+  status        SelfServiceRequestStatus @default(PENDING)
+  requestedAt   DateTime                 @default(now())
+  approvedAt    DateTime?
+  createdAt     DateTime                 @default(now())
+  updatedAt     DateTime                 @updatedAt
+
+  @@index([officeId, status])
+  @@index([employeeId, status])
+  @@index([approvedById])
 }

@@ -4,6 +4,9 @@ const QRCode = require('qrcode');
 const logger = require('../utils/logger');
 const { convertCurrency } = require('../utils/currencyConverter');
 const aiService = require('../services/aiService');
+const { postTransactionToGL } = require('../services/financePostingService');
+const { publishEvent } = require('../coreops/eventBus');
+const { evaluateEvent } = require('../coreops/automationEngine');
 
 const LIFECYCLE_STATES = [
     'REQUESTED',
@@ -256,6 +259,8 @@ exports.createAsset = asyncHandler(async (req, res, next) => {
 
     const guai = await generateGUAI(targetOfficeId);
 
+    const purchaseAmount = Number(purchaseCost) || 0;
+
     let asset = await prisma.asset.create({
         data: {
             guai,
@@ -264,7 +269,7 @@ exports.createAsset = asyncHandler(async (req, res, next) => {
             manufacturer,
             model,
             serialNumber,
-            purchasePrice: Number(purchaseCost) || 0,
+            purchasePrice: purchaseAmount,
             purchaseDate: purchaseDate ? new Date(purchaseDate) : new Date(),
             currency: effectiveCurrency,
             purchaseOrderNumber,
@@ -277,7 +282,7 @@ exports.createAsset = asyncHandler(async (req, res, next) => {
             vendorId: vendor || undefined,
             officeId: targetOfficeId,
             status: status || 'ACTIVE',
-            currentBookValue: Number(purchaseCost) || 0,
+            currentBookValue: purchaseAmount,
             createdById: req.user.id,
         },
     });
@@ -290,6 +295,48 @@ exports.createAsset = asyncHandler(async (req, res, next) => {
     } catch (qrError) {
         logger.error('Failed to generate QR code:', qrError);
     }
+
+    const shouldCreateExpenseEntry = req.body.skipAutoExpenseEntry !== true && purchaseAmount > 0;
+
+    if (shouldCreateExpenseEntry) {
+        await prisma.$transaction(async (tx) => {
+            const expenseTx = await tx.transaction.create({
+                data: {
+                    type: 'EXPENSE',
+                    category: 'ASSET_CAPEX',
+                    amount: purchaseAmount,
+                    currency: effectiveCurrency,
+                    date: asset.purchaseDate || new Date(),
+                    description: `Asset purchase - ${asset.name} (${asset.guai})`,
+                    referenceType: 'MANUAL',
+                    referenceId: asset.id,
+                    officeId: targetOfficeId,
+                    recordedById: req.user.id,
+                    status: 'CLEARED',
+                },
+            });
+
+            await postTransactionToGL({ tx, transaction: expenseTx, userId: req.user.id });
+        });
+    }
+
+    const assetCreatedEvent = await publishEvent('asset.created', {
+        assetId: asset.id,
+        guai: asset.guai,
+        officeId: targetOfficeId,
+        purchasePrice: purchaseAmount,
+        currency: effectiveCurrency,
+    }, {
+        source: 'asset.controller',
+        officeId: targetOfficeId,
+        actorId: req.user?.id || null,
+    });
+
+    await evaluateEvent(assetCreatedEvent, {
+        source: 'asset.controller',
+        officeId: targetOfficeId,
+        actorId: req.user?.id || null,
+    });
 
     await writeAssetFinanceLog({
         asset,

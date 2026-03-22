@@ -1,10 +1,10 @@
 import { type ComponentType, useEffect, useMemo, useState } from 'react';
-import { Briefcase, CalendarDays, Check, Loader2, RefreshCcw, Search, Users, Wallet, X } from 'lucide-react';
+import { Briefcase, CalendarDays, Check, Loader2, RefreshCcw, Search, Target, UserCheck, Users, Wallet, X } from 'lucide-react';
 import api, { getErrorMessage } from '../../lib/api';
 import { toast } from '../../components/ui/Toaster';
 import { useAuthStore } from '../../stores/authStore';
 
-type TabKey = 'employees' | 'leave' | 'attendance' | 'payroll';
+type TabKey = 'employees' | 'leave' | 'attendance' | 'payroll' | 'talent' | 'performance';
 
 type Office = { id: string; name: string; code: string };
 
@@ -72,6 +72,104 @@ type DashboardStats = {
   attendanceRatio: number;
 };
 
+type RecruitmentPosition = {
+  id: string;
+  positionCode: string;
+  title: string;
+  department: string | null;
+  employmentType: Employee['employmentType'];
+  targetHires: number;
+  openingsFilled: number;
+  status: 'OPEN' | 'ON_HOLD' | 'CLOSED' | 'CANCELLED';
+  officeId: string;
+  _count?: { applications: number };
+};
+
+type CandidateApplication = {
+  id: string;
+  recruitmentPositionId: string;
+  fullName: string;
+  email: string | null;
+  phone: string | null;
+  source: string | null;
+  stage: 'APPLIED' | 'SCREENING' | 'INTERVIEW' | 'OFFER' | 'HIRED' | 'REJECTED';
+  score: number | null;
+  recruitmentPosition: {
+    id: string;
+    positionCode: string;
+    title: string;
+    officeId: string;
+  };
+};
+
+type PerformanceGoal = {
+  id: string;
+  employeeId: string;
+  title: string;
+  targetValue: number | null;
+  currentValue: number;
+  weight: number;
+  status: 'DRAFT' | 'ACTIVE' | 'AT_RISK' | 'COMPLETED' | 'CANCELLED';
+  dueDate: string | null;
+  employee: { id: string; employeeCode: string; firstName: string; lastName: string; officeId: string };
+};
+
+type PerformanceReview = {
+  id: string;
+  employeeId: string;
+  periodStart: string;
+  periodEnd: string;
+  rating: number | null;
+  summary: string | null;
+  status: 'DRAFT' | 'SUBMITTED' | 'ACKNOWLEDGED' | 'FINALIZED';
+  employee: { id: string; employeeCode: string; firstName: string; lastName: string; officeId: string };
+  reviewer: { id: string; name: string; email: string } | null;
+};
+
+type Objective = {
+  id: string;
+  employee: { id: string; firstName: string; lastName: string; employeeCode: string; officeId: string };
+  title: string;
+  status: 'DRAFT' | 'ACTIVE' | 'AT_RISK' | 'COMPLETED' | 'CANCELLED';
+  dueDate: string | null;
+  keyResults: Array<{ id: string; title: string; currentValue: number; targetValue: number | null; status: 'NOT_STARTED' | 'ON_TRACK' | 'AT_RISK' | 'ACHIEVED' }>;
+};
+
+type LearningCourse = {
+  id: string;
+  officeId: string;
+  title: string;
+  provider: string | null;
+  status: 'ACTIVE' | 'ARCHIVED';
+  _count?: { enrollments: number };
+};
+
+type LearningEnrollment = {
+  id: string;
+  status: 'REQUESTED' | 'APPROVED' | 'REJECTED' | 'IN_PROGRESS' | 'COMPLETED';
+  employee: { id: string; firstName: string; lastName: string; employeeCode: string; officeId: string };
+  course: { id: string; title: string; officeId: string };
+};
+
+type WorkforcePlan = {
+  id: string;
+  officeId: string;
+  department: string | null;
+  plannedHeadcount: number;
+  currentHeadcount: number;
+  hiringNeeded: number;
+  status: 'DRAFT' | 'APPROVED' | 'IN_PROGRESS' | 'COMPLETED';
+  targetDate: string | null;
+};
+
+type SelfServiceRequest = {
+  id: string;
+  requestType: 'PROFILE_UPDATE' | 'SHIFT_CHANGE' | 'LEAVE_ADJUSTMENT' | 'TRAINING_REQUEST' | 'OTHER';
+  title: string;
+  status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'CANCELLED';
+  employee: { id: string; firstName: string; lastName: string; employeeCode: string; officeId: string };
+};
+
 type ApiResponse<T> = { success: boolean; data: T; count?: number };
 
 const tabs: Array<{ key: TabKey; label: string; icon: ComponentType<{ className?: string }> }> = [
@@ -79,6 +177,8 @@ const tabs: Array<{ key: TabKey; label: string; icon: ComponentType<{ className?
   { key: 'leave', label: 'Leave & Approvals', icon: CalendarDays },
   { key: 'attendance', label: 'Attendance', icon: Check },
   { key: 'payroll', label: 'Payroll', icon: Wallet },
+  { key: 'talent', label: 'Talent Acquisition', icon: UserCheck },
+  { key: 'performance', label: 'Performance', icon: Target },
 ];
 
 function currency(value: number) {
@@ -114,12 +214,24 @@ export function HCMWorkspace() {
   const [attendance, setAttendance] = useState<Attendance[]>([]);
   const [payrollRuns, setPayrollRuns] = useState<PayrollRun[]>([]);
   const [payrollPreview, setPayrollPreview] = useState<PayrollPreview | null>(null);
+  const [positions, setPositions] = useState<RecruitmentPosition[]>([]);
+  const [applications, setApplications] = useState<CandidateApplication[]>([]);
+  const [goals, setGoals] = useState<PerformanceGoal[]>([]);
+  const [reviews, setReviews] = useState<PerformanceReview[]>([]);
+  const [objectives, setObjectives] = useState<Objective[]>([]);
+  const [learningCourses, setLearningCourses] = useState<LearningCourse[]>([]);
+  const [learningEnrollments, setLearningEnrollments] = useState<LearningEnrollment[]>([]);
+  const [workforcePlans, setWorkforcePlans] = useState<WorkforcePlan[]>([]);
+  const [selfServiceRequests, setSelfServiceRequests] = useState<SelfServiceRequest[]>([]);
   const [stats, setStats] = useState<DashboardStats>({ employees: 0, pendingLeave: 0, presentToday: 0, attendanceRatio: 0 });
 
   const [employeeSearch, setEmployeeSearch] = useState('');
   const [employeeStatusFilter, setEmployeeStatusFilter] = useState<'ALL' | Employee['status']>('ALL');
   const [leaveStatusFilter, setLeaveStatusFilter] = useState<'ALL' | LeaveRequest['status']>('ALL');
   const [attendanceStatusFilter, setAttendanceStatusFilter] = useState<'ALL' | Attendance['status']>('ALL');
+  const [candidateStageFilter, setCandidateStageFilter] = useState<'ALL' | CandidateApplication['stage']>('ALL');
+  const [goalStatusFilter, setGoalStatusFilter] = useState<'ALL' | PerformanceGoal['status']>('ALL');
+  const [reviewStatusFilter, setReviewStatusFilter] = useState<'ALL' | PerformanceReview['status']>('ALL');
 
   const canManageEmployees = ['SUPER_ADMIN', 'ADMIN', 'MANAGER'].includes(user?.role || '');
   const canSubmitLeave = ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF'].includes(user?.role || '');
@@ -156,6 +268,71 @@ export function HCMWorkspace() {
     notes: '',
   });
 
+  const [positionForm, setPositionForm] = useState({
+    title: '',
+    department: '',
+    employmentType: 'FULL_TIME' as Employee['employmentType'],
+    targetHires: '1',
+    officeId: '',
+  });
+
+  const [applicationForm, setApplicationForm] = useState({
+    recruitmentPositionId: '',
+    fullName: '',
+    email: '',
+    phone: '',
+    source: 'LinkedIn',
+    score: '',
+  });
+
+  const [goalForm, setGoalForm] = useState({
+    employeeId: '',
+    title: '',
+    targetValue: '',
+    weight: '1',
+    dueDate: isoDate(new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0)),
+  });
+
+  const [reviewForm, setReviewForm] = useState({
+    employeeId: '',
+    periodStart: isoDate(new Date(new Date().getFullYear(), new Date().getMonth(), 1)),
+    periodEnd: isoDate(new Date()),
+    rating: '',
+    summary: '',
+  });
+
+  const [objectiveForm, setObjectiveForm] = useState({
+    employeeId: '',
+    title: '',
+    dueDate: isoDate(new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0)),
+  });
+
+  const [learningCourseForm, setLearningCourseForm] = useState({
+    title: '',
+    provider: '',
+    durationHours: '8',
+  });
+
+  const [learningRequestForm, setLearningRequestForm] = useState({
+    courseId: '',
+    employeeId: '',
+  });
+
+  const [workforcePlanForm, setWorkforcePlanForm] = useState({
+    department: '',
+    plannedHeadcount: '0',
+    currentHeadcount: '0',
+    hiringNeeded: '0',
+    targetDate: isoDate(new Date(new Date().getFullYear(), new Date().getMonth() + 2, 1)),
+  });
+
+  const [selfServiceForm, setSelfServiceForm] = useState({
+    employeeId: '',
+    requestType: 'OTHER' as SelfServiceRequest['requestType'],
+    title: '',
+    details: '',
+  });
+
   const scopedEmployees = useMemo(() => {
     if (!selectedOfficeId) return employees;
     return employees.filter((e) => e.officeId === selectedOfficeId);
@@ -174,14 +351,56 @@ export function HCMWorkspace() {
 
   const filteredAttendance = useMemo(() => attendance.filter((item) => (attendanceStatusFilter === 'ALL' || item.status === attendanceStatusFilter) && (!selectedOfficeId || item.employee.officeId === selectedOfficeId)), [attendance, attendanceStatusFilter, selectedOfficeId]);
 
+  const scopedPositions = useMemo(() => {
+    if (!selectedOfficeId) return positions;
+    return positions.filter((item) => item.officeId === selectedOfficeId);
+  }, [positions, selectedOfficeId]);
+
+  const filteredApplications = useMemo(() => applications.filter((item) => {
+    const matchesStage = candidateStageFilter === 'ALL' || item.stage === candidateStageFilter;
+    const matchesOffice = !selectedOfficeId || item.recruitmentPosition.officeId === selectedOfficeId;
+    return matchesStage && matchesOffice;
+  }), [applications, candidateStageFilter, selectedOfficeId]);
+
+  const filteredGoals = useMemo(() => goals.filter((item) => {
+    const matchesStatus = goalStatusFilter === 'ALL' || item.status === goalStatusFilter;
+    const matchesOffice = !selectedOfficeId || item.employee.officeId === selectedOfficeId;
+    return matchesStatus && matchesOffice;
+  }), [goals, goalStatusFilter, selectedOfficeId]);
+
+  const filteredReviews = useMemo(() => reviews.filter((item) => {
+    const matchesStatus = reviewStatusFilter === 'ALL' || item.status === reviewStatusFilter;
+    const matchesOffice = !selectedOfficeId || item.employee.officeId === selectedOfficeId;
+    return matchesStatus && matchesOffice;
+  }), [reviews, reviewStatusFilter, selectedOfficeId]);
+
+  const filteredObjectives = useMemo(() => objectives.filter((item) => !selectedOfficeId || item.employee.officeId === selectedOfficeId), [objectives, selectedOfficeId]);
+
+  const filteredLearningEnrollments = useMemo(() => learningEnrollments.filter((item) => !selectedOfficeId || item.employee.officeId === selectedOfficeId), [learningEnrollments, selectedOfficeId]);
+
+  const scopedLearningCourses = useMemo(() => learningCourses.filter((item) => !selectedOfficeId || item.officeId === selectedOfficeId), [learningCourses, selectedOfficeId]);
+
+  const scopedWorkforcePlans = useMemo(() => workforcePlans.filter((item) => !selectedOfficeId || item.officeId === selectedOfficeId), [workforcePlans, selectedOfficeId]);
+
+  const scopedSelfServiceRequests = useMemo(() => selfServiceRequests.filter((item) => !selectedOfficeId || item.employee.officeId === selectedOfficeId), [selfServiceRequests, selectedOfficeId]);
+
   const fetchBaseData = async () => {
-    const [officesRes, employeesRes, leaveRes, attendanceRes, runsRes, statsRes] = await Promise.all([
+    const [officesRes, employeesRes, leaveRes, attendanceRes, runsRes, statsRes, positionsRes, applicationsRes, goalsRes, reviewsRes, objectivesRes, learningCoursesRes, learningEnrollmentsRes, workforcePlansRes, selfServiceRes] = await Promise.all([
       api.get<ApiResponse<Office[]>>('/offices'),
       api.get<ApiResponse<Employee[]>>('/hcm/employees'),
       api.get<ApiResponse<LeaveRequest[]>>('/hcm/leave-requests'),
       api.get<ApiResponse<Attendance[]>>('/hcm/attendance'),
       api.get<ApiResponse<PayrollRun[]>>('/hcm/payroll-runs'),
       api.get<ApiResponse<DashboardStats>>('/hcm/dashboard-stats'),
+      api.get<ApiResponse<RecruitmentPosition[]>>('/hcm/recruitment-positions'),
+      api.get<ApiResponse<CandidateApplication[]>>('/hcm/candidate-applications'),
+      api.get<ApiResponse<PerformanceGoal[]>>('/hcm/performance-goals'),
+      api.get<ApiResponse<PerformanceReview[]>>('/hcm/performance-reviews'),
+      api.get<ApiResponse<Objective[]>>('/hcm/objectives'),
+      api.get<ApiResponse<LearningCourse[]>>('/hcm/learning-courses'),
+      api.get<ApiResponse<LearningEnrollment[]>>('/hcm/learning-enrollments'),
+      api.get<ApiResponse<WorkforcePlan[]>>('/hcm/workforce-plans'),
+      api.get<ApiResponse<SelfServiceRequest[]>>('/hcm/self-service-requests'),
     ]);
 
     const loadedOffices = officesRes.data.data || [];
@@ -192,6 +411,15 @@ export function HCMWorkspace() {
     setLeaveRequests(leaveRes.data.data || []);
     setAttendance(attendanceRes.data.data || []);
     setPayrollRuns(runsRes.data.data || []);
+    setPositions(positionsRes.data.data || []);
+    setApplications(applicationsRes.data.data || []);
+    setGoals(goalsRes.data.data || []);
+    setReviews(reviewsRes.data.data || []);
+    setObjectives(objectivesRes.data.data || []);
+    setLearningCourses(learningCoursesRes.data.data || []);
+    setLearningEnrollments(learningEnrollmentsRes.data.data || []);
+    setWorkforcePlans(workforcePlansRes.data.data || []);
+    setSelfServiceRequests(selfServiceRes.data.data || []);
     setStats(statsRes.data.data || { employees: 0, pendingLeave: 0, presentToday: 0, attendanceRatio: 0 });
 
     const fallbackOfficeId = user?.office?.id || user?.officeId || loadedEmployees[0]?.officeId || loadedOffices[0]?.id || '';
@@ -199,6 +427,13 @@ export function HCMWorkspace() {
     setEmployeeForm((prev) => ({ ...prev, officeId: prev.officeId || fallbackOfficeId }));
     setLeaveForm((prev) => ({ ...prev, employeeId: prev.employeeId || loadedEmployees[0]?.id || '' }));
     setAttendanceForm((prev) => ({ ...prev, employeeId: prev.employeeId || loadedEmployees[0]?.id || '' }));
+    setPositionForm((prev) => ({ ...prev, officeId: prev.officeId || fallbackOfficeId }));
+    setApplicationForm((prev) => ({ ...prev, recruitmentPositionId: prev.recruitmentPositionId || positionsRes.data.data?.[0]?.id || '' }));
+    setGoalForm((prev) => ({ ...prev, employeeId: prev.employeeId || loadedEmployees[0]?.id || '' }));
+    setReviewForm((prev) => ({ ...prev, employeeId: prev.employeeId || loadedEmployees[0]?.id || '' }));
+    setObjectiveForm((prev) => ({ ...prev, employeeId: prev.employeeId || loadedEmployees[0]?.id || '' }));
+    setLearningRequestForm((prev) => ({ ...prev, employeeId: prev.employeeId || loadedEmployees[0]?.id || '', courseId: prev.courseId || learningCoursesRes.data.data?.[0]?.id || '' }));
+    setSelfServiceForm((prev) => ({ ...prev, employeeId: prev.employeeId || loadedEmployees[0]?.id || '' }));
   };
 
   useEffect(() => {
@@ -337,6 +572,314 @@ export function HCMWorkspace() {
       setIsSubmitting(true);
       await api.put(`/hcm/payroll-runs/${runId}/lock`, {});
       toast.success('Payroll run locked');
+      await fetchBaseData();
+    } catch (error) {
+      toast.error(getErrorMessage(error));
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const onCreatePosition = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!canManageEmployees) return;
+
+    try {
+      setIsSubmitting(true);
+      await api.post('/hcm/recruitment-positions', {
+        title: positionForm.title,
+        department: positionForm.department || null,
+        employmentType: positionForm.employmentType,
+        targetHires: Number(positionForm.targetHires || 1),
+        officeId: positionForm.officeId || selectedOfficeId,
+      });
+      toast.success('Recruitment position created');
+      setPositionForm((prev) => ({ ...prev, title: '', department: '', targetHires: '1' }));
+      await fetchBaseData();
+    } catch (error) {
+      toast.error(getErrorMessage(error));
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const onAddCandidate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!applicationForm.recruitmentPositionId) return toast.error('Select a position first');
+
+    try {
+      setIsSubmitting(true);
+      await api.post(`/hcm/recruitment-positions/${applicationForm.recruitmentPositionId}/applications`, {
+        fullName: applicationForm.fullName,
+        email: applicationForm.email || null,
+        phone: applicationForm.phone || null,
+        source: applicationForm.source || null,
+        score: applicationForm.score ? Number(applicationForm.score) : null,
+      });
+      toast.success('Candidate application added');
+      setApplicationForm((prev) => ({ ...prev, fullName: '', email: '', phone: '', source: 'LinkedIn', score: '' }));
+      await fetchBaseData();
+    } catch (error) {
+      toast.error(getErrorMessage(error));
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const onUpdateCandidateStage = async (applicationId: string, stage: CandidateApplication['stage']) => {
+    if (!canManageEmployees) return;
+
+    try {
+      setIsSubmitting(true);
+      await api.put(`/hcm/candidate-applications/${applicationId}/stage`, { stage });
+      toast.success(`Candidate moved to ${stage}`);
+      await fetchBaseData();
+    } catch (error) {
+      toast.error(getErrorMessage(error));
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const onCreateGoal = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!canManageEmployees) return;
+    if (!goalForm.employeeId) return toast.error('Select an employee');
+
+    try {
+      setIsSubmitting(true);
+      await api.post('/hcm/performance-goals', {
+        employeeId: goalForm.employeeId,
+        title: goalForm.title,
+        targetValue: goalForm.targetValue ? Number(goalForm.targetValue) : null,
+        weight: Number(goalForm.weight || 1),
+        dueDate: goalForm.dueDate || null,
+      });
+      toast.success('Performance goal created');
+      setGoalForm((prev) => ({ ...prev, title: '', targetValue: '', weight: '1' }));
+      await fetchBaseData();
+    } catch (error) {
+      toast.error(getErrorMessage(error));
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const onUpdateGoalProgress = async (goalId: string, currentValue: number, targetValue: number | null) => {
+    if (!canManageEmployees) return;
+    const nextValue = Number(window.prompt('Update current value', String(currentValue)) || currentValue);
+    if (Number.isNaN(nextValue)) return;
+
+    try {
+      setIsSubmitting(true);
+      await api.put(`/hcm/performance-goals/${goalId}/progress`, {
+        currentValue: nextValue,
+        targetValue,
+      });
+      toast.success('Goal progress updated');
+      await fetchBaseData();
+    } catch (error) {
+      toast.error(getErrorMessage(error));
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const onCreateReview = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!canManageEmployees) return;
+    if (new Date(reviewForm.periodEnd) < new Date(reviewForm.periodStart)) return toast.error('Review period end date must be on or after start date');
+
+    try {
+      setIsSubmitting(true);
+      await api.post('/hcm/performance-reviews', {
+        employeeId: reviewForm.employeeId,
+        periodStart: reviewForm.periodStart,
+        periodEnd: reviewForm.periodEnd,
+        rating: reviewForm.rating ? Number(reviewForm.rating) : null,
+        summary: reviewForm.summary || null,
+      });
+      toast.success('Performance review created');
+      setReviewForm((prev) => ({ ...prev, rating: '', summary: '' }));
+      await fetchBaseData();
+    } catch (error) {
+      toast.error(getErrorMessage(error));
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const onSubmitReview = async (reviewId: string) => {
+    if (!canManageEmployees) return;
+
+    try {
+      setIsSubmitting(true);
+      await api.put(`/hcm/performance-reviews/${reviewId}/submit`, { status: 'SUBMITTED' });
+      toast.success('Review submitted');
+      await fetchBaseData();
+    } catch (error) {
+      toast.error(getErrorMessage(error));
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const onCreateObjective = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!canManageEmployees) return;
+    if (!objectiveForm.employeeId || !objectiveForm.title.trim()) return toast.error('Employee and objective title are required');
+
+    try {
+      setIsSubmitting(true);
+      await api.post('/hcm/objectives', {
+        employeeId: objectiveForm.employeeId,
+        title: objectiveForm.title,
+        dueDate: objectiveForm.dueDate || null,
+      });
+      toast.success('Objective created');
+      setObjectiveForm((prev) => ({ ...prev, title: '' }));
+      await fetchBaseData();
+    } catch (error) {
+      toast.error(getErrorMessage(error));
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const onUpdateKeyResult = async (keyResultId: string, currentValue: number, targetValue: number | null) => {
+    if (!canManageEmployees) return;
+    const input = window.prompt('Update current value', String(currentValue));
+    if (input == null) return;
+    const nextValue = Number(input);
+    if (Number.isNaN(nextValue)) return toast.error('Current value must be a number');
+
+    try {
+      setIsSubmitting(true);
+      await api.put(`/hcm/key-results/${keyResultId}`, {
+        currentValue: nextValue,
+        targetValue,
+      });
+      toast.success('Key result updated');
+      await fetchBaseData();
+    } catch (error) {
+      toast.error(getErrorMessage(error));
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const onCreateLearningCourse = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!canManageEmployees) return;
+    if (!learningCourseForm.title.trim()) return toast.error('Course title is required');
+
+    try {
+      setIsSubmitting(true);
+      await api.post('/hcm/learning-courses', {
+        officeId: selectedOfficeId,
+        title: learningCourseForm.title,
+        provider: learningCourseForm.provider || null,
+        durationHours: Number(learningCourseForm.durationHours || 0),
+      });
+      toast.success('Learning course created');
+      setLearningCourseForm((prev) => ({ ...prev, title: '', provider: '' }));
+      await fetchBaseData();
+    } catch (error) {
+      toast.error(getErrorMessage(error));
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const onRequestLearningEnrollment = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!learningRequestForm.employeeId || !learningRequestForm.courseId) {
+      return toast.error('Employee and course are required for enrollment');
+    }
+
+    try {
+      setIsSubmitting(true);
+      await api.post('/hcm/learning-enrollments', {
+        employeeId: learningRequestForm.employeeId,
+        courseId: learningRequestForm.courseId,
+      });
+      toast.success('Enrollment request submitted');
+      await fetchBaseData();
+    } catch (error) {
+      toast.error(getErrorMessage(error));
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const onDecideLearningEnrollment = async (id: string, status: LearningEnrollment['status']) => {
+    if (!canManageEmployees) return;
+    try {
+      setIsSubmitting(true);
+      await api.put(`/hcm/learning-enrollments/${id}/decision`, { status });
+      toast.success(`Enrollment marked as ${status.replace('_', ' ')}`);
+      await fetchBaseData();
+    } catch (error) {
+      toast.error(getErrorMessage(error));
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const onCreateWorkforcePlan = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!canManageEmployees) return;
+    if (!selectedOfficeId) return toast.error('Select an office first');
+
+    try {
+      setIsSubmitting(true);
+      await api.post('/hcm/workforce-plans', {
+        officeId: selectedOfficeId,
+        department: workforcePlanForm.department || null,
+        plannedHeadcount: Number(workforcePlanForm.plannedHeadcount || 0),
+        currentHeadcount: Number(workforcePlanForm.currentHeadcount || 0),
+        hiringNeeded: Number(workforcePlanForm.hiringNeeded || 0),
+        targetDate: workforcePlanForm.targetDate || null,
+      });
+      toast.success('Workforce plan created');
+      setWorkforcePlanForm((prev) => ({ ...prev, department: '', plannedHeadcount: '0', currentHeadcount: '0', hiringNeeded: '0' }));
+      await fetchBaseData();
+    } catch (error) {
+      toast.error(getErrorMessage(error));
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const onCreateSelfServiceRequest = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selfServiceForm.employeeId || !selfServiceForm.title.trim()) return toast.error('Employee and title are required');
+
+    try {
+      setIsSubmitting(true);
+      await api.post('/hcm/self-service-requests', {
+        officeId: selectedOfficeId,
+        employeeId: selfServiceForm.employeeId,
+        requestType: selfServiceForm.requestType,
+        title: selfServiceForm.title,
+        details: selfServiceForm.details || null,
+      });
+      toast.success('Self-service request submitted');
+      setSelfServiceForm((prev) => ({ ...prev, title: '', details: '' }));
+      await fetchBaseData();
+    } catch (error) {
+      toast.error(getErrorMessage(error));
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const onDecideSelfService = async (id: string, status: 'APPROVED' | 'REJECTED') => {
+    if (!canManageEmployees) return;
+    try {
+      setIsSubmitting(true);
+      await api.put(`/hcm/self-service-requests/${id}/decision`, { status });
+      toast.success(`Request ${status.toLowerCase()}`);
       await fetchBaseData();
     } catch (error) {
       toast.error(getErrorMessage(error));
@@ -530,6 +1073,290 @@ export function HCMWorkspace() {
                     )) : <tr><td colSpan={6} className="px-3 py-8 text-center text-[var(--muted-foreground)]">No payroll runs available.</td></tr>}
                   </tbody>
                 </table>
+              </div>
+            </div>
+          </section>
+        </div>
+      ) : null}
+
+      {!isLoading && activeTab === 'talent' ? (
+        <div className="grid gap-6 xl:grid-cols-12">
+          <section className="xl:col-span-4 rounded-2xl border border-[var(--border)] bg-[var(--card)] p-5 space-y-6">
+            <div>
+              <h2 className="mb-3 text-lg font-semibold">Open Position</h2>
+              {!canManageEmployees ? <p className="rounded-lg border border-[var(--border)] bg-[var(--background)] px-3 py-2 text-sm text-[var(--muted-foreground)]">You have read-only access for recruitment setup.</p> : (
+                <form onSubmit={onCreatePosition} className="space-y-3">
+                  <input value={positionForm.title} onChange={(e) => setPositionForm((p) => ({ ...p, title: e.target.value }))} placeholder="Role title" className="w-full rounded-md border border-[var(--input)] bg-[var(--background)] px-3 py-2" required />
+                  <input value={positionForm.department} onChange={(e) => setPositionForm((p) => ({ ...p, department: e.target.value }))} placeholder="Department" className="w-full rounded-md border border-[var(--input)] bg-[var(--background)] px-3 py-2" />
+                  <div className="grid grid-cols-2 gap-3">
+                    <select value={positionForm.employmentType} onChange={(e) => setPositionForm((p) => ({ ...p, employmentType: e.target.value as Employee['employmentType'] }))} className="rounded-md border border-[var(--input)] bg-[var(--background)] px-3 py-2"><option value="FULL_TIME">Full Time</option><option value="PART_TIME">Part Time</option><option value="CONTRACT">Contract</option><option value="INTERN">Intern</option></select>
+                    <input type="number" min="1" value={positionForm.targetHires} onChange={(e) => setPositionForm((p) => ({ ...p, targetHires: e.target.value }))} className="rounded-md border border-[var(--input)] bg-[var(--background)] px-3 py-2" />
+                  </div>
+                  <select value={positionForm.officeId} onChange={(e) => setPositionForm((p) => ({ ...p, officeId: e.target.value }))} className="w-full rounded-md border border-[var(--input)] bg-[var(--background)] px-3 py-2" required><option value="">Select Office</option>{offices.map((office) => <option key={office.id} value={office.id}>{office.name}</option>)}</select>
+                  <button type="submit" disabled={isSubmitting} className="inline-flex w-full items-center justify-center gap-2 rounded-md bg-[var(--primary)] px-4 py-2.5 font-semibold text-black disabled:opacity-60">{isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : null}Create Position</button>
+                </form>
+              )}
+            </div>
+
+            <div>
+              <h2 className="mb-3 text-lg font-semibold">Add Candidate</h2>
+              <form onSubmit={onAddCandidate} className="space-y-3">
+                <select value={applicationForm.recruitmentPositionId} onChange={(e) => setApplicationForm((p) => ({ ...p, recruitmentPositionId: e.target.value }))} className="w-full rounded-md border border-[var(--input)] bg-[var(--background)] px-3 py-2" required><option value="">Select Position</option>{scopedPositions.map((position) => <option key={position.id} value={position.id}>{position.positionCode} • {position.title}</option>)}</select>
+                <input value={applicationForm.fullName} onChange={(e) => setApplicationForm((p) => ({ ...p, fullName: e.target.value }))} placeholder="Candidate full name" className="w-full rounded-md border border-[var(--input)] bg-[var(--background)] px-3 py-2" required />
+                <input value={applicationForm.email} onChange={(e) => setApplicationForm((p) => ({ ...p, email: e.target.value }))} placeholder="Email" className="w-full rounded-md border border-[var(--input)] bg-[var(--background)] px-3 py-2" />
+                <input value={applicationForm.phone} onChange={(e) => setApplicationForm((p) => ({ ...p, phone: e.target.value }))} placeholder="Phone" className="w-full rounded-md border border-[var(--input)] bg-[var(--background)] px-3 py-2" />
+                <div className="grid grid-cols-2 gap-3">
+                  <input value={applicationForm.source} onChange={(e) => setApplicationForm((p) => ({ ...p, source: e.target.value }))} placeholder="Source" className="rounded-md border border-[var(--input)] bg-[var(--background)] px-3 py-2" />
+                  <input type="number" min="0" max="10" step="0.1" value={applicationForm.score} onChange={(e) => setApplicationForm((p) => ({ ...p, score: e.target.value }))} placeholder="Score" className="rounded-md border border-[var(--input)] bg-[var(--background)] px-3 py-2" />
+                </div>
+                <button type="submit" disabled={isSubmitting} className="inline-flex w-full items-center justify-center gap-2 rounded-md border border-[var(--border)] bg-[var(--background)] px-4 py-2.5 font-medium disabled:opacity-60">{isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : null}Add Candidate</button>
+              </form>
+            </div>
+          </section>
+
+          <section className="xl:col-span-8 space-y-6">
+            <div className="rounded-2xl border border-[var(--border)] bg-[var(--card)] p-5">
+              <h2 className="mb-4 text-lg font-semibold">Recruitment Pipeline</h2>
+              <div className="overflow-hidden rounded-xl border border-[var(--border)]">
+                <table className="w-full text-sm">
+                  <thead className="bg-[var(--muted)]/40 text-[var(--muted-foreground)]"><tr><th className="px-3 py-2 text-left">Position</th><th className="px-3 py-2 text-left">Type</th><th className="px-3 py-2 text-right">Target</th><th className="px-3 py-2 text-right">Filled</th><th className="px-3 py-2 text-right">Applications</th><th className="px-3 py-2 text-left">Status</th></tr></thead>
+                  <tbody>
+                    {scopedPositions.length ? scopedPositions.map((position) => (
+                      <tr key={position.id} className="border-t border-[var(--border)]"><td className="px-3 py-2"><div className="font-medium">{position.title}</div><div className="text-xs text-[var(--muted-foreground)]">{position.positionCode} {position.department ? `• ${position.department}` : ''}</div></td><td className="px-3 py-2">{position.employmentType.replace('_', ' ')}</td><td className="px-3 py-2 text-right">{position.targetHires}</td><td className="px-3 py-2 text-right">{position.openingsFilled}</td><td className="px-3 py-2 text-right">{position._count?.applications ?? 0}</td><td className="px-3 py-2"><span className={`rounded-full px-2 py-0.5 text-xs font-medium ${badgeClass(position.status)}`}>{position.status.replace('_', ' ')}</span></td></tr>
+                    )) : <tr><td colSpan={6} className="px-3 py-8 text-center text-[var(--muted-foreground)]">No recruitment positions found.</td></tr>}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-[var(--border)] bg-[var(--card)] p-5">
+              <div className="mb-4 flex items-center justify-between gap-3"><h2 className="text-lg font-semibold">Candidate Funnel</h2><select value={candidateStageFilter} onChange={(e) => setCandidateStageFilter(e.target.value as 'ALL' | CandidateApplication['stage'])} className="rounded-md border border-[var(--input)] bg-[var(--background)] px-3 py-2 text-sm"><option value="ALL">All Stages</option><option value="APPLIED">Applied</option><option value="SCREENING">Screening</option><option value="INTERVIEW">Interview</option><option value="OFFER">Offer</option><option value="HIRED">Hired</option><option value="REJECTED">Rejected</option></select></div>
+              <div className="overflow-hidden rounded-xl border border-[var(--border)]">
+                <table className="w-full text-sm">
+                  <thead className="bg-[var(--muted)]/40 text-[var(--muted-foreground)]"><tr><th className="px-3 py-2 text-left">Candidate</th><th className="px-3 py-2 text-left">Position</th><th className="px-3 py-2 text-left">Source</th><th className="px-3 py-2 text-right">Score</th><th className="px-3 py-2 text-left">Stage</th><th className="px-3 py-2 text-right">Action</th></tr></thead>
+                  <tbody>
+                    {filteredApplications.length ? filteredApplications.map((candidate) => (
+                      <tr key={candidate.id} className="border-t border-[var(--border)]"><td className="px-3 py-2"><div className="font-medium">{candidate.fullName}</div><div className="text-xs text-[var(--muted-foreground)]">{candidate.email || '-'} {candidate.phone ? `• ${candidate.phone}` : ''}</div></td><td className="px-3 py-2">{candidate.recruitmentPosition.title}</td><td className="px-3 py-2">{candidate.source || '-'}</td><td className="px-3 py-2 text-right">{candidate.score ?? '-'}</td><td className="px-3 py-2"><span className={`rounded-full px-2 py-0.5 text-xs font-medium ${badgeClass(candidate.stage)}`}>{candidate.stage}</span></td><td className="px-3 py-2 text-right">{canManageEmployees ? <select value={candidate.stage} onChange={(e) => onUpdateCandidateStage(candidate.id, e.target.value as CandidateApplication['stage'])} className="rounded-md border border-[var(--input)] bg-[var(--background)] px-2 py-1 text-xs"><option value="APPLIED">Applied</option><option value="SCREENING">Screening</option><option value="INTERVIEW">Interview</option><option value="OFFER">Offer</option><option value="HIRED">Hired</option><option value="REJECTED">Rejected</option></select> : <span className="text-xs text-[var(--muted-foreground)]">-</span>}</td></tr>
+                    )) : <tr><td colSpan={6} className="px-3 py-8 text-center text-[var(--muted-foreground)]">No candidate applications found.</td></tr>}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </section>
+        </div>
+      ) : null}
+
+      {!isLoading && activeTab === 'performance' ? (
+        <div className="grid gap-6 xl:grid-cols-12">
+          <section className="xl:col-span-4 rounded-2xl border border-[var(--border)] bg-[var(--card)] p-5 space-y-6">
+            <div>
+              <h2 className="mb-3 text-lg font-semibold">Create Goal</h2>
+              {!canManageEmployees ? <p className="rounded-lg border border-[var(--border)] bg-[var(--background)] px-3 py-2 text-sm text-[var(--muted-foreground)]">You have read-only access for performance setup.</p> : (
+                <form onSubmit={onCreateGoal} className="space-y-3">
+                  <select value={goalForm.employeeId} onChange={(e) => setGoalForm((p) => ({ ...p, employeeId: e.target.value }))} className="w-full rounded-md border border-[var(--input)] bg-[var(--background)] px-3 py-2" required><option value="">Select Employee</option>{employees.map((employee) => <option key={employee.id} value={employee.id}>{employee.firstName} {employee.lastName} ({employee.employeeCode})</option>)}</select>
+                  <input value={goalForm.title} onChange={(e) => setGoalForm((p) => ({ ...p, title: e.target.value }))} placeholder="Goal title" className="w-full rounded-md border border-[var(--input)] bg-[var(--background)] px-3 py-2" required />
+                  <div className="grid grid-cols-2 gap-3"><input type="number" min="0" step="0.01" value={goalForm.targetValue} onChange={(e) => setGoalForm((p) => ({ ...p, targetValue: e.target.value }))} placeholder="Target value" className="rounded-md border border-[var(--input)] bg-[var(--background)] px-3 py-2" /><input type="number" min="0.1" step="0.1" value={goalForm.weight} onChange={(e) => setGoalForm((p) => ({ ...p, weight: e.target.value }))} placeholder="Weight" className="rounded-md border border-[var(--input)] bg-[var(--background)] px-3 py-2" /></div>
+                  <input type="date" value={goalForm.dueDate} onChange={(e) => setGoalForm((p) => ({ ...p, dueDate: e.target.value }))} className="w-full rounded-md border border-[var(--input)] bg-[var(--background)] px-3 py-2" />
+                  <button type="submit" disabled={isSubmitting} className="inline-flex w-full items-center justify-center gap-2 rounded-md bg-[var(--primary)] px-4 py-2.5 font-semibold text-black disabled:opacity-60">{isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : null}Create Goal</button>
+                </form>
+              )}
+            </div>
+
+            <div>
+              <h2 className="mb-3 text-lg font-semibold">Create Review</h2>
+              <form onSubmit={onCreateReview} className="space-y-3">
+                <select value={reviewForm.employeeId} onChange={(e) => setReviewForm((p) => ({ ...p, employeeId: e.target.value }))} className="w-full rounded-md border border-[var(--input)] bg-[var(--background)] px-3 py-2" required><option value="">Select Employee</option>{employees.map((employee) => <option key={employee.id} value={employee.id}>{employee.firstName} {employee.lastName} ({employee.employeeCode})</option>)}</select>
+                <div className="grid grid-cols-2 gap-3"><input type="date" value={reviewForm.periodStart} onChange={(e) => setReviewForm((p) => ({ ...p, periodStart: e.target.value }))} className="rounded-md border border-[var(--input)] bg-[var(--background)] px-3 py-2" required /><input type="date" value={reviewForm.periodEnd} onChange={(e) => setReviewForm((p) => ({ ...p, periodEnd: e.target.value }))} className="rounded-md border border-[var(--input)] bg-[var(--background)] px-3 py-2" required /></div>
+                <input type="number" min="0" max="5" step="0.1" value={reviewForm.rating} onChange={(e) => setReviewForm((p) => ({ ...p, rating: e.target.value }))} placeholder="Rating (0-5)" className="w-full rounded-md border border-[var(--input)] bg-[var(--background)] px-3 py-2" />
+                <textarea value={reviewForm.summary} onChange={(e) => setReviewForm((p) => ({ ...p, summary: e.target.value }))} placeholder="Review summary" className="h-20 w-full rounded-md border border-[var(--input)] bg-[var(--background)] px-3 py-2" />
+                <button type="submit" disabled={isSubmitting || !canManageEmployees} className="inline-flex w-full items-center justify-center gap-2 rounded-md border border-[var(--border)] bg-[var(--background)] px-4 py-2.5 font-medium disabled:opacity-60">{isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : null}Create Review</button>
+              </form>
+            </div>
+          </section>
+
+          <section className="xl:col-span-8 space-y-6">
+            <div className="rounded-2xl border border-[var(--border)] bg-[var(--card)] p-5">
+              <div className="mb-4 flex items-center justify-between gap-3"><h2 className="text-lg font-semibold">Goal Tracker</h2><select value={goalStatusFilter} onChange={(e) => setGoalStatusFilter(e.target.value as 'ALL' | PerformanceGoal['status'])} className="rounded-md border border-[var(--input)] bg-[var(--background)] px-3 py-2 text-sm"><option value="ALL">All Status</option><option value="DRAFT">Draft</option><option value="ACTIVE">Active</option><option value="AT_RISK">At Risk</option><option value="COMPLETED">Completed</option><option value="CANCELLED">Cancelled</option></select></div>
+              <div className="overflow-hidden rounded-xl border border-[var(--border)]">
+                <table className="w-full text-sm">
+                  <thead className="bg-[var(--muted)]/40 text-[var(--muted-foreground)]"><tr><th className="px-3 py-2 text-left">Employee</th><th className="px-3 py-2 text-left">Goal</th><th className="px-3 py-2 text-right">Progress</th><th className="px-3 py-2 text-left">Due Date</th><th className="px-3 py-2 text-left">Status</th><th className="px-3 py-2 text-right">Action</th></tr></thead>
+                  <tbody>
+                    {filteredGoals.length ? filteredGoals.map((goal) => (
+                      <tr key={goal.id} className="border-t border-[var(--border)]"><td className="px-3 py-2">{goal.employee.firstName} {goal.employee.lastName}</td><td className="px-3 py-2"><div className="font-medium">{goal.title}</div><div className="text-xs text-[var(--muted-foreground)]">Weight {goal.weight}</div></td><td className="px-3 py-2 text-right">{goal.currentValue}{goal.targetValue == null ? '' : ` / ${goal.targetValue}`}</td><td className="px-3 py-2">{goal.dueDate ? goal.dueDate.slice(0, 10) : '-'}</td><td className="px-3 py-2"><span className={`rounded-full px-2 py-0.5 text-xs font-medium ${badgeClass(goal.status)}`}>{goal.status.replace('_', ' ')}</span></td><td className="px-3 py-2 text-right">{canManageEmployees ? <button onClick={() => onUpdateGoalProgress(goal.id, goal.currentValue, goal.targetValue)} className="rounded-md bg-cyan-500/20 px-2 py-1 text-xs text-cyan-300">Update</button> : <span className="text-xs text-[var(--muted-foreground)]">-</span>}</td></tr>
+                    )) : <tr><td colSpan={6} className="px-3 py-8 text-center text-[var(--muted-foreground)]">No performance goals found.</td></tr>}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-[var(--border)] bg-[var(--card)] p-5">
+              <div className="mb-4 flex items-center justify-between gap-3"><h2 className="text-lg font-semibold">Review Cycles</h2><select value={reviewStatusFilter} onChange={(e) => setReviewStatusFilter(e.target.value as 'ALL' | PerformanceReview['status'])} className="rounded-md border border-[var(--input)] bg-[var(--background)] px-3 py-2 text-sm"><option value="ALL">All Status</option><option value="DRAFT">Draft</option><option value="SUBMITTED">Submitted</option><option value="ACKNOWLEDGED">Acknowledged</option><option value="FINALIZED">Finalized</option></select></div>
+              <div className="overflow-hidden rounded-xl border border-[var(--border)]">
+                <table className="w-full text-sm">
+                  <thead className="bg-[var(--muted)]/40 text-[var(--muted-foreground)]"><tr><th className="px-3 py-2 text-left">Employee</th><th className="px-3 py-2 text-left">Period</th><th className="px-3 py-2 text-right">Rating</th><th className="px-3 py-2 text-left">Reviewer</th><th className="px-3 py-2 text-left">Status</th><th className="px-3 py-2 text-right">Action</th></tr></thead>
+                  <tbody>
+                    {filteredReviews.length ? filteredReviews.map((review) => (
+                      <tr key={review.id} className="border-t border-[var(--border)]"><td className="px-3 py-2">{review.employee.firstName} {review.employee.lastName}</td><td className="px-3 py-2">{review.periodStart.slice(0, 10)} to {review.periodEnd.slice(0, 10)}</td><td className="px-3 py-2 text-right">{review.rating ?? '-'}</td><td className="px-3 py-2">{review.reviewer?.name || '-'}</td><td className="px-3 py-2"><span className={`rounded-full px-2 py-0.5 text-xs font-medium ${badgeClass(review.status)}`}>{review.status}</span></td><td className="px-3 py-2 text-right">{canManageEmployees && review.status === 'DRAFT' ? <button onClick={() => onSubmitReview(review.id)} className="rounded-md bg-emerald-500/20 px-2 py-1 text-xs text-emerald-300">Submit</button> : <span className="text-xs text-[var(--muted-foreground)]">-</span>}</td></tr>
+                    )) : <tr><td colSpan={6} className="px-3 py-8 text-center text-[var(--muted-foreground)]">No performance reviews found.</td></tr>}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-[var(--border)] bg-[var(--card)] p-5">
+              <h2 className="mb-4 text-lg font-semibold">Objectives & Key Results</h2>
+              <div className="grid gap-4 lg:grid-cols-2">
+                <form onSubmit={onCreateObjective} className="space-y-3 rounded-xl border border-[var(--border)] bg-[var(--background)] p-4">
+                  <h3 className="text-sm font-semibold uppercase tracking-[0.08em] text-[var(--muted-foreground)]">Create Objective</h3>
+                  <select value={objectiveForm.employeeId} onChange={(e) => setObjectiveForm((p) => ({ ...p, employeeId: e.target.value }))} className="w-full rounded-md border border-[var(--input)] bg-[var(--card)] px-3 py-2" required>
+                    <option value="">Select Employee</option>
+                    {employees.map((employee) => <option key={employee.id} value={employee.id}>{employee.firstName} {employee.lastName} ({employee.employeeCode})</option>)}
+                  </select>
+                  <input value={objectiveForm.title} onChange={(e) => setObjectiveForm((p) => ({ ...p, title: e.target.value }))} placeholder="Objective title" className="w-full rounded-md border border-[var(--input)] bg-[var(--card)] px-3 py-2" required />
+                  <input type="date" value={objectiveForm.dueDate} onChange={(e) => setObjectiveForm((p) => ({ ...p, dueDate: e.target.value }))} className="w-full rounded-md border border-[var(--input)] bg-[var(--card)] px-3 py-2" />
+                  <button type="submit" disabled={isSubmitting || !canManageEmployees} className="inline-flex w-full items-center justify-center gap-2 rounded-md bg-[var(--primary)] px-4 py-2.5 font-semibold text-black disabled:opacity-60">{isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : null}Save Objective</button>
+                </form>
+
+                <div className="rounded-xl border border-[var(--border)] bg-[var(--background)] p-4">
+                  <h3 className="mb-3 text-sm font-semibold uppercase tracking-[0.08em] text-[var(--muted-foreground)]">Objective Rollup</h3>
+                  <div className="space-y-3 max-h-72 overflow-auto pr-1">
+                    {filteredObjectives.length ? filteredObjectives.map((objective) => (
+                      <div key={objective.id} className="rounded-lg border border-[var(--border)] bg-[var(--card)] p-3">
+                        <div className="flex items-start justify-between gap-2">
+                          <div>
+                            <p className="font-medium">{objective.title}</p>
+                            <p className="text-xs text-[var(--muted-foreground)]">{objective.employee.firstName} {objective.employee.lastName} ({objective.employee.employeeCode})</p>
+                          </div>
+                          <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${badgeClass(objective.status)}`}>{objective.status.replace('_', ' ')}</span>
+                        </div>
+                        <div className="mt-3 space-y-2">
+                          {objective.keyResults.length ? objective.keyResults.map((kr) => (
+                            <div key={kr.id} className="flex items-center justify-between rounded-md border border-[var(--border)] bg-[var(--background)] px-2 py-1.5 text-xs">
+                              <div>
+                                <p className="font-medium">{kr.title}</p>
+                                <p className="text-[var(--muted-foreground)]">{kr.currentValue}{kr.targetValue == null ? '' : ` / ${kr.targetValue}`}</p>
+                              </div>
+                              {canManageEmployees ? <button onClick={() => onUpdateKeyResult(kr.id, kr.currentValue, kr.targetValue)} className="rounded-md bg-cyan-500/20 px-2 py-1 text-cyan-300">Update</button> : null}
+                            </div>
+                          )) : <p className="text-xs text-[var(--muted-foreground)]">No key results attached yet.</p>}
+                        </div>
+                      </div>
+                    )) : <p className="rounded-md border border-dashed border-[var(--border)] px-3 py-6 text-center text-sm text-[var(--muted-foreground)]">No objectives available for this office.</p>}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-[var(--border)] bg-[var(--card)] p-5">
+              <h2 className="mb-4 text-lg font-semibold">Learning & Development</h2>
+              <div className="grid gap-4 lg:grid-cols-2">
+                <form onSubmit={onCreateLearningCourse} className="space-y-3 rounded-xl border border-[var(--border)] bg-[var(--background)] p-4">
+                  <h3 className="text-sm font-semibold uppercase tracking-[0.08em] text-[var(--muted-foreground)]">Create Course</h3>
+                  <input value={learningCourseForm.title} onChange={(e) => setLearningCourseForm((p) => ({ ...p, title: e.target.value }))} placeholder="Course title" className="w-full rounded-md border border-[var(--input)] bg-[var(--card)] px-3 py-2" required />
+                  <input value={learningCourseForm.provider} onChange={(e) => setLearningCourseForm((p) => ({ ...p, provider: e.target.value }))} placeholder="Provider" className="w-full rounded-md border border-[var(--input)] bg-[var(--card)] px-3 py-2" />
+                  <input type="number" min="0" step="1" value={learningCourseForm.durationHours} onChange={(e) => setLearningCourseForm((p) => ({ ...p, durationHours: e.target.value }))} placeholder="Duration in hours" className="w-full rounded-md border border-[var(--input)] bg-[var(--card)] px-3 py-2" />
+                  <button type="submit" disabled={isSubmitting || !canManageEmployees} className="inline-flex w-full items-center justify-center gap-2 rounded-md border border-[var(--border)] bg-[var(--card)] px-4 py-2.5 font-medium disabled:opacity-60">{isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : null}Create Course</button>
+                </form>
+
+                <form onSubmit={onRequestLearningEnrollment} className="space-y-3 rounded-xl border border-[var(--border)] bg-[var(--background)] p-4">
+                  <h3 className="text-sm font-semibold uppercase tracking-[0.08em] text-[var(--muted-foreground)]">Request Enrollment</h3>
+                  <select value={learningRequestForm.employeeId} onChange={(e) => setLearningRequestForm((p) => ({ ...p, employeeId: e.target.value }))} className="w-full rounded-md border border-[var(--input)] bg-[var(--card)] px-3 py-2" required>
+                    <option value="">Select Employee</option>
+                    {employees.map((employee) => <option key={employee.id} value={employee.id}>{employee.firstName} {employee.lastName} ({employee.employeeCode})</option>)}
+                  </select>
+                  <select value={learningRequestForm.courseId} onChange={(e) => setLearningRequestForm((p) => ({ ...p, courseId: e.target.value }))} className="w-full rounded-md border border-[var(--input)] bg-[var(--card)] px-3 py-2" required>
+                    <option value="">Select Course</option>
+                    {scopedLearningCourses.map((course) => <option key={course.id} value={course.id}>{course.title} {course.provider ? `• ${course.provider}` : ''}</option>)}
+                  </select>
+                  <button type="submit" disabled={isSubmitting} className="inline-flex w-full items-center justify-center gap-2 rounded-md bg-[var(--primary)] px-4 py-2.5 font-semibold text-black disabled:opacity-60">{isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : null}Request Enrollment</button>
+                </form>
+              </div>
+
+              <div className="mt-4 overflow-hidden rounded-xl border border-[var(--border)]">
+                <table className="w-full text-sm">
+                  <thead className="bg-[var(--muted)]/40 text-[var(--muted-foreground)]"><tr><th className="px-3 py-2 text-left">Employee</th><th className="px-3 py-2 text-left">Course</th><th className="px-3 py-2 text-left">Status</th><th className="px-3 py-2 text-right">Action</th></tr></thead>
+                  <tbody>
+                    {filteredLearningEnrollments.length ? filteredLearningEnrollments.map((row) => (
+                      <tr key={row.id} className="border-t border-[var(--border)]">
+                        <td className="px-3 py-2">{row.employee.firstName} {row.employee.lastName}</td>
+                        <td className="px-3 py-2">{row.course.title}</td>
+                        <td className="px-3 py-2"><span className={`rounded-full px-2 py-0.5 text-xs font-medium ${badgeClass(row.status)}`}>{row.status.replace('_', ' ')}</span></td>
+                        <td className="px-3 py-2 text-right">
+                          {canManageEmployees && ['REQUESTED', 'APPROVED', 'IN_PROGRESS'].includes(row.status) ? (
+                            <div className="inline-flex gap-2">
+                              {row.status === 'REQUESTED' ? <button onClick={() => onDecideLearningEnrollment(row.id, 'APPROVED')} className="rounded-md bg-emerald-500/20 px-2 py-1 text-xs text-emerald-300">Approve</button> : null}
+                              {row.status === 'REQUESTED' ? <button onClick={() => onDecideLearningEnrollment(row.id, 'REJECTED')} className="rounded-md bg-rose-500/20 px-2 py-1 text-xs text-rose-300">Reject</button> : null}
+                              {row.status === 'APPROVED' ? <button onClick={() => onDecideLearningEnrollment(row.id, 'IN_PROGRESS')} className="rounded-md bg-cyan-500/20 px-2 py-1 text-xs text-cyan-300">Start</button> : null}
+                              {row.status === 'IN_PROGRESS' ? <button onClick={() => onDecideLearningEnrollment(row.id, 'COMPLETED')} className="rounded-md bg-amber-500/20 px-2 py-1 text-xs text-amber-300">Complete</button> : null}
+                            </div>
+                          ) : <span className="text-xs text-[var(--muted-foreground)]">-</span>}
+                        </td>
+                      </tr>
+                    )) : <tr><td colSpan={4} className="px-3 py-8 text-center text-[var(--muted-foreground)]">No learning enrollments found.</td></tr>}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-[var(--border)] bg-[var(--card)] p-5">
+              <h2 className="mb-4 text-lg font-semibold">Workforce Planning</h2>
+              <form onSubmit={onCreateWorkforcePlan} className="grid gap-3 rounded-xl border border-[var(--border)] bg-[var(--background)] p-4 lg:grid-cols-5">
+                <input value={workforcePlanForm.department} onChange={(e) => setWorkforcePlanForm((p) => ({ ...p, department: e.target.value }))} placeholder="Department" className="rounded-md border border-[var(--input)] bg-[var(--card)] px-3 py-2" />
+                <input type="number" min="0" value={workforcePlanForm.plannedHeadcount} onChange={(e) => setWorkforcePlanForm((p) => ({ ...p, plannedHeadcount: e.target.value }))} placeholder="Planned" className="rounded-md border border-[var(--input)] bg-[var(--card)] px-3 py-2" />
+                <input type="number" min="0" value={workforcePlanForm.currentHeadcount} onChange={(e) => setWorkforcePlanForm((p) => ({ ...p, currentHeadcount: e.target.value }))} placeholder="Current" className="rounded-md border border-[var(--input)] bg-[var(--card)] px-3 py-2" />
+                <input type="number" min="0" value={workforcePlanForm.hiringNeeded} onChange={(e) => setWorkforcePlanForm((p) => ({ ...p, hiringNeeded: e.target.value }))} placeholder="Hiring Needed" className="rounded-md border border-[var(--input)] bg-[var(--card)] px-3 py-2" />
+                <input type="date" value={workforcePlanForm.targetDate} onChange={(e) => setWorkforcePlanForm((p) => ({ ...p, targetDate: e.target.value }))} className="rounded-md border border-[var(--input)] bg-[var(--card)] px-3 py-2" />
+                <button type="submit" disabled={isSubmitting || !canManageEmployees} className="lg:col-span-5 inline-flex items-center justify-center gap-2 rounded-md bg-[var(--primary)] px-4 py-2.5 font-semibold text-black disabled:opacity-60">{isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : null}Save Workforce Plan</button>
+              </form>
+
+              <div className="mt-4 overflow-hidden rounded-xl border border-[var(--border)]">
+                <table className="w-full text-sm">
+                  <thead className="bg-[var(--muted)]/40 text-[var(--muted-foreground)]"><tr><th className="px-3 py-2 text-left">Department</th><th className="px-3 py-2 text-right">Planned</th><th className="px-3 py-2 text-right">Current</th><th className="px-3 py-2 text-right">Hiring Needed</th><th className="px-3 py-2 text-left">Target Date</th><th className="px-3 py-2 text-left">Status</th></tr></thead>
+                  <tbody>
+                    {scopedWorkforcePlans.length ? scopedWorkforcePlans.map((plan) => (
+                      <tr key={plan.id} className="border-t border-[var(--border)]"><td className="px-3 py-2">{plan.department || '-'}</td><td className="px-3 py-2 text-right">{plan.plannedHeadcount}</td><td className="px-3 py-2 text-right">{plan.currentHeadcount}</td><td className="px-3 py-2 text-right">{plan.hiringNeeded}</td><td className="px-3 py-2">{plan.targetDate ? plan.targetDate.slice(0, 10) : '-'}</td><td className="px-3 py-2"><span className={`rounded-full px-2 py-0.5 text-xs font-medium ${badgeClass(plan.status)}`}>{plan.status.replace('_', ' ')}</span></td></tr>
+                    )) : <tr><td colSpan={6} className="px-3 py-8 text-center text-[var(--muted-foreground)]">No workforce plans found.</td></tr>}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-[var(--border)] bg-[var(--card)] p-5">
+              <h2 className="mb-4 text-lg font-semibold">Self-Service Approvals</h2>
+              <div className="grid gap-4 lg:grid-cols-2">
+                <form onSubmit={onCreateSelfServiceRequest} className="space-y-3 rounded-xl border border-[var(--border)] bg-[var(--background)] p-4">
+                  <h3 className="text-sm font-semibold uppercase tracking-[0.08em] text-[var(--muted-foreground)]">New Request</h3>
+                  <select value={selfServiceForm.employeeId} onChange={(e) => setSelfServiceForm((p) => ({ ...p, employeeId: e.target.value }))} className="w-full rounded-md border border-[var(--input)] bg-[var(--card)] px-3 py-2" required>
+                    <option value="">Select Employee</option>
+                    {employees.map((employee) => <option key={employee.id} value={employee.id}>{employee.firstName} {employee.lastName} ({employee.employeeCode})</option>)}
+                  </select>
+                  <select value={selfServiceForm.requestType} onChange={(e) => setSelfServiceForm((p) => ({ ...p, requestType: e.target.value as SelfServiceRequest['requestType'] }))} className="w-full rounded-md border border-[var(--input)] bg-[var(--card)] px-3 py-2">
+                    <option value="PROFILE_UPDATE">Profile Update</option>
+                    <option value="SHIFT_CHANGE">Shift Change</option>
+                    <option value="LEAVE_ADJUSTMENT">Leave Adjustment</option>
+                    <option value="TRAINING_REQUEST">Training Request</option>
+                    <option value="OTHER">Other</option>
+                  </select>
+                  <input value={selfServiceForm.title} onChange={(e) => setSelfServiceForm((p) => ({ ...p, title: e.target.value }))} placeholder="Request title" className="w-full rounded-md border border-[var(--input)] bg-[var(--card)] px-3 py-2" required />
+                  <textarea value={selfServiceForm.details} onChange={(e) => setSelfServiceForm((p) => ({ ...p, details: e.target.value }))} placeholder="Details" className="h-20 w-full rounded-md border border-[var(--input)] bg-[var(--card)] px-3 py-2" />
+                  <button type="submit" disabled={isSubmitting} className="inline-flex w-full items-center justify-center gap-2 rounded-md border border-[var(--border)] bg-[var(--card)] px-4 py-2.5 font-medium disabled:opacity-60">{isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : null}Submit Request</button>
+                </form>
+
+                <div className="overflow-hidden rounded-xl border border-[var(--border)]">
+                  <table className="w-full text-sm">
+                    <thead className="bg-[var(--muted)]/40 text-[var(--muted-foreground)]"><tr><th className="px-3 py-2 text-left">Employee</th><th className="px-3 py-2 text-left">Type</th><th className="px-3 py-2 text-left">Status</th><th className="px-3 py-2 text-right">Action</th></tr></thead>
+                    <tbody>
+                      {scopedSelfServiceRequests.length ? scopedSelfServiceRequests.map((request) => (
+                        <tr key={request.id} className="border-t border-[var(--border)]">
+                          <td className="px-3 py-2"><div className="font-medium">{request.employee.firstName} {request.employee.lastName}</div><div className="text-xs text-[var(--muted-foreground)]">{request.title}</div></td>
+                          <td className="px-3 py-2">{request.requestType.replace('_', ' ')}</td>
+                          <td className="px-3 py-2"><span className={`rounded-full px-2 py-0.5 text-xs font-medium ${badgeClass(request.status)}`}>{request.status}</span></td>
+                          <td className="px-3 py-2 text-right">{canManageEmployees && request.status === 'PENDING' ? <div className="inline-flex gap-2"><button onClick={() => onDecideSelfService(request.id, 'APPROVED')} className="rounded-md bg-emerald-500/20 px-2 py-1 text-xs text-emerald-300">Approve</button><button onClick={() => onDecideSelfService(request.id, 'REJECTED')} className="rounded-md bg-rose-500/20 px-2 py-1 text-xs text-rose-300">Reject</button></div> : <span className="text-xs text-[var(--muted-foreground)]">-</span>}</td>
+                        </tr>
+                      )) : <tr><td colSpan={4} className="px-3 py-8 text-center text-[var(--muted-foreground)]">No self-service requests found.</td></tr>}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             </div>
           </section>

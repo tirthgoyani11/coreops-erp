@@ -1,6 +1,8 @@
 const prisma = require('../config/prisma');
 const aiService = require('../services/aiService');
 const { postTransactionToGL } = require('../services/financePostingService');
+const { publishEvent } = require('../coreops/eventBus');
+const { evaluateEvent } = require('../coreops/automationEngine');
 
 /**
  * Maintenance Controller (Prisma)
@@ -886,13 +888,39 @@ exports.consumePart = async (req, res) => {
                 data: { actualCost: { increment: partCost } },
             });
 
-            return await tx.maintenanceTicket.findUnique({
+            const updatedTicket = await tx.maintenanceTicket.findUnique({
                 where: { id: req.params.id },
                 include: { sparePartsUsed: { include: { inventory: { select: { id: true, name: true } } } } },
             });
+
+            return {
+                ticket: updatedTicket,
+                usage: {
+                    ticketId: ticket.id,
+                    ticketNumber: ticket.ticketNumber,
+                    officeId: ticket.officeId,
+                    inventoryId,
+                    inventoryName: part.name,
+                    quantity: Number(quantity),
+                    unitCost: Number(part.unitCost || part.costPrice || 0),
+                    totalCost: Number(partCost.toFixed(2)),
+                },
+            };
         });
 
-        res.status(200).json({ success: true, data: result });
+        const spareUsageEvent = await publishEvent('inventory.sparepart.used', result.usage, {
+            source: 'maintenance.controller',
+            officeId: result.usage.officeId,
+            actorId: req.user?.id || null,
+        });
+
+        await evaluateEvent(spareUsageEvent, {
+            source: 'maintenance.controller',
+            officeId: result.usage.officeId,
+            actorId: req.user?.id || null,
+        });
+
+        res.status(200).json({ success: true, data: result.ticket });
     } catch (error) {
         res.status(500).json({ success: false, message: 'Server Error', error: error.message });
     }

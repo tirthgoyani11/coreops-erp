@@ -2,6 +2,22 @@ const { AsyncLocalStorage } = require('async_hooks');
 
 const asyncLocalStorage = new AsyncLocalStorage();
 
+function getStore() {
+    return asyncLocalStorage.getStore();
+}
+
+function setContextValue(key, value) {
+    const store = getStore();
+    if (!store) return;
+    store.set(key, value);
+}
+
+function getContextValue(key) {
+    const store = getStore();
+    if (!store) return undefined;
+    return store.get(key);
+}
+
 /**
  * Middleware to initialize AsyncLocalStorage for the request lifecycle.
  * This allows passing context (like userId, or collecting audit changes)
@@ -9,8 +25,14 @@ const asyncLocalStorage = new AsyncLocalStorage();
  */
 const reqContext = (req, res, next) => {
     asyncLocalStorage.run(new Map(), () => {
-        // We can pre-populate the map here, but since token verification 
-        // happens later, we just set up the empty Map to collect changes.
+        const store = getStore();
+        if (store) {
+            store.set('requestId', req.id || null);
+            store.set('traceId', req.traceId || req.id || null);
+            store.set('requestPath', req.originalUrl || req.url || null);
+            store.set('requestMethod', req.method || null);
+            store.set('startedAt', Date.now());
+        }
         next();
     });
 };
@@ -18,4 +40,7 @@ const reqContext = (req, res, next) => {
 module.exports = {
     asyncLocalStorage,
     reqContext,
+    getStore,
+    setContextValue,
+    getContextValue,
 };

@@ -23,6 +23,7 @@ const authorize = require('../middleware/authorize');
 const { filterByOffice } = require('../middleware/filterByOffice');
 const { assetValidation, paginationValidation } = require('../middleware/validation');
 const auditMiddleware = require('../middleware/auditMiddleware');
+const { idempotencyMiddleware } = require('../middleware/idempotency');
 
 // All routes require authentication
 router.use(verifyToken);
@@ -46,14 +47,28 @@ router.get('/:id/insights', assetValidation.getById, getAssetInsights);
 router.get('/:id/workflow-timeline', assetValidation.getById, getAssetWorkflowTimeline);
 
 // Mutation routes - MANAGER or higher with validation
-router.post('/', authorize('MANAGER', 'SUPER_ADMIN'), assetValidation.create, auditMiddleware('CREATE_ASSET', 'ASSET_RESOURCE'), createAsset);
+router.post(
+    '/',
+    authorize('MANAGER', 'SUPER_ADMIN'),
+    idempotencyMiddleware({ namespace: 'asset.create' }),
+    assetValidation.create,
+    auditMiddleware('CREATE_ASSET', 'ASSET_RESOURCE'),
+    createAsset
+);
 router.patch('/:id', authorize('MANAGER', 'SUPER_ADMIN'), assetValidation.update, auditMiddleware('UPDATE_ASSET', 'ASSET_RESOURCE'), updateAsset);
-router.patch('/:id/lifecycle', authorize('MANAGER', 'SUPER_ADMIN'), assetValidation.getById, auditMiddleware('UPDATE_ASSET_STATUS', 'ASSET_RESOURCE'), transitionAssetLifecycle);
+router.patch(
+    '/:id/lifecycle',
+    authorize('MANAGER', 'SUPER_ADMIN'),
+    idempotencyMiddleware({ namespace: 'asset.lifecycle' }),
+    assetValidation.getById,
+    auditMiddleware('UPDATE_ASSET_STATUS', 'ASSET_RESOURCE'),
+    transitionAssetLifecycle
+);
 router.delete('/:id', authorize('MANAGER', 'SUPER_ADMIN'), assetValidation.getById, auditMiddleware('DELETE_ASSET', 'ASSET_RESOURCE'), deleteAsset);
 
 // Check-in / Check-out
-router.post('/:id/checkout', authorize('MANAGER', 'SUPER_ADMIN'), checkoutAsset);
-router.post('/:id/checkin', authorize('MANAGER', 'SUPER_ADMIN'), checkinAsset);
+router.post('/:id/checkout', authorize('MANAGER', 'SUPER_ADMIN'), idempotencyMiddleware({ namespace: 'asset.checkout' }), checkoutAsset);
+router.post('/:id/checkin', authorize('MANAGER', 'SUPER_ADMIN'), idempotencyMiddleware({ namespace: 'asset.checkin' }), checkinAsset);
 
 // Predictive Maintenance
 const predictiveService = require('../services/predictiveService');

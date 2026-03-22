@@ -12,16 +12,17 @@ const {
 const verifyToken = require('../middleware/verifyToken');
 const authorize = require('../middleware/authorize');
 const { writeLimiter } = require('../middleware/rateLimiter');
+const { idempotencyMiddleware } = require('../middleware/idempotency');
 
 router.use(verifyToken);
 
 router.route('/transactions')
     .get(getTransactions)
-    .post(authorize('SUPER_ADMIN', 'ADMIN', 'MANAGER'), writeLimiter, createTransaction);
+    .post(authorize('SUPER_ADMIN', 'ADMIN', 'MANAGER'), writeLimiter, idempotencyMiddleware({ namespace: 'finance.transaction.create' }), createTransaction);
 
 router.route('/budgets')
     .get(getBudgets)
-    .post(authorize('SUPER_ADMIN', 'ADMIN', 'MANAGER'), writeLimiter, setBudget);
+    .post(authorize('SUPER_ADMIN', 'ADMIN', 'MANAGER'), writeLimiter, idempotencyMiddleware({ namespace: 'finance.budget.set' }), setBudget);
 
 // Phase 2 — Financial Intelligence
 router.get('/ap-aging', getAPAging);
