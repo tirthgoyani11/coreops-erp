@@ -348,7 +348,7 @@ export default function Reports() {
                         <select
                             value={selectedTemplateId}
                             onChange={(e) => setSelectedTemplateId(e.target.value)}
-                            className="w-full px-3 py-2 bg-[var(--background)] border border-[var(--input)] rounded-md"
+                            className="report-select w-full px-3 py-2 bg-[var(--background)] border border-[var(--input)] rounded-md"
                         >
                             {REPORT_TEMPLATES.map((template) => (
                                 <option key={template.id} value={template.id}>
@@ -375,7 +375,7 @@ export default function Reports() {
                         <select
                             value={selectedOffice}
                             onChange={(e) => setSelectedOffice(e.target.value)}
-                            className="w-full px-3 py-2 bg-[var(--background)] border border-[var(--input)] rounded-md"
+                            className="report-select w-full px-3 py-2 bg-[var(--background)] border border-[var(--input)] rounded-md"
                         >
                             <option value="ALL">All Offices</option>
                             {offices.map((office) => (
@@ -386,7 +386,7 @@ export default function Reports() {
 
                     <div className="space-y-2">
                         <label className="text-sm text-[var(--muted-foreground)]">Group By</label>
-                        <select value={groupBy} onChange={(e) => setGroupBy(e.target.value as 'day' | 'week' | 'month' | 'quarter')} className="w-full px-3 py-2 bg-[var(--background)] border border-[var(--input)] rounded-md">
+                        <select value={groupBy} onChange={(e) => setGroupBy(e.target.value as 'day' | 'week' | 'month' | 'quarter')} className="report-select w-full px-3 py-2 bg-[var(--background)] border border-[var(--input)] rounded-md">
                             <option value="day">Day</option>
                             <option value="week">Week</option>
                             <option value="month">Month</option>

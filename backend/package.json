@@ -5,12 +5,15 @@
   "main": "index.js",
   "scripts": {
     "start": "node server.js",
-    "dev": "set PORT=5001&& nodemon server.js",
-    "dev:5001": "set PORT=5001&& nodemon server.js",
+    "prisma:generate": "npx prisma generate",
+    "dev": "npm run prisma:generate && set PORT=5050&& nodemon server.js",
+    "dev:5050": "npm run prisma:generate && set PORT=5050&& nodemon server.js",
+    "dev:5001": "npm run prisma:generate && set PORT=5001&& nodemon server.js",
     "test": "echo \"Error: no test specified\" && exit 1",
     "db:seed": "node prisma/seed.js",
     "db:reset": "npx prisma migrate reset --force",
-    "db:seed:fresh": "node scripts/resetAndSeedFreshData.js"
+    "db:seed:fresh": "node scripts/resetAndSeedFreshData.js",
+    "hcm:backfill:payroll-expense": "node scripts/backfillPayrollExpenseTransactions.js"
   },
   "prisma": {
     "seed": "node prisma/seed.js"

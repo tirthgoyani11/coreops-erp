@@ -116,3 +116,19 @@ input:-webkit-autofill:active {
   background-size: 200% 100%;
   animation: shimmer 1.5s ease-in-out infinite;
 }
+
+/* Reports: keep native select menu options readable in dark and light themes */
+.report-select {
+  color: var(--text-primary);
+  background-color: var(--surface-background);
+}
+
+.report-select option {
+  color: #0f172a;
+  background-color: #ffffff;
+}
+
+.dark .report-select option {
+  color: #fafafa;
+  background-color: #18181b;
+}

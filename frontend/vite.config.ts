@@ -3,7 +3,7 @@ import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import path from "path"
 
-const proxyTarget = process.env.VITE_PROXY_TARGET || 'http://localhost:5001';
+const proxyTarget = process.env.VITE_PROXY_TARGET || 'http://localhost:5050';
 
 // https://vite.dev/config/
 export default defineConfig({
