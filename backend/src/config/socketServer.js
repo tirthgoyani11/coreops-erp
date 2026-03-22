@@ -24,7 +24,7 @@ let io = null;
 function init(httpServer) {
     const allowedOrigins = process.env.ALLOWED_ORIGINS
         ? process.env.ALLOWED_ORIGINS.split(',')
-        : ['http://localhost:5173', 'https://coreops.tirthgoyani.in'];
+        : ['https://coreops.tirthgoyani.in'];
 
     io = new Server(httpServer, {
         cors: {

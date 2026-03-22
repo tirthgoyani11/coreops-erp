@@ -79,7 +79,7 @@ const sendApprovalRequestEmail = async (recipient, ticketNumber, assetName, esti
                     </tr>
                 </table>
                 <p style="margin-top: 20px;">Please log in to CoreOps ERP to review and take action.</p>
-                <a href="${process.env.FRONTEND_URL || 'http://localhost:5173'}/maintenance" 
+                <a href="${process.env.FRONTEND_URL || 'https://coreops.tirthgoyani.in'}/maintenance" 
                    style="display: inline-block; background: #667eea; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; margin-top: 10px;">
                     Review Ticket
                 </a>
@@ -201,7 +201,7 @@ const sendLowStockAlertEmail = async (recipient, items) => {
                         ${itemsHtml}
                     </tbody>
                 </table>
-                <a href="${process.env.FRONTEND_URL || 'http://localhost:5173'}/inventory" 
+                <a href="${process.env.FRONTEND_URL || 'https://coreops.tirthgoyani.in'}/inventory" 
                    style="display: inline-block; background: #667eea; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; margin-top: 20px;">
                     View Inventory
                 </a>
@@ -307,7 +307,7 @@ const sendPOApprovalRequestEmail = async (recipient, poNumber, vendorName, total
                     </tr>
                 </table>
                 <p style="margin-top: 20px;">Please log in to CoreOps ERP to review and take action.</p>
-                <a href="${process.env.FRONTEND_URL || 'http://localhost:5173'}/purchase-orders" 
+                <a href="${process.env.FRONTEND_URL || 'https://coreops.tirthgoyani.in'}/purchase-orders" 
                    style="display: inline-block; background: #667eea; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; margin-top: 10px;">
                     Review PO
                 </a>

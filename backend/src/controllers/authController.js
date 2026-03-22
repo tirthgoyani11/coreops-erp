@@ -383,7 +383,7 @@ exports.forgotPassword = asyncHandler(async (req, res, next) => {
         },
     });
 
-    const resetUrl = `${process.env.FRONTEND_URL || 'http://localhost:5173'}/reset-password?token=${resetToken}`;
+    const resetUrl = `${process.env.FRONTEND_URL || 'https://coreops.tirthgoyani.in'}/reset-password?token=${resetToken}`;
 
     try {
         await emailService.sendPasswordResetEmail(user.email, resetUrl);
