@@ -242,9 +242,16 @@ export const NAV_ITEMS: NavItem[] = [
         icon: DollarSign,
         roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF', 'VIEWER', 'TECHNICIAN'],
         subItems: [
-            { label: 'Finance Control Tower', path: '/financial', roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF', 'VIEWER'] },
-            { label: 'Automation Feed', path: '/financial/automation', roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF', 'VIEWER'] },
-            { label: 'AI + OCR Intake', path: '/financial/ai-ocr', roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF'] }
+            { label: 'Overview', path: '/financial', roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF', 'VIEWER'] },
+            { label: 'General Ledger', path: '/gl', roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'VIEWER'] },
+            { label: 'Balance Sheet', path: '/balance-sheet', roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'VIEWER'] },
+            { label: 'Profit & Loss', path: '/profit-loss', roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'VIEWER'] },
+            { label: 'Cash Flow', path: '/cash-flow', roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'VIEWER'] },
+            { label: 'Enterprise Close & Consolidation', path: '/financial/enterprise-close', roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER'] },
+            { label: 'Exception Center', path: '/finance/exception-center', roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF'] },
+            { label: 'Bank Reconciliation', path: '/bank-reconciliation', roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER'] },
+            { label: 'Year End Close', path: '/year-end-close', roles: ['SUPER_ADMIN'] },
+            { label: 'Expense Claims', path: '/expense-claims', roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF', 'TECHNICIAN'] }
         ]
     },
 

@@ -8,7 +8,6 @@ import { GlobalShortcutsModal } from './components/ui/GlobalShortcutsModal';
 import { Toaster } from './components/ui/Toaster';
 import { useShortcut } from './hooks/useShortcuts';
 import { useAuthStore } from './stores/authStore';
-import Financial from './pages/financial/Financial';
 
 const PageLoader = () => (
   <div className="flex items-center justify-center min-h-[50vh] w-full">
@@ -65,6 +64,16 @@ const VendorDetail = lazy(() => import('./pages/procurement/VendorDetail').then(
 const PurchaseOrderList = lazy(() => import('./pages/procurement/PurchaseOrderList').then(m => ({ default: m.PurchaseOrderList })));
 const CreatePO = lazy(() => import('./pages/procurement/CreatePO').then(m => ({ default: m.CreatePO })));
 const PurchaseOrderDetail = lazy(() => import('./pages/procurement/PurchaseOrderDetail').then(m => ({ default: m.PurchaseOrderDetail })));
+const Financial = lazy(() => import('./pages/financial/Financial'));
+const GLDashboard = lazy(() => import('./pages/financial/GLDashboard').then(m => ({ default: m.GLDashboard })));
+const BalanceSheet = lazy(() => import('./pages/financial/BalanceSheet').then(m => ({ default: m.BalanceSheet })));
+const BankReconciliation = lazy(() => import('./pages/financial/BankReconciliation').then(m => ({ default: m.BankReconciliation })));
+const YearEndClose = lazy(() => import('./pages/financial/YearEndClose').then(m => ({ default: m.YearEndClose })));
+const ExpenseClaims = lazy(() => import('./pages/financial/ExpenseClaims').then(m => ({ default: m.ExpenseClaims })));
+const ProfitLoss = lazy(() => import('./pages/financial/ProfitLoss').then(m => ({ default: m.ProfitLoss })));
+const CashFlow = lazy(() => import('./pages/financial/CashFlow').then(m => ({ default: m.CashFlow })));
+const ExceptionCenter = lazy(() => import('./pages/financial/ExceptionCenter').then(m => ({ default: m.ExceptionCenter })));
+const InventoryAnalytics = lazy(() => import('./pages/financial/InventoryAnalytics').then(m => ({ default: m.InventoryAnalytics })));
 const Analytics = lazy(() => import('./pages/Analytics').then(m => ({ default: m.Analytics })));
 const Reports = lazy(() => import('./pages/Reports'));
 const Notifications = lazy(() => import('./pages/Notifications').then(m => ({ default: m.Notifications })));
@@ -258,8 +267,6 @@ function App() {
               <Route path="/financial/tax" element={<RoleGuard allowedRoles={['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF', 'VIEWER']}><Financial /></RoleGuard>} />
               <Route path="/financial/working-capital" element={<RoleGuard allowedRoles={['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF', 'VIEWER']}><Financial /></RoleGuard>} />
               <Route path="/financial/enterprise-close" element={<RoleGuard allowedRoles={['SUPER_ADMIN', 'ADMIN', 'MANAGER']}><Financial /></RoleGuard>} />
-              <Route path="/financial/automation" element={<RoleGuard allowedRoles={['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF', 'VIEWER']}><Financial /></RoleGuard>} />
-              <Route path="/financial/ai-ocr" element={<RoleGuard allowedRoles={['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF']}><Financial /></RoleGuard>} />
               <Route path="/financial/phase1-control-plane" element={<Navigate to="/financial" replace />} />
 
               {/* CRM & Sales */}
@@ -271,22 +278,22 @@ function App() {
               {/* Phase 2: HCM */}
               <Route path="/hcm" element={<RoleGuard allowedRoles={['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF', 'VIEWER']}><HCMWorkspace /></RoleGuard>} />
 
-              {/* Legacy financial URLs -> Unified control tower */}
-              <Route path="/gl" element={<Navigate to="/financial" replace />} />
-              <Route path="/balance-sheet" element={<Navigate to="/financial" replace />} />
-              <Route path="/bank-reconciliation" element={<Navigate to="/financial" replace />} />
-              <Route path="/year-end-close" element={<Navigate to="/financial" replace />} />
-              <Route path="/expense-claims" element={<Navigate to="/financial" replace />} />
-              <Route path="/profit-loss" element={<Navigate to="/financial" replace />} />
-              <Route path="/cash-flow" element={<Navigate to="/financial" replace />} />
-              <Route path="/inventory-analytics" element={<Navigate to="/financial" replace />} />
+              {/* Phase 2 — GL, P&L, Cash Flow, Inventory Analytics */}
+              <Route path="/gl" element={<RoleGuard allowedRoles={['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'VIEWER']}><GLDashboard /></RoleGuard>} />
+              <Route path="/balance-sheet" element={<RoleGuard allowedRoles={['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'VIEWER']}><BalanceSheet /></RoleGuard>} />
+              <Route path="/bank-reconciliation" element={<RoleGuard allowedRoles={['SUPER_ADMIN', 'ADMIN', 'MANAGER']}><BankReconciliation /></RoleGuard>} />
+              <Route path="/year-end-close" element={<RoleGuard allowedRoles={['SUPER_ADMIN']}><YearEndClose /></RoleGuard>} />
+              <Route path="/expense-claims" element={<RoleGuard allowedRoles={['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF', 'TECHNICIAN']}><ExpenseClaims /></RoleGuard>} />
+              <Route path="/profit-loss" element={<RoleGuard allowedRoles={['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'VIEWER']}><ProfitLoss /></RoleGuard>} />
+              <Route path="/cash-flow" element={<RoleGuard allowedRoles={['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'VIEWER']}><CashFlow /></RoleGuard>} />
+              <Route path="/inventory-analytics" element={<RoleGuard allowedRoles={['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF']}><InventoryAnalytics /></RoleGuard>} />
 
               <Route path="/finance/ap-aging" element={<Navigate to="/financial/working-capital" replace />} />
               <Route path="/finance/ar-aging" element={<Navigate to="/financial/working-capital" replace />} />
               <Route path="/finance/working-capital" element={<Navigate to="/financial/working-capital" replace />} />
               <Route path="/finance/enterprise-close" element={<Navigate to="/financial/enterprise-close" replace />} />
               <Route path="/finance/phase1-control-plane" element={<Navigate to="/financial" replace />} />
-              <Route path="/finance/exception-center" element={<Navigate to="/financial" replace />} />
+              <Route path="/finance/exception-center" element={<RoleGuard allowedRoles={['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF']}><ExceptionCenter /></RoleGuard>} />
 
               {/* Analytics - Not for Technician */}
               <Route
