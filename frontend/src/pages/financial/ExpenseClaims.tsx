@@ -56,6 +56,24 @@ export function ExpenseClaims() {
         setItems(items.filter((_, i) => i !== index));
     };
 
+    const normalizeScannedAmount = (value: unknown): { amount: string; fixed: boolean } => {
+        if (value === null || value === undefined || value === '') return { amount: '', fixed: false };
+
+        const raw = String(value).trim().replace(/[₹,\s]/g, '');
+        if (!raw) return { amount: '', fixed: false };
+
+        const parsed = Number(raw);
+        if (!Number.isFinite(parsed)) return { amount: '', fixed: false };
+
+        // If OCR drops decimal point (e.g., 38025.84 -> 3802584),
+        // correct only when the integer is unrealistically large for a single claim line.
+        if (!raw.includes('.') && /^\d+$/.test(raw) && parsed >= 1_000_000 && !raw.endsWith('00')) {
+            return { amount: (parsed / 100).toFixed(2), fixed: true };
+        }
+
+        return { amount: String(parsed), fixed: false };
+    };
+
     const handleScanReceipt = async (event: React.ChangeEvent<HTMLInputElement>) => {
         const file = event.target.files?.[0];
         if (!file) return;
@@ -76,6 +94,7 @@ export function ExpenseClaims() {
             const aiSource = res?.data?.data?.aiSource || 'unknown';
             const ocrMode = res?.data?.data?.ocrMode || 'high';
             const lineItems = Array.isArray(extracted.lineItems) ? extracted.lineItems : [];
+            let correctedCount = 0;
 
             if (extracted.vendorName || extracted.invoiceNumber || extracted.notes) {
                 const autoDescription = [
@@ -88,24 +107,38 @@ export function ExpenseClaims() {
             }
 
             if (lineItems.length > 0) {
-                const mappedItems = lineItems.slice(0, 20).map((line: any) => ({
-                    date: extracted.date || new Date().toISOString().split('T')[0],
-                    category: 'SUPPLIES',
-                    description: String(line.description || 'OCR Imported Item').slice(0, 200),
-                    amount: String(Number(line.total || line.unitPrice || 0) || ''),
-                }));
+                const mappedItems = lineItems.slice(0, 20).map((line: any) => {
+                    const normalized = normalizeScannedAmount(line.total || line.unitPrice || 0);
+                    if (normalized.fixed) correctedCount += 1;
+
+                    return {
+                        date: extracted.date || new Date().toISOString().split('T')[0],
+                        category: 'SUPPLIES',
+                        description: String(line.description || 'OCR Imported Item').slice(0, 200),
+                        amount: normalized.amount,
+                    };
+                });
                 setItems(mappedItems.length > 0 ? mappedItems : items);
-                setOcrMessage(`OCR (${ocrMode}, ${aiSource}) complete. Imported ${mappedItems.length} expense item(s).`);
+                setOcrMessage(
+                    `OCR (${ocrMode}, ${aiSource}) complete. Imported ${mappedItems.length} expense item(s).` +
+                    (correctedCount > 0 ? ` Auto-corrected decimal in ${correctedCount} amount(s).` : '')
+                );
             } else if (extracted.totalAmount) {
+                const normalized = normalizeScannedAmount(extracted.totalAmount);
+                if (normalized.fixed) correctedCount += 1;
+
                 setItems([
                     {
                         date: extracted.date || new Date().toISOString().split('T')[0],
                         category: 'SUPPLIES',
                         description: extracted.vendorName ? `Receipt from ${extracted.vendorName}` : 'OCR imported receipt',
-                        amount: String(Number(extracted.totalAmount)),
+                        amount: normalized.amount,
                     },
                 ]);
-                setOcrMessage(`OCR (${ocrMode}, ${aiSource}) complete. Total amount imported as one expense item.`);
+                setOcrMessage(
+                    `OCR (${ocrMode}, ${aiSource}) complete. Total amount imported as one expense item.` +
+                    (correctedCount > 0 ? ' Decimal point was auto-corrected.' : '')
+                );
             } else {
                 setOcrMessage(`OCR (${ocrMode}, ${aiSource}) complete, but no amount was detected. Please fill values manually.`);
             }

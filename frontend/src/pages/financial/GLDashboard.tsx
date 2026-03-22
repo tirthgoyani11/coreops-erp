@@ -468,9 +468,11 @@ function NewJournalEntryDialog({ open, onClose, accounts, onSuccess }: {
                                     onChange={e => { const n = [...lines]; n[i].accountId = e.target.value; setLines(n); }}
                                     className="col-span-4 bg-[var(--bg-primary)] border border-[var(--border-color)] rounded-md px-2 py-2 text-sm text-[var(--text-primary)]"
                                 >
-                                    <option value="">Select Account</option>
+                                    <option value="" style={{ color: '#111827', backgroundColor: '#ffffff' }}>Select Account</option>
                                     {accounts.map(a => (
-                                        <option key={a.id} value={a.id}>{a.code} - {a.name}</option>
+                                        <option key={a.id} value={a.id} style={{ color: '#111827', backgroundColor: '#ffffff' }}>
+                                            {a.code} - {a.name}
+                                        </option>
                                     ))}
                                 </select>
                                 <Input className="col-span-3" type="number" placeholder="Debit" value={line.debit}
