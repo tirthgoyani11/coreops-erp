@@ -12,7 +12,7 @@
  * NEVER lets the LLM generate Prisma/SQL. All DB ops are in agentExecutor.
  */
 
-const kaggleService = require('./kaggleInferenceService');
+const langchainService = require('./langchainService');
 const agentExecutor = require('./agentExecutor');
 const logger = require('../utils/logger');
 const prisma = require('../config/prisma');
@@ -24,6 +24,7 @@ const ENABLE_LOCAL_INTENT_CLASSIFIER = false;
 const INTENT_PATTERNS = [
     { intent: 'CREATE_ASSET', keywords: ['create asset', 'add asset', 'new asset', 'register asset', 'register this', 'bought a new', 'add a new', 'create a new'] },
     { intent: 'UPDATE_ASSET', keywords: ['update asset', 'edit asset', 'modify asset', 'change asset'] },
+    { intent: 'REMOVE_ASSET', keywords: ['remove asset', 'delete asset', 'trash asset', 'remove that', 'delete that'] },
     { intent: 'CREATE_TRANSACTION', keywords: ['create transaction', 'new transaction', 'add transaction', 'record expense', 'record income', 'new expense', 'new income', 'add expense', 'add income', 'make expense', 'make income'] },
     { intent: 'REFILL_INVENTORY', keywords: ['refill', 'restock', 'reorder stock', 'replenish', 'low stock refill', 'order more'] },
     { intent: 'APPROVE_PURCHASE', keywords: ['approve po', 'approve purchase', 'approve order', 'accept po', 'approve purch'] },
@@ -92,7 +93,7 @@ const INTENT_SYSTEM_PROMPT = `You are OpsPilot, the AI intent classifier for Cor
 Given a user command, output ONLY valid JSON with this exact schema:
 {"intent":"INTENT_NAME","entities":{...},"confidence":0.0-1.0}
 
-Valid intents: CREATE_ASSET, CREATE_TRANSACTION, REFILL_INVENTORY, APPROVE_PURCHASE, REJECT_PURCHASE, CLOSE_MAINTENANCE, CREATE_TICKET, UPDATE_ASSET, GET_LOW_STOCK, SET_BUDGET, MATCH_INVOICE, PROCESS_BILL, LIST_ASSETS, LIST_VENDORS, LIST_REQUISITIONS, LIST_RFQS, LIST_PURCHASE_ORDERS, LIST_TICKETS, LIST_INVENTORY, LIST_TRANSACTIONS, DASHBOARD_SUMMARY, CREATE_VENDOR, CREATE_PURCHASE_ORDER, CREATE_INVENTORY, VIEW_PROFIT_LOSS, VIEW_CASH_FLOW, VIEW_BALANCE_SHEET, LIST_GL_ACCOUNTS, CREATE_GL_ACCOUNT, VIEW_AUDIT_LOGS, LIST_NOTIFICATIONS, SEND_NOTIFICATION, LIST_OFFICES, CREATE_OFFICE, LIST_USERS, VIEW_ANALYTICS, LIST_DOCUMENTS, VIEW_PROFILE, UPDATE_TICKET, QUERY_DATA, DETECT_ANOMALY, FORECAST_BUDGET, GENERAL
+Valid intents: CREATE_ASSET, CREATE_TRANSACTION, REFILL_INVENTORY, APPROVE_PURCHASE, REJECT_PURCHASE, CLOSE_MAINTENANCE, CREATE_TICKET, UPDATE_ASSET, REMOVE_ASSET, GET_LOW_STOCK, SET_BUDGET, MATCH_INVOICE, PROCESS_BILL, LIST_ASSETS, LIST_VENDORS, LIST_REQUISITIONS, LIST_RFQS, LIST_PURCHASE_ORDERS, LIST_TICKETS, LIST_INVENTORY, LIST_TRANSACTIONS, DASHBOARD_SUMMARY, CREATE_VENDOR, CREATE_PURCHASE_ORDER, CREATE_INVENTORY, VIEW_PROFIT_LOSS, VIEW_CASH_FLOW, VIEW_BALANCE_SHEET, LIST_GL_ACCOUNTS, CREATE_GL_ACCOUNT, VIEW_AUDIT_LOGS, LIST_NOTIFICATIONS, SEND_NOTIFICATION, LIST_OFFICES, CREATE_OFFICE, LIST_USERS, VIEW_ANALYTICS, LIST_DOCUMENTS, VIEW_PROFILE, UPDATE_TICKET, QUERY_DATA, DETECT_ANOMALY, FORECAST_BUDGET, GENERAL
 
 Entity schemas per intent:
 - CREATE_ASSET: { assetName, assetCategory (LAPTOP|COMPUTER|PHONE|PRINTER|SERVER|NETWORK|FURNITURE|VEHICLE|EQUIPMENT|MACHINERY|OTHER), amount, manufacturer, model, description, serialNumber, condition (GOOD|FAIR|POOR|NEW), warrantyMonths, vendorName, assignedTo }
@@ -102,6 +103,10 @@ Entity schemas per intent:
 - APPROVE_PURCHASE / REJECT_PURCHASE: { poNumber }
 - CLOSE_MAINTENANCE: { ticketId, assetId }
 - CREATE_TICKET: { assetId, description, priority (LOW|MEDIUM|HIGH|CRITICAL) }
+- REMOVE_ASSET: { assetId }
+  IMPORTANT: For REMOVE_ASSET or UPDATE_ASSET, actively extract the assetId (ID, GUAI, or name) from previous messages if the user uses pronouns like "it" or "that".
+- SET_BUDGET: { category, amount, month, year }
+  IMPORTANT: Extract the exact category name (e.g. Marketing, IT) and numeric amount.
 - LIST_ASSETS / LIST_VENDORS / LIST_REQUISITIONS / LIST_RFQS / LIST_PURCHASE_ORDERS / LIST_TICKETS / LIST_INVENTORY / LIST_TRANSACTIONS: { limit, status }
 - DASHBOARD_SUMMARY: {}
 - CREATE_VENDOR: { vendorName, contactPerson, email, phone, address, gstNumber }
@@ -135,7 +140,7 @@ Formatting Rules:
 7. Never fabricate data — if missing, say "data not available"
 8. Keep answers concise and actionable
 9. Do NOT use # or ## or ### headers — use **bold text** instead
-10. Use bullet points (•) for lists, not dashes
+10. Use bullet points (-) for lists, not dashes
 11. Separate sections with a blank line for readability
 12. End with a brief actionable recommendation when relevant`;
 
@@ -146,29 +151,29 @@ Formatting Rules:
 1. Keep responses concise, warm, and professional
 2. Use **bold** for emphasis, never use # headers
 3. Use emojis naturally: 🖥️ assets, 📦 inventory, 📋 POs, 🔧 maintenance, 💰 budgets, 📊 analytics, ⚡ actions
-4. Use bullet points (•) for lists
+4. Use bullet points (-) for lists
 5. Use markdown tables only when showing structured data with 3+ rows
 6. Format currency as ₹X,XX,XXX
 7. Be action-oriented — tell users what you CAN DO, not just describe
 
 Capabilities you can EXECUTE (not just describe):
-• 🖥️ Create, update, list assets with smart auto-fill
-• 📦 Create inventory items, refill low stock, check stock levels
-• 📋 Create, list, approve, or reject purchase orders
-• 🔧 Create, update, close, list maintenance tickets
-• 💰 Set budgets, record transactions (income/expense)
-• 📊 Analytics, anomaly detection, budget forecasts, KPIs
-• 🔍 Search and query any ERP data
-• 📄 Invoice matching, bill processing
-• 🏢 Create & list vendors/suppliers
-• 💹 Profit & Loss, Cash Flow, Balance Sheet reports
-• 📒 Chart of Accounts — list & create GL accounts
-• 🛡️ View audit logs and system activity
-• 🔔 List & send notifications
-• 🏗️ List & create offices/branches
-• 👥 List users & team members
-• 📄 List uploaded documents
-• 👤 View your profile & account info
+- 🖥️ Create, update, list assets with smart auto-fill
+- 📦 Create inventory items, refill low stock, check stock levels
+- 📋 Create, list, approve, or reject purchase orders
+- 🔧 Create, update, close, list maintenance tickets
+- 💰 Set budgets, record transactions (income/expense)
+- 📊 Analytics, anomaly detection, budget forecasts, KPIs
+- 🔍 Search and query any ERP data
+- 📄 Invoice matching, bill processing
+- 🏢 Create & list vendors/suppliers
+- 💹 Profit & Loss, Cash Flow, Balance Sheet reports
+- 📒 Chart of Accounts — list & create GL accounts
+- 🛡️ View audit logs and system activity
+- 🔔 List & send notifications
+- 🏗️ List & create offices/branches
+- 👥 List users & team members
+- 📄 List uploaded documents
+- 👤 View your profile & account info
 
 When listing capabilities, show them as actionable commands the user can try.`;
 
@@ -379,59 +384,27 @@ function extractEntities(message, intent) {
     return entities;
 }
 
-// ─── JSON EXTRACTION FROM LLM OUTPUT ────────────────────────────
-function extractJSON(text) {
-    if (!text) return null;
+// JSON extraction is now handled by LangChain Structured Output
 
-    // Strip <think>...</think> blocks
-    const thinkEnd = text.indexOf('</think>');
-    if (thinkEnd !== -1) {
-        text = text.substring(thinkEnd + 8).trim();
-    }
-    text = text.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
-
-    // Try multiple extraction strategies
-    const strategies = [
-        (t) => JSON.parse(t),
-        (t) => JSON.parse(t.match(/```(?:json)?\s*([\s\S]*?)\s*```/i)?.[1]),
-        (t) => JSON.parse(t.match(/(\{[\s\S]*\})/)?.[1]),
-    ];
-
-    for (const fn of strategies) {
-        try {
-            const parsed = fn(text);
-            if (parsed && typeof parsed === 'object') {
-                // Ensure minimum schema
-                if (!parsed.intent) parsed.intent = 'GENERAL';
-                if (!parsed.entities) parsed.entities = {};
-                if (!parsed.confidence) parsed.confidence = 0.5;
-                return parsed;
-            }
-        } catch { }
-    }
-
-    return null;
-}
-
-// ─── CHAT MEMORY (success-only, hygiene-first) ──────────────────
+// ─── CHAT MEMORY (Full context for multi-turn slot filling) ──
 async function getChatMemory(userId, sessionId) {
-    if (!sessionId) return '';
+    if (!sessionId) return [];
     try {
         const ops = await prisma.aiOperation.findMany({
-            where: { sessionId, userId, status: 'AI_COMPLETED' }, // SUCCESS ONLY
+            where: { sessionId, userId },
             orderBy: { createdAt: 'desc' },
-            take: 3,
+            take: 4,
         });
-        if (ops.length === 0) return '';
+        if (ops.length === 0) return [];
 
-        let mem = '\n--- RECENT HISTORY ---\n';
+        const messages = [];
         for (const op of ops.reverse()) {
-            if (op.inputSummary) mem += `User: ${op.inputSummary}\n`;
-            if (op.explanation?.output) mem += `OpsPilot: ${String(op.explanation.output).substring(0, 200)}\n`;
+            if (op.inputSummary) messages.push(['user', op.inputSummary]);
+            if (op.explanation?.output) messages.push(['assistant', op.explanation.output]);
         }
-        return mem + '----------------------\n';
+        return messages;
     } catch {
-        return '';
+        return [];
     }
 }
 
@@ -481,40 +454,35 @@ async function processCommand(userMessage, context = {}) {
             };
         }
 
-        // ── Step 1: Intent classification ──
+        // ── Step 1: Intent classification (local rules) ──
         const procurementIntent = detectProcurementListIntent(userMessage);
-        let classification = procurementIntent || (ENABLE_LOCAL_INTENT_CLASSIFIER ? classifyLocally(userMessage) : null);
+        const localClassification = procurementIntent || (ENABLE_LOCAL_INTENT_CLASSIFIER ? classifyLocally(userMessage) : null);
+
+        let classification = { intent: 'GENERAL', confidence: 0, source: 'init' };
         let entities = {};
 
-        if (procurementIntent) {
-            modelsUsed.push({ model: 'procurement-entity-router', source: 'rule' });
-            entities = extractEntities(userMessage, classification.intent);
-            logger.info(`[Orchestrator] Procurement entity hit: ${classification.intent} (${classification.confidence})`);
-        } else if (classification) {
-            modelsUsed.push({ model: 'local-classifier', source: 'local' });
+        if (localClassification) {
+            modelsUsed.push({ model: 'local-classifier', source: localClassification.source });
+            classification = localClassification;
             entities = extractEntities(userMessage, classification.intent);
             logger.info(`[Orchestrator] Local hit: ${classification.intent} (${classification.confidence})`);
         } else {
-            // ── Step 2: LLM classification (Kaggle → Ollama → fallback) ──
-            logger.info('[Orchestrator] Ambiguous intent → calling LLM classifier...');
-            const llmResult = await kaggleService.intent(
-                userMessage,
-                buildRoleAwareIntentPrompt(context),
-                {
-                    providerPreference: context.providerPreference,
-                    modelPreference: context.modelPreference,
-                }
-            );
-            modelsUsed.push({ model: 'intent-llm', source: llmResult.source });
+            // ── Step 2: LangChain intent classifier (Kimi → Ollama fallback) ──
+            logger.info('[Orchestrator] Ambiguous intent → calling LangChain classifier...');
+            const history = await getChatMemory(context.userId, context.sessionId);
+            const systemPrompt = buildRoleAwareIntentPrompt(context);
+            
+            const result = await langchainService.classifyIntent(userMessage, systemPrompt, history);
+            modelsUsed.push({ model: 'intent-langchain', source: 'llm' });
 
-            const parsed = llmResult.parsed || extractJSON(llmResult.text);
-            if (parsed && parsed.intent) {
-                classification = { intent: parsed.intent, confidence: parsed.confidence || 0.7, source: 'llm' };
-                entities = { ...extractEntities(userMessage, parsed.intent), ...(parsed.entities || {}) };
+            if (result && result.intent) {
+                classification = { intent: result.intent, confidence: result.confidence || 0.7, source: 'langchain' };
+                // Merge deterministic entities with LLM-extracted entities
+                entities = { ...extractEntities(userMessage, result.intent), ...(result.entities || {}) };
             } else {
                 classification = { intent: 'GENERAL', confidence: 0.5, source: 'fallback' };
             }
-            logger.info(`[Orchestrator] LLM classified: ${classification.intent} (${classification.confidence})`);
+            logger.info(`[Orchestrator] LangChain classified: ${classification.intent} (${classification.confidence})`);
         }
 
         // ── Step 3: Validate extracted entities ──
@@ -532,12 +500,11 @@ async function processCommand(userMessage, context = {}) {
 
         // ── Step 4: Route to correct handler ──
         const actionIntents = [
-            'CREATE_ASSET', 'UPDATE_ASSET', 'CREATE_TRANSACTION', 'REFILL_INVENTORY',
+            'CREATE_ASSET', 'UPDATE_ASSET', 'REMOVE_ASSET', 'CREATE_TRANSACTION', 'REFILL_INVENTORY',
             'APPROVE_PURCHASE', 'REJECT_PURCHASE', 'CLOSE_MAINTENANCE', 'CREATE_TICKET',
             'GET_LOW_STOCK', 'GET_ASSET_STATS', 'SET_BUDGET', 'MATCH_INVOICE', 'PROCESS_BILL',
             'LIST_ASSETS', 'LIST_VENDORS', 'LIST_REQUISITIONS', 'LIST_RFQS', 'LIST_PURCHASE_ORDERS', 'LIST_TICKETS',
             'LIST_INVENTORY', 'LIST_TRANSACTIONS', 'DASHBOARD_SUMMARY',
-            // v5: full system coverage
             'CREATE_VENDOR', 'CREATE_PURCHASE_ORDER', 'CREATE_INVENTORY',
             'VIEW_PROFIT_LOSS', 'VIEW_CASH_FLOW', 'VIEW_BALANCE_SHEET',
             'LIST_GL_ACCOUNTS', 'CREATE_GL_ACCOUNT',
@@ -547,8 +514,9 @@ async function processCommand(userMessage, context = {}) {
         ];
 
         if (actionIntents.includes(classification.intent)) {
-            // ACTION → Execute deterministically, ZERO LLM calls
-            const execResult = await agentExecutor.execute(classification.intent, entities, context);
+            // ACTION → Execute deterministically
+            const execContext = { ...context, originalText: userMessage };
+            const execResult = await agentExecutor.execute(classification.intent, entities, execContext);
             if (execResult && execResult.success) {
                 finalResponse = execResult.message;
                 actions.push(execResult);
@@ -557,35 +525,24 @@ async function processCommand(userMessage, context = {}) {
             }
 
         } else if (['QUERY_DATA', 'DETECT_ANOMALY', 'FORECAST_BUDGET', 'GENERATE_REPORT', 'PREDICT_MAINTENANCE'].includes(classification.intent)) {
-            // QUERY → Fetch snapshot + LLM synthesis
+            // QUERY → Fetch snapshot + LangChain synthesis
             const snapshot = await agentExecutor.fetchContextData(classification.intent, entities, context);
-            const memory = await getChatMemory(context.userId, context.sessionId);
-            const snapshotStr = JSON.stringify(snapshot).substring(0, 4000);
-
-            const queryPrompt = `${memory}\n--- ERP LIVE DATA ---\n${snapshotStr}\n---------------------\n\nUser Question: ${userMessage}\n\nProvide a clear, data-driven answer.`;
-
-            const llmResult = await kaggleService.reasoning(queryPrompt, {
-                systemPrompt: QUERY_SYSTEM_PROMPT,
-                temperature: 0.3,
-                providerPreference: context.providerPreference,
-                modelPreference: context.modelPreference,
-            });
-            modelsUsed.push({ model: 'reasoning', source: llmResult.source });
-            finalResponse = llmResult.text || 'I could not generate an analysis. Please try a more specific question.';
+            const history = await getChatMemory(context.userId, context.sessionId);
+            
+            logger.info(`[Orchestrator] Calling LangChain Synthesis for: ${classification.intent}`);
+            const synthesis = await langchainService.synthesizeResponse(userMessage, QUERY_SYSTEM_PROMPT, snapshot, history);
+            
+            modelsUsed.push({ model: 'synthesis-langchain', source: 'llm' });
+            finalResponse = synthesis || 'I could not generate an analysis. Please try a more specific question.';
 
         } else {
-            // GENERAL → LLM chat
-            const memory = await getChatMemory(context.userId, context.sessionId);
-            const chatPrompt = memory ? `${memory}\nUser: ${userMessage}` : userMessage;
+            // GENERAL → LangChain chat
+            const history = await getChatMemory(context.userId, context.sessionId);
+            logger.info(`[Orchestrator] Calling LangChain Chat for GENERAL intent`);
+            const chatOutput = await langchainService.chatResponse(userMessage, CHAT_SYSTEM_PROMPT, history);
 
-            const llmResult = await kaggleService.chat(chatPrompt, {
-                systemPrompt: CHAT_SYSTEM_PROMPT,
-                temperature: 0.7,
-                providerPreference: context.providerPreference,
-                modelPreference: context.modelPreference,
-            });
-            modelsUsed.push({ model: 'chat', source: llmResult.source });
-            finalResponse = llmResult.text || "I'm OpsPilot, your ERP assistant. I can help with assets, inventory, POs, tickets, budgets, and transactions. What do you need?";
+            modelsUsed.push({ model: 'chat-langchain', source: 'llm' });
+            finalResponse = chatOutput || "I'm OpsPilot, how can I help today?";
         }
 
         // ── Step 5: Log operation (success only for clean memory) ──
@@ -595,7 +552,7 @@ async function processCommand(userMessage, context = {}) {
             'CLOSE_MAINTENANCE', 'PROCESS_BILL', 'APPROVE_PURCHASE', 'REJECT_PURCHASE', 'GENERATE_REPORT',
             'QUERY_DATA', 'CREATE_TRANSACTION', 'DETECT_ANOMALY', 'EXTRACT_DOCUMENT', 'PREDICT_MAINTENANCE',
             'MATCH_INVOICE', 'FORECAST_BUDGET', 'CREATE_ASSET', 'REFILL_INVENTORY', 'GENERAL',
-            'CREATE_TICKET', 'UPDATE_ASSET', 'GET_LOW_STOCK', 'GET_ASSET_STATS', 'SET_BUDGET',
+            'CREATE_TICKET', 'UPDATE_ASSET', 'REMOVE_ASSET', 'GET_LOW_STOCK', 'GET_ASSET_STATS', 'SET_BUDGET',
             'LIST_ASSETS', 'LIST_VENDORS', 'LIST_REQUISITIONS', 'LIST_RFQS', 'LIST_PURCHASE_ORDERS', 'LIST_TICKETS', 'LIST_INVENTORY',
             'LIST_TRANSACTIONS', 'DASHBOARD_SUMMARY', 'CREATE_VENDOR', 'CREATE_PURCHASE_ORDER',
             'CREATE_INVENTORY', 'VIEW_PROFIT_LOSS', 'VIEW_CASH_FLOW', 'VIEW_BALANCE_SHEET',
@@ -682,12 +639,17 @@ async function processCommand(userMessage, context = {}) {
     }
 }
 
-// ─── VISION (unchanged) ─────────────────────────────────────────
+// ─── VISION (Now powered by LangChain) ─────────────────────────
 async function processVision(imageBase64, prompt, context = {}) {
     const startTime = Date.now();
     try {
-        const result = await kaggleService.vision(imageBase64, prompt);
-        return { response: result.text, model: 'vision', source: result.source, durationMs: Date.now() - startTime };
+        const result = await langchainService.processVision(imageBase64, prompt);
+        return { 
+            response: result.text, 
+            model: 'vision-langchain', 
+            source: result.source, 
+            durationMs: Date.now() - startTime 
+        };
     } catch (error) {
         return { response: null, error: error.message, durationMs: Date.now() - startTime };
     }

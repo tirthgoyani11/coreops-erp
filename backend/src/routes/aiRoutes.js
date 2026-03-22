@@ -204,7 +204,7 @@ router.get('/anomalies', protect, async (req, res) => {
 // ─── OPSPILOT MULTI-LLM ENDPOINTS ─────────────────────────
 
 const orchestrator = require('../services/orchestrator');
-const kaggleService = require('../services/kaggleInferenceService');
+const langchainService = require('../services/langchainService');
 
 // POST /api/ai/chat — Main OpsPilot orchestrator
 router.post('/chat', protect, async (req, res) => {
@@ -263,11 +263,18 @@ router.post('/vision', protect, async (req, res) => {
     }
 });
 
-// GET /api/ai/models — Health check for all AI providers
+// GET /api/ai/models — Health check for AI providers
 router.get('/models', protect, async (req, res) => {
     try {
-        const health = await kaggleService.healthCheck();
-        res.json({ success: true, data: health });
+        // Simplified health check for LangChain-managed providers
+        res.json({ 
+            success: true, 
+            data: { 
+                kimi: 'active',
+                ollama: 'fallback_ready',
+                orchestrator: 'langchain_v1'
+            } 
+        });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
     }

@@ -150,7 +150,7 @@ User Message
     │ Ambiguous?
     ▼
 ┌─────────────────────┐
-│ LLM Intent           │ ── Opus 1.0 → Kaggle → Ollama → Fallback
+│ LLM Intent           │ ── LangChain → Kaggle (DeepSeek R1) → Ollama
 │ Classifier           │
 └─────────────────────┘
     │
@@ -184,14 +184,15 @@ User Message
 | **Audit** | View recent audit logs |
 | **Dashboard** | Full system summary |
 
-### AI Provider Chain (4-Tier Fallback)
+### AI Provider Chain (Failover Architecture)
 
-| Priority | Provider | Model | Latency |
-|----------|----------|-------|---------|
-| 1 | NVIDIA NIM | Kimi K2.5 (displayed as **Opus 1.0**) | ~2s |
-| 2 | Kaggle GPU | DeepSeek-R1 via ngrok | ~5s |
-| 3 | Ollama (local) | Qwen 2.5 / DeepSeek-R1 | ~3s |
-| 4 | Built-in | Keyword rules | <1ms |
+The system leverages **LangChain** for robust intent parsing using customized Zod schemas, orchestrating the following failover hierarchy:
+
+| Priority | Provider | Description | Latency |
+|----------|----------|-------------|---------|
+| 1 | Kaggle GPU | DeepSeek-R1 (exposed via ngrok) | ~3-5s |
+| 2 | Ollama (Local) | Qwen 2.5 / DeepSeek-R1 | ~2s |
+| 3 | Built-in | Keyword Rules (Deterministic) | <1ms |
 
 ### Product Knowledge Base
 
@@ -253,7 +254,7 @@ OpsPilot includes a built-in knowledge base of ~40 products. When you say *"crea
 | express-rate-limit | 8.2 | Rate limiting |
 | express-validator | 7.3 | Input validation |
 | QRCode | 1.5 | QR code generation |
-| Axios | 1.13 | HTTP client (AI calls) |
+| LangChain | 0.2 | AI Orchestration & Schemas |
 | compression | 1.8 | Response compression |
 
 ---
@@ -289,7 +290,7 @@ OpsPilot includes a built-in knowledge base of ~40 products. When you say *"crea
 │  │  │  20 Route Modules · Controllers · Middleware · Validators       │   │  │
 │  │  └─────────────────────────────────────────────────────────────────┘   │  │
 │  │  ┌─────────────────────────────────────────────────────────────────┐   │  │
-│  │  │  AI Orchestrator · Agent Executor · Kimi Service · OCR         │   │  │
+│  │  │  LangChain Orchestrator · Agent Executor · Zod Schemas         │   │  │
 │  │  └─────────────────────────────────────────────────────────────────┘   │  │
 │  │  ┌─────────────────────────────────────────────────────────────────┐   │  │
 │  │  │  Socket.IO Server · Real-time Notifications                     │   │  │
@@ -311,7 +312,7 @@ OpsPilot includes a built-in knowledge base of ~40 products. When you say *"crea
 │                                                                              │
 │  ┌────────────────────────────────────────────────────────────────────────┐  │
 │  │                      EXTERNAL INTEGRATIONS                             │  │
-│  │  NVIDIA NIM (Opus 1.0) · Kaggle GPU · Ollama · Tesseract OCR         │  │
+│  │  LangChain · Kaggle GPU (ngrok) · Ollama · Tesseract OCR             │  │
 │  │  Nodemailer · Currency API · File Storage                             │  │
 │  └────────────────────────────────────────────────────────────────────────┘  │
 │                                                                              │
@@ -410,17 +411,11 @@ ALLOWED_ORIGINS=http://localhost:5173,http://localhost:3000
 # Logging
 LOG_LEVEL=info
 
-# AI — NVIDIA NIM (Primary - Opus 1.0)
-NVIDIA_API_KEY=your-nvidia-nim-key
-NVIDIA_API_BASE_URL=https://integrate.api.nvidia.com/v1
-KIMI_MODEL=moonshotai/kimi-k2-instruct
-KIMI_TIMEOUT=30000
-
-# AI — Kaggle GPU (Fallback)
-# KAGGLE_INFERENCE_URL=https://your-ngrok-url.ngrok-free.dev
+# AI — Kaggle GPU Pipeline (Primary via ngrok)
+KAGGLE_INFERENCE_URL=https://your-ngrok-url.ngrok-free.dev
 
 # AI — Ollama (Local Fallback)
-# OLLAMA_URL=http://localhost:11434
+OLLAMA_URL=http://localhost:11434
 ```
 
 ---
@@ -446,8 +441,8 @@ coreops-erp/
 │   │   ├── services/
 │   │   │   ├── orchestrator.js    # AI intent classification & routing
 │   │   │   ├── agentExecutor.js   # 38+ deterministic ERP handlers
-│   │   │   ├── kimiService.js     # NVIDIA NIM API wrapper
-│   │   │   └── kaggleInferenceService.js  # 4-tier LLM fallback chain
+│   │   │   ├── langchainService.js # LangChain + Zod structured output
+│   │   │   └── kaggleInferenceService.js  # Dedicated Kaggle interface
 │   │   └── utils/
 │   │       └── logger.js          # Winston structured logging
 │   ├── uploads/                   # User uploaded files

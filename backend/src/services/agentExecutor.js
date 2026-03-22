@@ -136,6 +136,7 @@ async function execute(intent, entities, context) {
         // v3 — New handlers
         CREATE_TICKET: createTicket,
         UPDATE_ASSET: updateAsset,
+        REMOVE_ASSET: removeAsset,
         GET_LOW_STOCK: getLowStock,
         GET_ASSET_STATS: getAssetStats,
         SET_BUDGET: setBudget,
@@ -337,11 +338,11 @@ async function createTransaction(entities, context) {
     return {
         success: true,
         message: `${typeIcon} **Transaction Created!**\n\n` +
-            `• **Type**: ${txType}\n` +
-            `• **Category**: ${category}\n` +
-            `• **Amount**: ₹${parsedAmount.toLocaleString('en-IN')}\n` +
-            `• **Description**: ${description}\n` +
-            `• **Date**: ${new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}`,
+            `- **Type**: ${txType}\n` +
+            `- **Category**: ${category}\n` +
+            `- **Amount**: ₹${parsedAmount.toLocaleString('en-IN')}\n` +
+            `- **Description**: ${description}\n` +
+            `- **Date**: ${new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}`,
         data: transaction,
     };
 }
@@ -367,9 +368,19 @@ async function createAsset(entities, context) {
 
     // Smart auto-fill: look up product knowledge base for realistic defaults
     const defaults = getProductDefaults(name);
+    
+    // Check if amount is missing and user hasn't explicitly skipped it
+    if (!entities.amount && !(context.originalText && context.originalText.toLowerCase().includes('default'))) {
+        const estimated = defaults ? defaults.price : 0;
+        return { 
+            success: false, 
+            message: `How much did the **${name}** cost? \n\n- Reply with the exact price (e.g. "₹5000")\n- Reply **"Use default"** to estimate it at ₹${estimated}` 
+        };
+    }
+
     const manufacturer = entities.manufacturer || (defaults ? defaults.manufacturer : null);
     const model = entities.model || (defaults ? defaults.model : name);
-    const description = entities.description || (defaults ? defaults.description : `${name} — registered via OpsPilot AI`);
+    const description = entities.description || (defaults ? defaults.description : `${name} - registered via OpsPilot AI`);
     const serialNumber = entities.serialNumber || generateSerial(defaults ? defaults.serialPrefix : 'SN');
     const purchasePrice = entities.amount ? parseFloat(entities.amount) : (defaults ? defaults.price : 0);
     const VALID_CONDITIONS = ['EXCELLENT', 'GOOD', 'FAIR', 'POOR'];
@@ -563,10 +574,10 @@ async function refillInventory(entities, context) {
         success: true,
         message: `📦 **Stock Refilled Successfully!**\n\n` +
             `I identified low stock for **${item.name}** and autonomously executed a refill workflow:\n` +
-            `• **Purchase Order**: ${result.po.poNumber} (Auto-Approved & Received)\n` +
-            `• **Quantity Ordered**: ${orderQuantity} units\n` +
-            `• **Total Cost**: ₹${result.po.totalAmount.toLocaleString('en-IN')}\n` +
-            `• **New Stock Level**: ${result.updatedItem.currentQuantity} units (up from ${item.currentQuantity})`,
+            `- **Purchase Order**: ${result.po.poNumber} (Auto-Approved & Received)\n` +
+            `- **Quantity Ordered**: ${orderQuantity} units\n` +
+            `- **Total Cost**: ₹${result.po.totalAmount.toLocaleString('en-IN')}\n` +
+            `- **New Stock Level**: ${result.updatedItem.currentQuantity} units (up from ${item.currentQuantity})`,
         data: result.updatedItem
     };
 }
@@ -656,10 +667,10 @@ async function createTicket(entities, context) {
     return {
         success: true,
         message: `🔧 **Maintenance Ticket Created!**\n\n` +
-            `• **Ticket**: ${ticket.ticketNumber}\n` +
-            `• **Issue**: ${description}\n` +
-            `• **Priority**: ${ticket.priority}\n` +
-            `• **Status**: ${ticket.status}`,
+            `- **Ticket**: ${ticket.ticketNumber}\n` +
+            `- **Issue**: ${description}\n` +
+            `- **Priority**: ${ticket.priority}\n` +
+            `- **Status**: ${ticket.status}`,
         data: ticket,
     };
 }
@@ -669,16 +680,39 @@ async function updateAsset(entities, context) {
     if (!assetId) return { success: false, message: 'Please specify which asset to update (ID or GUAI).' };
 
     const normalizedAssetId = String(assetId).replace(/-/g, ' ');
-    const asset = await prisma.asset.findFirst({
-        where: {
-            OR: [
-                { id: assetId },
-                { guai: { contains: String(assetId), mode: 'insensitive' } },
-                { name: { contains: String(assetId), mode: 'insensitive' } },
-                { name: { contains: normalizedAssetId, mode: 'insensitive' } },
-            ],
-        },
-    });
+    const buzzwords = ['last', 'latest', 'recent', 'it', 'that', 'this'];
+    let asset = null;
+
+    if (buzzwords.includes(String(assetId).toLowerCase().trim())) {
+        asset = await prisma.asset.findFirst({
+            where: { createdById: context.userId, officeId: context.officeId || undefined },
+            orderBy: { createdAt: 'desc' }
+        });
+    } else {
+        asset = await prisma.asset.findFirst({
+            where: {
+                OR: [
+                    { id: String(assetId) },
+                    { guai: { contains: String(assetId), mode: 'insensitive' } },
+                    { name: { contains: String(assetId), mode: 'insensitive' } },
+                    { name: { contains: normalizedAssetId, mode: 'insensitive' } },
+                ],
+                officeId: context.officeId || undefined
+            },
+        });
+        
+        // Smart fallback: if exact search fails, grab their most recently created asset (within 15 mins)
+        if (!asset) {
+            const recent = await prisma.asset.findFirst({
+                where: { createdById: context.userId, officeId: context.officeId || undefined },
+                orderBy: { createdAt: 'desc' }
+            });
+            if (recent && (Date.now() - new Date(recent.createdAt).getTime() < 15 * 60 * 1000)) {
+                asset = recent;
+            }
+        }
+    }
+
     if (!asset) return { success: false, message: `Asset "${assetId}" not found.` };
 
     const updateData = {};
@@ -703,9 +737,70 @@ async function updateAsset(entities, context) {
     return {
         success: true,
         message: `✅ **Asset Updated!**\n\n` +
-            `• **Asset**: ${updated.name} (${updated.guai})\n` +
-            `• **Fields changed**: ${Object.keys(updateData).join(', ')}`,
+            `- **Asset**: ${updated.name} (${updated.guai})\n` +
+            `- **Fields changed**: ${Object.keys(updateData).join(', ')}`,
         data: updated,
+    };
+}
+
+async function removeAsset(entities, context) {
+    const assetId = entities.assetId || entities.guai || entities.assetName;
+    if (!assetId) return { success: false, message: 'Please specify which asset to remove (by ID, GUAI, or name).' };
+
+    const normalizedAssetId = String(assetId).replace(/-/g, ' ');
+    const buzzwords = ['last', 'latest', 'recent', 'it', 'that', 'this'];
+    let asset = null;
+
+    if (buzzwords.includes(String(assetId).toLowerCase().trim())) {
+        asset = await prisma.asset.findFirst({
+            where: { createdById: context.userId, officeId: context.officeId || undefined },
+            orderBy: { createdAt: 'desc' }
+        });
+    } else {
+        asset = await prisma.asset.findFirst({
+            where: {
+                OR: [
+                    { id: String(assetId) },
+                    { guai: { contains: String(assetId), mode: 'insensitive' } },
+                    { name: { contains: String(assetId), mode: 'insensitive' } },
+                    { name: { contains: normalizedAssetId, mode: 'insensitive' } },
+                ],
+                officeId: context.officeId || undefined
+            },
+        });
+        
+        // Smart fallback: if exact search fails, grab their most recently created asset (within 15 mins)
+        if (!asset) {
+            const recent = await prisma.asset.findFirst({
+                where: { createdById: context.userId, officeId: context.officeId || undefined },
+                orderBy: { createdAt: 'desc' }
+            });
+            if (recent && (Date.now() - new Date(recent.createdAt).getTime() < 15 * 60 * 1000)) {
+                asset = recent;
+            }
+        }
+    }
+
+    if (!asset) {
+        return { success: false, message: `Could not find an asset matching "${assetId}".` };
+    }
+
+    try {
+        await prisma.asset.update({
+            where: { id: asset.id },
+            data: { status: 'RETIRED' }
+        });
+    } catch (err) {
+        return { success: false, message: `Failed to retire asset. It might be linked to existing tickets or transactions.` };
+    }
+
+    return {
+        success: true,
+        message: `⛔ **Asset Retired!**\n\n` +
+            `- **Name**: ${asset.name}\n` +
+            `- **GUAI**: ${asset.guai}\n` +
+            `- **Status**: RETIRED`,
+        data: { id: asset.id },
     };
 }
 
@@ -760,7 +855,12 @@ async function getAssetStats(entities, context) {
 }
 
 async function setBudget(entities, context) {
-    const category = entities.category || 'General';
+    if (context.originalText && String(context.originalText).includes('%')) {
+        return { success: false, message: 'Please specify the exact budget amount in ₹ (e.g., "50000") rather than a percentage.' };
+    }
+
+    // Sometimes LangChain extracts the category in title case or lower case, standardize it
+    const category = entities.category ? (entities.category.charAt(0).toUpperCase() + entities.category.slice(1).toLowerCase()) : 'General';
     const limit = entities.amount;
     if (!limit) return { success: false, message: 'Please specify a budget limit amount.' };
 
@@ -787,10 +887,10 @@ async function setBudget(entities, context) {
     return {
         success: true,
         message: `💰 **Budget Set!**\n\n` +
-            `• **Category**: ${budget.category}\n` +
-            `• **Month**: ${month}/${year}\n` +
-            `• **Limit**: ₹${parseFloat(limit).toLocaleString('en-IN')}\n` +
-            `• **Spent**: ₹${budget.spent.toLocaleString('en-IN')}`,
+            `- **Category**: ${budget.category}\n` +
+            `- **Month**: ${month}/${year}\n` +
+            `- **Limit**: ₹${parseFloat(limit).toLocaleString('en-IN')}\n` +
+            `- **Spent**: ₹${budget.spent.toLocaleString('en-IN')}`,
         data: budget,
     };
 }
@@ -1168,8 +1268,8 @@ async function dashboardSummary(entities, context) {
 
     msg += `| Module | Status |\n|--------|--------|\n`;
     msg += `| 🖥️ Assets | **${activeAssets}** active of **${assetCount}** total |\n`;
-    msg += `| 📦 Inventory | **${inventoryCount}** items ${lowStockCount > 0 ? `• 🔴 **${lowStockCount}** low stock` : '• ✅ All stocked'} |\n`;
-    msg += `| 🔧 Maintenance | **${openTickets}** open tickets ${criticalTickets > 0 ? `• 🔴 **${criticalTickets}** critical` : ''} |\n`;
+    msg += `| 📦 Inventory | **${inventoryCount}** items ${lowStockCount > 0 ? `- 🔴 **${lowStockCount}** low stock` : '- ✅ All stocked'} |\n`;
+    msg += `| 🔧 Maintenance | **${openTickets}** open tickets ${criticalTickets > 0 ? `- 🔴 **${criticalTickets}** critical` : ''} |\n`;
     msg += `| 📋 Purchase Orders | **${pendingPOs}** pending approval |\n`;
     msg += `| ${budgetIcon} Budget | ₹${totalSpent.toLocaleString('en-IN')} / ₹${totalBudget.toLocaleString('en-IN')} (**${budgetPct}%** used) |\n`;
 
@@ -1344,7 +1444,7 @@ async function viewProfitLoss(entities, context) {
     if (topCategories.length > 0) {
         msg += `\n**Top Expense Categories:**\n`;
         for (const cat of topCategories) {
-            msg += `• ${cat.category || 'Uncategorized'}: ₹${(cat._sum.amount || 0).toLocaleString('en-IN')}\n`;
+            msg += `- ${cat.category || 'Uncategorized'}: ₹${(cat._sum.amount || 0).toLocaleString('en-IN')}\n`;
         }
     }
 
@@ -1541,7 +1641,7 @@ async function sendNotification(entities, context) {
 
     return {
         success: true,
-        message: `🔔 **Notification Sent!**\n\n• **Title**: ${title}\n• **Message**: ${message}\n• **Recipients**: ${users.length} user(s)`,
+        message: `🔔 **Notification Sent!**\n\n- **Title**: ${title}\n- **Message**: ${message}\n- **Recipients**: ${users.length} user(s)`,
     };
 }
 
@@ -1645,28 +1745,28 @@ async function viewAnalytics(entities, context) {
     // Assets by category
     msg += `**🖥️ Assets by Category**\n`;
     for (const cat of assetsByCategory) {
-        msg += `• ${cat.category}: **${cat._count}**\n`;
+        msg += `- ${cat.category}: **${cat._count}**\n`;
     }
 
     // Financial summary
     const income = monthlyIncome._sum.amount || 0;
     const expense = monthlyExpense._sum.amount || 0;
     msg += `\n**💰 This Month's Financials**\n`;
-    msg += `• Income: ₹${income.toLocaleString('en-IN')}\n`;
-    msg += `• Expenses: ₹${expense.toLocaleString('en-IN')}\n`;
-    msg += `• Net: ₹${(income - expense).toLocaleString('en-IN')}\n`;
+    msg += `- Income: ₹${income.toLocaleString('en-IN')}\n`;
+    msg += `- Expenses: ₹${expense.toLocaleString('en-IN')}\n`;
+    msg += `- Net: ₹${(income - expense).toLocaleString('en-IN')}\n`;
 
     // Tickets by priority
     if (ticketsByPriority.length > 0) {
         const prioIcon = { CRITICAL: '🔴', HIGH: '🟠', MEDIUM: '🟡', LOW: '🟢' };
         msg += `\n**🔧 Open Tickets by Priority**\n`;
         for (const t of ticketsByPriority) {
-            msg += `• ${prioIcon[t.priority] || ''} ${t.priority}: **${t._count}**\n`;
+            msg += `- ${prioIcon[t.priority] || ''} ${t.priority}: **${t._count}**\n`;
         }
     }
 
-    msg += `\n• 📦 Total Inventory Units: **${(inventoryValue._sum.currentQuantity || 0).toLocaleString()}**`;
-    msg += `\n• 🏢 Active Vendors: **${vendorCount}**`;
+    msg += `\n- 📦 Total Inventory Units: **${(inventoryValue._sum.currentQuantity || 0).toLocaleString()}**`;
+    msg += `\n- 🏢 Active Vendors: **${vendorCount}**`;
 
     return { success: true, message: msg };
 }
@@ -1784,7 +1884,7 @@ async function closeMaintenance(entities, context) {
 
     return {
         success: true,
-        message: `✅ **Ticket Closed!**\n\n• **Ticket**: ${updated.ticketNumber}\n• **Status**: COMPLETED`,
+        message: `✅ **Ticket Closed!**\n\n- **Ticket**: ${updated.ticketNumber}\n- **Status**: COMPLETED`,
         data: updated,
     };
 }
@@ -1817,7 +1917,7 @@ async function updateTicket(entities, context) {
 
     return {
         success: true,
-        message: `✅ **Ticket Updated!**\n\n• **Ticket**: ${updated.ticketNumber}\n• **Fields changed**: ${Object.keys(updateData).join(', ')}`,
+        message: `✅ **Ticket Updated!**\n\n- **Ticket**: ${updated.ticketNumber}\n- **Fields changed**: ${Object.keys(updateData).join(', ')}`,
         data: updated,
     };
 }
