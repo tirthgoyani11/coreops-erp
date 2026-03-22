@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
-import { ShoppingCart, CheckCircle, Package } from 'lucide-react';
+import { ShoppingCart, Package } from 'lucide-react';
 import api from '../../lib/api';
 
 interface SalesOrder {

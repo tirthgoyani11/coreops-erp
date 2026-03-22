@@ -44,6 +44,7 @@ const customerRoutes = require('./src/routes/customerRoutes');
 const pricingRuleRoutes = require('./src/routes/pricingRuleRoutes');
 const quotationRoutes = require('./src/routes/quotationRoutes');
 const salesOrderRoutes = require('./src/routes/salesOrderRoutes');
+const apInvoiceRoutes = require('./src/routes/apInvoiceRoutes');
 
 // Services
 const currencyService = require('./src/services/currencyService');
@@ -180,6 +181,7 @@ app.use('/api/customers', customerRoutes);
 app.use('/api/pricing-rules', pricingRuleRoutes);
 app.use('/api/quotations', quotationRoutes);
 app.use('/api/sales-orders', salesOrderRoutes);
+app.use('/api/ap-invoices', apInvoiceRoutes);
 app.use('/api/search', require('./src/routes/searchRoutes'));
 
 // Serve uploaded files (local storage — dev mode)

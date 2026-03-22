@@ -7,6 +7,7 @@ const bankReconController = require('../controllers/bankReconciliationController
 const yearEndController = require('../controllers/yearEndController');
 const expenseController = require('../controllers/expenseController');
 const orchestrationController = require('../controllers/orchestrationController');
+const financeRebuildController = require('../controllers/financeRebuildController');
 const prisma = require('../config/prisma');
 const { asyncHandler } = require('../utils/errorHandler');
 
@@ -37,6 +38,10 @@ router.post('/tax-rates', asyncHandler(async (req, res) => {
     const rate = await prisma.taxRate.create({ data: req.body });
     res.status(201).json({ success: true, data: rate });
 }));
+router.get('/tax-reconciliation', financeRebuildController.getTaxReconciliation);
+router.get('/gst-reconciliation', financeRebuildController.getGSTReconciliationReport);
+router.get('/tax-summary/:invoiceType/:invoiceId', financeRebuildController.getInvoiceTaxSummaryReport);
+router.post('/tax/calculate-line', financeRebuildController.calculateTaxForLine);
 
 // ── Bank Reconciliation ────────────────────────────────
 router.get('/bank-statements', bankReconController.getBankStatements);

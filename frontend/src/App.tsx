@@ -1,5 +1,5 @@
 import { useEffect, Suspense, lazy, useState } from 'react';
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { MainLayout } from './components/layout/MainLayout';
 import { RoleGuard } from './components/layout/RoleGuard';
 import { ErrorBoundary } from './components/ErrorBoundary';
@@ -64,7 +64,7 @@ const VendorDetail = lazy(() => import('./pages/procurement/VendorDetail').then(
 const PurchaseOrderList = lazy(() => import('./pages/procurement/PurchaseOrderList').then(m => ({ default: m.PurchaseOrderList })));
 const CreatePO = lazy(() => import('./pages/procurement/CreatePO').then(m => ({ default: m.CreatePO })));
 const PurchaseOrderDetail = lazy(() => import('./pages/procurement/PurchaseOrderDetail').then(m => ({ default: m.PurchaseOrderDetail })));
-const Financial = lazy(() => import('./pages/financial/Financial').then(m => ({ default: m.Financial })));
+const Financial = lazy(() => import('./pages/financial/Financial'));
 const GLDashboard = lazy(() => import('./pages/financial/GLDashboard').then(m => ({ default: m.GLDashboard })));
 const BalanceSheet = lazy(() => import('./pages/financial/BalanceSheet').then(m => ({ default: m.BalanceSheet })));
 const BankReconciliation = lazy(() => import('./pages/financial/BankReconciliation').then(m => ({ default: m.BankReconciliation })));
@@ -72,9 +72,6 @@ const YearEndClose = lazy(() => import('./pages/financial/YearEndClose').then(m 
 const ExpenseClaims = lazy(() => import('./pages/financial/ExpenseClaims').then(m => ({ default: m.ExpenseClaims })));
 const ProfitLoss = lazy(() => import('./pages/financial/ProfitLoss').then(m => ({ default: m.ProfitLoss })));
 const CashFlow = lazy(() => import('./pages/financial/CashFlow').then(m => ({ default: m.CashFlow })));
-const APAging = lazy(() => import('./pages/financial/APAging').then(m => ({ default: m.APAging })));
-const ARAging = lazy(() => import('./pages/financial/ARAging').then(m => ({ default: m.ARAging })));
-const WorkingCapital = lazy(() => import('./pages/financial/WorkingCapital').then(m => ({ default: m.WorkingCapital })));
 const ExceptionCenter = lazy(() => import('./pages/financial/ExceptionCenter').then(m => ({ default: m.ExceptionCenter })));
 const InventoryAnalytics = lazy(() => import('./pages/financial/InventoryAnalytics').then(m => ({ default: m.InventoryAnalytics })));
 const Analytics = lazy(() => import('./pages/Analytics').then(m => ({ default: m.Analytics })));
@@ -263,6 +260,10 @@ function App() {
 
               {/* Financial - Managers + Viewer */}
               <Route path="/financial" element={<RoleGuard allowedRoles={['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF', 'VIEWER']}><Financial /></RoleGuard>} />
+              <Route path="/financial/ap-invoices" element={<RoleGuard allowedRoles={['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF', 'VIEWER']}><Financial /></RoleGuard>} />
+              <Route path="/financial/matching" element={<RoleGuard allowedRoles={['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF', 'VIEWER']}><Financial /></RoleGuard>} />
+              <Route path="/financial/tax" element={<RoleGuard allowedRoles={['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF', 'VIEWER']}><Financial /></RoleGuard>} />
+              <Route path="/financial/working-capital" element={<RoleGuard allowedRoles={['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF', 'VIEWER']}><Financial /></RoleGuard>} />
 
               {/* CRM & Sales */}
               <Route path="/sales/customers" element={<RoleGuard allowedRoles={['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF']}><Customers /></RoleGuard>} />
@@ -279,9 +280,9 @@ function App() {
               <Route path="/cash-flow" element={<RoleGuard allowedRoles={['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'VIEWER']}><CashFlow /></RoleGuard>} />
               <Route path="/inventory-analytics" element={<RoleGuard allowedRoles={['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF']}><InventoryAnalytics /></RoleGuard>} />
 
-              <Route path="/finance/ap-aging" element={<RoleGuard allowedRoles={['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'VIEWER']}><APAging /></RoleGuard>} />
-              <Route path="/finance/ar-aging" element={<RoleGuard allowedRoles={['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'VIEWER']}><ARAging /></RoleGuard>} />
-              <Route path="/finance/working-capital" element={<RoleGuard allowedRoles={['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'VIEWER']}><WorkingCapital /></RoleGuard>} />
+              <Route path="/finance/ap-aging" element={<Navigate to="/financial/working-capital" replace />} />
+              <Route path="/finance/ar-aging" element={<Navigate to="/financial/working-capital" replace />} />
+              <Route path="/finance/working-capital" element={<Navigate to="/financial/working-capital" replace />} />
               <Route path="/finance/exception-center" element={<RoleGuard allowedRoles={['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF']}><ExceptionCenter /></RoleGuard>} />
 
               {/* Analytics - Not for Technician */}

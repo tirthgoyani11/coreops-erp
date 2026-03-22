@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Users, DollarSign, Briefcase, Plus, X, Loader2, Search, Filter } from 'lucide-react';
+import { Users, DollarSign, Briefcase, Plus, X, Loader2, Search } from 'lucide-react';
 import api from '../../lib/api';
 
 interface Customer {
@@ -81,6 +81,19 @@ export function Customers() {
             </div>
 
             {/* Grid */}
+            <div className="rounded-2xl border border-[var(--border-color)] bg-[var(--bg-card)] p-4">
+                <div className="relative max-w-md">
+                    <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-secondary)]" />
+                    <input
+                        type="text"
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        placeholder="Search customer by name"
+                        className="w-full pl-9 pr-3 py-2 rounded-xl border border-[var(--border-color)] bg-[var(--bg-overlay)] text-sm text-[var(--text-primary)]"
+                    />
+                </div>
+            </div>
+
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {customers.map((c, i) => (
                     <motion.div

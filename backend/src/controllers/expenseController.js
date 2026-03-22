@@ -1,5 +1,6 @@
 const prisma = require('../config/prisma');
 const { asyncHandler } = require('../utils/errorHandler');
+const { postTransactionToGL } = require('../services/financePostingService');
 
 // ── Expense Claims Controller ────────────────────────────────
 
@@ -114,7 +115,7 @@ exports.payClaim = asyncHandler(async (req, res) => {
         });
 
         // Create finance transaction so payment appears in reports
-        await tx.transaction.create({
+        const financialTransaction = await tx.transaction.create({
             data: {
                 type: 'EXPENSE',
                 category: 'EMPLOYEE_REIMBURSEMENT',
@@ -127,6 +128,8 @@ exports.payClaim = asyncHandler(async (req, res) => {
                 status: 'CLEARED',
             }
         });
+
+        await postTransactionToGL({ tx, transaction: financialTransaction, userId: req.user.id });
 
         return claim;
     });

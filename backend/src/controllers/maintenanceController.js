@@ -1,5 +1,6 @@
 const prisma = require('../config/prisma');
 const aiService = require('../services/aiService');
+const { postTransactionToGL } = require('../services/financePostingService');
 
 /**
  * Maintenance Controller (Prisma)
@@ -445,7 +446,7 @@ exports.updateTicket = async (req, res) => {
                 // Create finance transaction for maintenance cost
                 const maintenanceCost = ticket.actualCost || ticket.estimatedCost || 0;
                 if (maintenanceCost > 0) {
-                    await prisma.transaction.create({
+                    const maintenanceTransaction = await prisma.transaction.create({
                         data: {
                             type: 'EXPENSE',
                             category: 'MAINTENANCE',
@@ -458,6 +459,8 @@ exports.updateTicket = async (req, res) => {
                             status: 'CLEARED',
                         },
                     });
+
+                    await postTransactionToGL({ transaction: maintenanceTransaction, userId: req.user.id });
                 }
             }
         }

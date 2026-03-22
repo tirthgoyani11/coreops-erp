@@ -133,7 +133,7 @@ export function AssetOverview({ asset }: AssetOverviewProps) {
                         <div className="rounded-lg border border-[var(--border-color)] p-3 bg-[var(--bg-card-hover)]/20">
                             <p className="text-xs text-[var(--text-secondary)]">Invoice</p>
                             <p className="font-semibold text-[var(--text-primary)] mt-1">{workflow?.invoice?.invoiceNumber || asset.invoiceNumber || 'Not linked'}</p>
-                            <a className="text-xs text-sky-400 hover:underline" href="/finance/ap-aging">Open AP/AR</a>
+                            <a className="text-xs text-sky-400 hover:underline" href="/financial/working-capital">Open AP/AR</a>
                         </div>
                         <div className="rounded-lg border border-[var(--border-color)] p-3 bg-[var(--bg-card-hover)]/20">
                             <p className="text-xs text-[var(--text-secondary)]">Maintenance</p>

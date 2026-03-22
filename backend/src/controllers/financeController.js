@@ -1,4 +1,5 @@
 const prisma = require('../config/prisma');
+const { postTransactionToGL } = require('../services/financePostingService');
 
 // @desc    Get All Transactions
 // @route   GET /api/finance/transactions
@@ -84,32 +85,34 @@ exports.createTransaction = async (req, res) => {
             }
         }
 
-        const transaction = await prisma.transaction.create({
-            data: {
-                type,
-                category,
-                amount,
-                description,
-                referenceType: referenceType || 'MANUAL',
-                referenceId,
-                date: date ? new Date(date) : new Date(),
-                officeId: officeId || null,
-                recordedById: req.user.id,
-            },
-        });
+        let budgetWarning = null;
+        const transaction = await prisma.$transaction(async (tx) => {
+            const createdTransaction = await tx.transaction.create({
+                data: {
+                    type,
+                    category,
+                    amount,
+                    description,
+                    referenceType: referenceType || 'MANUAL',
+                    referenceId,
+                    date: date ? new Date(date) : new Date(),
+                    officeId: officeId || null,
+                    recordedById: req.user.id,
+                },
+            });
 
-        // Update Budget if Expense
-        if (type === 'EXPENSE') {
-            const dateObj = new Date(transaction.date);
-            const month = dateObj.getMonth() + 1;
-            const year = dateObj.getFullYear();
+            // Auto-post to GL for zero-manual accounting entries.
+            await postTransactionToGL({ tx, transaction: createdTransaction, userId: req.user.id });
 
-            if (officeId) {
-                // Try to find and update existing budget
-                const budget = await prisma.budget.findUnique({
+            if (type === 'EXPENSE' && officeId) {
+                const dateObj = new Date(createdTransaction.date);
+                const month = dateObj.getMonth() + 1;
+                const year = dateObj.getFullYear();
+
+                const budget = await tx.budget.findUnique({
                     where: {
                         officeId_category_month_year: {
-                            officeId: officeId,
+                            officeId,
                             category,
                             month,
                             year,
@@ -118,23 +121,21 @@ exports.createTransaction = async (req, res) => {
                 });
 
                 if (budget) {
-                    const updatedBudget = await prisma.budget.update({
+                    const updatedBudget = await tx.budget.update({
                         where: { id: budget.id },
                         data: { spent: { increment: amount } },
                     });
 
                     if (updatedBudget.spent >= updatedBudget.limit * 0.9) {
-                        return res.status(201).json({
-                            success: true,
-                            data: transaction,
-                            warning: `Budget variance alert: ${category} spending (₹${updatedBudget.spent.toLocaleString()}) has exceeded 90% of the monthly limit (₹${updatedBudget.limit.toLocaleString()}).`
-                        });
+                        budgetWarning = `Budget variance alert: ${category} spending (₹${updatedBudget.spent.toLocaleString()}) has exceeded 90% of the monthly limit (₹${updatedBudget.limit.toLocaleString()}).`;
                     }
                 }
             }
-        }
 
-        res.status(201).json({ success: true, data: transaction });
+            return createdTransaction;
+        });
+
+        res.status(201).json({ success: true, data: transaction, ...(budgetWarning ? { warning: budgetWarning } : {}) });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
     }

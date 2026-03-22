@@ -93,6 +93,27 @@ const REPORT_TEMPLATES: ReportTemplate[] = [
         category: 'FINANCE',
     },
     {
+        id: 'ap-matching',
+        label: 'AP Matching Report',
+        endpoint: '/ap-invoices/matching/report',
+        description: '3-way matching variances across AP invoices.',
+        category: 'FINANCE',
+    },
+    {
+        id: 'tax-reconciliation',
+        label: 'Tax Reconciliation',
+        endpoint: '/finance-ext/tax-reconciliation',
+        description: 'Input vs output tax balance by tax code.',
+        category: 'FINANCE',
+    },
+    {
+        id: 'gst-reconciliation',
+        label: 'GST Reconciliation',
+        endpoint: '/finance-ext/gst-reconciliation',
+        description: 'IGST, SGST, CGST liability and credit netting.',
+        category: 'FINANCE',
+    },
+    {
         id: 'exception-center',
         label: 'Exception Center',
         endpoint: '/finance-ext/exception-center',
@@ -194,9 +215,12 @@ export default function Reports() {
         setReportError(null);
 
         try {
+            const usesTaxDateRange = selectedTemplate.id === 'tax-reconciliation' || selectedTemplate.id === 'gst-reconciliation';
             const params: Record<string, string> = {
                 ...(dateFrom && { from: dateFrom }),
                 ...(dateTo && { to: dateTo }),
+                ...(usesTaxDateRange && dateFrom && { startDate: new Date(dateFrom).toISOString() }),
+                ...(usesTaxDateRange && dateTo && { endDate: new Date(dateTo).toISOString() }),
                 ...(groupBy && { groupBy }),
                 ...(selectedOffice !== 'ALL' && { officeId: selectedOffice }),
                 ...(enableCompare && { compare: 'true' }),

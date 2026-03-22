@@ -1,5 +1,6 @@
 const prisma = require('../config/prisma');
 const { asyncHandler, AppError } = require('../utils/errorHandler');
+const { postARInvoiceToGL } = require('../services/financePostingService');
 
 function resolveOfficeId(value) {
     if (!value) return null;
@@ -145,6 +146,8 @@ exports.fulfillSalesOrder = asyncHandler(async (req, res, next) => {
                 dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
             }
         });
+
+        await postARInvoiceToGL({ tx, invoice, userId: req.user.id });
 
         return { updatedOrder, invoice };
     });

@@ -7,6 +7,7 @@
 
 const prisma = require('../config/prisma');
 const logger = require('../utils/logger');
+const { postTransactionToGL } = require('./financePostingService');
 
 // ─── Secret Field Sanitizer ──────────────────────────────────────
 // Strips sensitive fields from any object/array before showing to AI/user.
@@ -322,16 +323,21 @@ async function createTransaction(entities, context) {
     const description = entities.description || entities.additionalContext || 'Created by OpsPilot AI';
     const parsedAmount = parseFloat(String(amount).replace(/,/g, ''));
 
-    const transaction = await prisma.transaction.create({
-        data: {
-            type: txType,
-            category,
-            amount: parsedAmount,
-            description,
-            date: new Date(),
-            officeId: officeId || null,
-            recordedById: context.userId,
-        },
+    const transaction = await prisma.$transaction(async (tx) => {
+        const createdTransaction = await tx.transaction.create({
+            data: {
+                type: txType,
+                category,
+                amount: parsedAmount,
+                description,
+                date: new Date(),
+                officeId: officeId || null,
+                recordedById: context.userId,
+            },
+        });
+
+        await postTransactionToGL({ tx, transaction: createdTransaction, userId: context.userId });
+        return createdTransaction;
     });
 
     const typeIcon = txType === 'INCOME' ? '📈' : '📉';

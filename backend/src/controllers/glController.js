@@ -479,3 +479,121 @@ exports.getCashFlow = async (req, res) => {
         res.status(500).json({ success: false, error: error.message });
     }
 };
+
+// ─── ENHANCED REPORTS ──────────────────────────────────────────
+
+// @desc    General Ledger Extract (account movements detail)
+// @route   GET /api/gl/extract
+exports.getGLExtract = async (req, res) => {
+    try {
+        const { accountId, startDate, endDate, limit = 500 } = req.query;
+        
+        if (!accountId) {
+            return res.status(400).json({
+                success: false,
+                message: 'accountId is required',
+            });
+        }
+
+        const account = await prisma.gLAccount.findUnique({
+            where: { id: accountId },
+        });
+
+        if (!account) {
+            return res.status(404).json({
+                success: false,
+                message: 'Account not found',
+            });
+        }
+
+        const where = { accountId };
+        if (startDate && endDate) {
+            where.journalEntry = {
+                date: { gte: new Date(startDate), lte: new Date(endDate) },
+            };
+        }
+
+        const lines = await prisma.journalEntryLine.findMany({
+            where,
+            include: {
+                journalEntry: { select: { entryNumber: true, date: true, description: true, status: true } },
+            },
+            orderBy: { journalEntry: { date: 'asc' } },
+            take: parseInt(limit),
+        });
+
+        // Calculate running balance
+        let runningBalance = 0;
+        const rows = lines.map(line => {
+            const delta = line.debit - line.credit;
+            runningBalance += delta;
+            return {
+                entryNumber: line.journalEntry.entryNumber,
+                date: line.journalEntry.date,
+                description: line.journalEntry.description,
+                debit: line.debit,
+                credit: line.credit,
+                balance: runningBalance,
+            };
+        });
+
+        res.json({
+            success: true,
+            data: {
+                account: { id: account.id, code: account.code, name: account.name },
+                lines: rows,
+                totalDebits: rows.reduce((s, r) => s + r.debit, 0),
+                totalCredits: rows.reduce((s, r) => s + r.credit, 0),
+                endingBalance: account.balance,
+            },
+        });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+};
+
+// @desc    Account Reconciliation (balance verification)
+// @route   GET /api/gl/reconciliation
+exports.getAccountReconciliation = async (req, res) => {
+    try {
+        const accounts = await prisma.gLAccount.findMany({
+            where: { isActive: true },
+        });
+
+        const reconciliation = [];
+        let totalImbalance = 0;
+
+        for (const account of accounts) {
+            const lines = await prisma.journalEntryLine.findMany({
+                where: { accountId: account.id, journalEntry: { status: 'POSTED' } },
+            });
+
+            const calculatedBalance = lines.reduce((sum, l) => sum + (l.debit - l.credit), 0);
+            const imbalance = Math.abs(account.balance - calculatedBalance);
+
+            if (imbalance > 0.01) {
+                reconciliation.push({
+                    accountCode: account.code,
+                    accountName: account.name,
+                    recordedBalance: account.balance,
+                    calculatedBalance,
+                    imbalance,
+                    status: imbalance > 0.01 ? 'ERROR' : 'OK',
+                });
+                totalImbalance += imbalance;
+            }
+        }
+
+        res.json({
+            success: true,
+            data: {
+                overallStatus: totalImbalance < 0.01 ? 'RECONCILED' : 'IMBALANCES_FOUND',
+                totalImbalance,
+                imbalancedAccounts: reconciliation.length,
+                details: reconciliation,
+            },
+        });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+};

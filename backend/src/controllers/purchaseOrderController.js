@@ -1,4 +1,5 @@
 const prisma = require('../config/prisma');
+const { postTransactionToGL } = require('../services/financePostingService');
 
 // @desc    Create new PO
 // @route   POST /api/purchase-orders
@@ -401,6 +402,8 @@ exports.approvePayment = async (req, res) => {
                     status: 'CLEARED'
                 }
             });
+
+            await postTransactionToGL({ tx, transaction, userId: req.user.id });
 
             return { updatedPO, transaction };
         });
