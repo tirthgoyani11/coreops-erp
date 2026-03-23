@@ -106,6 +106,8 @@ export function ExpenseClaims() {
             const formData = new FormData();
             formData.append('invoice', file);
             formData.append('ocrMode', 'high');
+            formData.append('ocrTarget', 'expense_receipt');
+            formData.append('autoCreateAssets', 'false');
 
             const res = await api.post('/ocr/upload', formData, {
                 headers: { 'Content-Type': 'multipart/form-data' },

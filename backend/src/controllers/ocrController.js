@@ -4,6 +4,7 @@ const path = require('path');
 const logger = require('../utils/logger');
 const kaggleService = require('../services/kaggleInferenceService');
 const kimiService = require('../services/kimiService');
+const { extractExpenseReceipt } = require('../services/mindeeOcrService');
 const { asyncHandler, AppError } = require('../utils/errorHandler');
 
 // ─── Core OCR prompt ─────────────────────────────────────────────
@@ -397,76 +398,97 @@ exports.processInvoice = asyncHandler(async (req, res, next) => {
     const maxAssetsPerScan = 60;
     const ocrMode = String(req.body.ocrMode || 'high').trim().toLowerCase();
     const isHighCapabilityMode = ocrMode !== 'fast';
+    const ocrTarget = String(req.body.ocrTarget || '').trim().toLowerCase();
+    const isExpenseReceiptScan = ocrTarget === 'expense_receipt';
 
     try {
-        // ── Tier 1: Kimi vision (preferred) -> Kaggle vision fallback ──
-        const imageBase64 = Buffer.from(fs.readFileSync(filePath)).toString('base64');
-        const primaryPrompt = isHighCapabilityMode
-            ? `${INVOICE_PROMPT}\n${HARD_OCR_PROMPT_SUFFIX}`
-            : INVOICE_PROMPT;
-
-        let visionResult = await kaggleService.vision(imageBase64, primaryPrompt, {
-            mimeType,
-            providerPreference: 'kimi',
-            temperature: isHighCapabilityMode ? 0.05 : 0.1,
-            maxTokens: isHighCapabilityMode ? 5000 : 2500,
-        });
-
-        // Retry with alternate provider preference in high-capability mode for hard scans.
-        if ((!visionResult?.text || visionResult?.source === 'none') && isHighCapabilityMode) {
-            const secondaryPrompt = `${primaryPrompt}\nRe-run extraction with strict robustness and return only JSON.`;
-            visionResult = await kaggleService.vision(imageBase64, secondaryPrompt, {
-                mimeType,
-                providerPreference: 'kaggle',
-                temperature: 0.05,
-                maxTokens: 5000,
+        // ── Tier 0: Mindee receipt OCR for expense claim scans ──
+        if (isExpenseReceiptScan) {
+            const mindeeResult = await extractExpenseReceipt(filePath, {
+                rag: req.body.rag !== undefined ? parseBooleanFlag(req.body.rag, false) : undefined,
+                rawText: req.body.rawText !== undefined ? parseBooleanFlag(req.body.rawText, true) : undefined,
+                polygon: req.body.polygon !== undefined ? parseBooleanFlag(req.body.polygon, false) : undefined,
+                confidence: req.body.confidence !== undefined ? parseBooleanFlag(req.body.confidence, true) : undefined,
             });
+
+            if (mindeeResult.configured && mindeeResult.data) {
+                extractedData = normalizeExtractedData(mindeeResult.data);
+                aiSource = 'mindee';
+            } else {
+                logger.info('[OCR] Mindee not configured. Falling back to existing OCR pipeline.');
+            }
         }
 
-        if (visionResult?.text) {
-            aiSource = visionResult.source || 'kaggle';
-            try {
-                const clean = visionResult.text.replace(/```json/gi, '').replace(/```/g, '').trim();
-                extractedData = normalizeExtractedData(JSON.parse(clean));
-                extractedData.confidenceScore = extractedData.confidenceScore || 0.85;
+        // ── Tier 1: Kimi vision (preferred) -> Kaggle vision fallback ──
+        if (!extractedData || Object.keys(extractedData).length === 0) {
+            const imageBase64 = Buffer.from(fs.readFileSync(filePath)).toString('base64');
+            const primaryPrompt = isHighCapabilityMode
+                ? `${INVOICE_PROMPT}\n${HARD_OCR_PROMPT_SUFFIX}`
+                : INVOICE_PROMPT;
 
-                // High-capability refinement pass for edge cases and consistency checks.
-                if (isHighCapabilityMode) {
-                    extractedData = await refineWithKimi(extractedData, visionResult.text);
-                }
-            } catch {
-                // JSON parse failed — salvage fields then refine with Kimi text reasoning
-                const fallback = parseTextFallback(visionResult.text);
-                extractedData = await refineWithKimi(fallback, visionResult.text);
-                aiSource = aiSource === 'kimi-k2.5' ? 'kimi-refined' : 'vision-fallback';
+            let visionResult = await kaggleService.vision(imageBase64, primaryPrompt, {
+                mimeType,
+                providerPreference: 'kimi',
+                temperature: isHighCapabilityMode ? 0.05 : 0.1,
+                maxTokens: isHighCapabilityMode ? 5000 : 2500,
+            });
+
+            // Retry with alternate provider preference in high-capability mode for hard scans.
+            if ((!visionResult?.text || visionResult?.source === 'none') && isHighCapabilityMode) {
+                const secondaryPrompt = `${primaryPrompt}\nRe-run extraction with strict robustness and return only JSON.`;
+                visionResult = await kaggleService.vision(imageBase64, secondaryPrompt, {
+                    mimeType,
+                    providerPreference: 'kaggle',
+                    temperature: 0.05,
+                    maxTokens: 5000,
+                });
             }
-        } else {
-            // ── Tier 2: Tesseract.js local OCR ──────────────────
-            try {
-                const { createWorker } = require('tesseract.js');
-                const worker = await createWorker('eng');
-                const { data: { text } } = await worker.recognize(filePath);
-                await worker.terminate();
-                const fallback = parseTextFallback(text);
-                extractedData = await refineWithKimi(fallback, text);
-                extractedData.rawText = text;
-                aiSource = kimiService.isConfigured() ? 'tesseract+kimi' : 'tesseract';
-            } catch {
-                // ── Tier 3: Demo data ────────────────────────────
-                extractedData = {
-                    invoiceNumber: 'INV-' + Date.now().toString().slice(-6),
-                    vendorName: 'Demo Vendor Corp',
-                    date: new Date().toISOString().split('T')[0],
-                    totalAmount: 1500.00,
-                    taxAmount: 270.00,
-                    taxRate: 18,
-                    currency: 'INR',
-                    documentType: 'INVOICE',
-                    lineItems: [{ description: 'Professional Services', quantity: 1, unitPrice: 1500, total: 1500 }],
-                    confidenceScore: 0.3,
-                    note: 'Demo data — AI vision unavailable',
-                };
-                aiSource = 'demo';
+
+            if (visionResult?.text) {
+                aiSource = visionResult.source || 'kaggle';
+                try {
+                    const clean = visionResult.text.replace(/```json/gi, '').replace(/```/g, '').trim();
+                    extractedData = normalizeExtractedData(JSON.parse(clean));
+                    extractedData.confidenceScore = extractedData.confidenceScore || 0.85;
+
+                    // High-capability refinement pass for edge cases and consistency checks.
+                    if (isHighCapabilityMode) {
+                        extractedData = await refineWithKimi(extractedData, visionResult.text);
+                    }
+                } catch {
+                    // JSON parse failed — salvage fields then refine with Kimi text reasoning
+                    const fallback = parseTextFallback(visionResult.text);
+                    extractedData = await refineWithKimi(fallback, visionResult.text);
+                    aiSource = aiSource === 'kimi-k2.5' ? 'kimi-refined' : 'vision-fallback';
+                }
+            } else {
+                // ── Tier 2: Tesseract.js local OCR ──────────────────
+                try {
+                    const { createWorker } = require('tesseract.js');
+                    const worker = await createWorker('eng');
+                    const { data: { text } } = await worker.recognize(filePath);
+                    await worker.terminate();
+                    const fallback = parseTextFallback(text);
+                    extractedData = await refineWithKimi(fallback, text);
+                    extractedData.rawText = text;
+                    aiSource = kimiService.isConfigured() ? 'tesseract+kimi' : 'tesseract';
+                } catch {
+                    // ── Tier 3: Demo data ────────────────────────────
+                    extractedData = {
+                        invoiceNumber: 'INV-' + Date.now().toString().slice(-6),
+                        vendorName: 'Demo Vendor Corp',
+                        date: new Date().toISOString().split('T')[0],
+                        totalAmount: 1500.00,
+                        taxAmount: 270.00,
+                        taxRate: 18,
+                        currency: 'INR',
+                        documentType: 'INVOICE',
+                        lineItems: [{ description: 'Professional Services', quantity: 1, unitPrice: 1500, total: 1500 }],
+                        confidenceScore: 0.3,
+                        note: 'Demo data — AI vision unavailable',
+                    };
+                    aiSource = 'demo';
+                }
             }
         }
     } catch (err) {
