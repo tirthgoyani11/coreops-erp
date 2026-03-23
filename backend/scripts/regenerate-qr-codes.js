@@ -6,9 +6,8 @@
  */
 
 require('dotenv').config();
-const { PrismaClient } = require('@prisma/client');
 const QRCode = require('qrcode');
-const prisma = new PrismaClient();
+const prisma = require('../src/config/prisma');
 
 const FRONTEND_URL = process.env.FRONTEND_URL || 'https://coreops.tirthgoyani.in';
 
