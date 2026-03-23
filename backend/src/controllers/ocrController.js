@@ -430,6 +430,7 @@ exports.processInvoice = asyncHandler(async (req, res, next) => {
                 configured: mindeeResult.configured,
                 hasData: !!mindeeResult.data,
                 dataKeys: mindeeResult.data ? Object.keys(mindeeResult.data) : [],
+                error: mindeeResult.error || null,
             });
 
             if (mindeeResult.configured && mindeeResult.data) {
@@ -449,7 +450,9 @@ exports.processInvoice = asyncHandler(async (req, res, next) => {
                     totalAmount: extractedData.totalAmount,
                 });
             } else {
-                logger.info('[OCR] Mindee invoice model not configured. Falling back to existing OCR pipeline.');
+                logger.warn('[OCR] Mindee invoice extraction unavailable. Falling back to existing OCR pipeline.', {
+                    reason: mindeeResult.error || 'Not configured',
+                });
             }
         }
 
@@ -526,7 +529,14 @@ exports.processInvoice = asyncHandler(async (req, res, next) => {
             }
         }
     } catch (err) {
-        logger.error('[OCR] Processing error:', err.message);
+        logger.error('[OCR] Processing error', {
+            message: err?.message || null,
+            stack: err?.stack || null,
+            name: err?.name || null,
+            code: err?.code || null,
+            details: err?.details || null,
+            response: err?.response?.data || null,
+        });
     }
 
     // ── Save to Document table for full system access ─────────────

@@ -27,7 +27,10 @@ export const useSocket = () => {
 
         // Initialize socket only if not already connected
         if (!socket) {
-            const socketUrl = (import.meta.env.VITE_API_URL || 'http://localhost:5000').replace(/\/api\/?$/, '');
+            const apiUrl = import.meta.env.VITE_API_URL;
+            const socketUrl = apiUrl
+                ? (apiUrl.startsWith('/') ? window.location.origin : apiUrl).replace(/\/api\/?$/, '')
+                : 'http://localhost:5050';
             socket = io(socketUrl, {
                 auth: { token },
                 withCredentials: true,

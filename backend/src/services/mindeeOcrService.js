@@ -251,12 +251,15 @@ function extractRegistrationNumber(regList) {
 function mapMindeeToCoreOps(response) {
     const plainResponse = toPlainObject(response) || {};
     const inferenceResult =
+        plainResponse?.rawHttp?.inference?.result ||
         plainResponse?.inference?.result ||
+        plainResponse?.rawHttp?.inference ||
         plainResponse?.inference ||
         plainResponse?.result ||
         plainResponse;
 
     const fields =
+        plainResponse?.rawHttp?.inference?.result?.fields ||
         inferenceResult?.fields ||
         plainResponse?.fields ||
         {};
@@ -346,51 +349,64 @@ async function extractWithModel(filePath, modelId, logLabel, options = {}) {
     const apiKey = process.env.MINDEE_API_KEY;
 
     if (!apiKey || !modelId) {
+        logger.info(`[Mindee OCR] ${logLabel} not configured (missing API key or model ID)`);
         return { configured: false, data: null, response: null };
     }
 
     const absolutePath = path.resolve(filePath);
 
-    const client = new mindee.Client({ apiKey });
-    const inputSource = new mindee.PathInput({ inputPath: absolutePath });
+    try {
+        const client = new mindee.Client({ apiKey });
+        const inputSource = new mindee.PathInput({ inputPath: absolutePath });
 
-    const productParams = {
-        modelId,
-        rag: options.rag,
-        rawText: options.rawText,
-        polygon: options.polygon,
-        confidence: options.confidence,
-    };
+        const productParams = {
+            modelId,
+            rag: options.rag,
+            rawText: options.rawText,
+            polygon: options.polygon,
+            confidence: options.confidence,
+        };
 
-    logger.info(`[Mindee OCR] Processing ${logLabel} with custom extraction model`);
+        logger.info(`[Mindee OCR] Processing ${logLabel} with custom extraction model`);
 
-    const response = await client.enqueueAndGetResult(
-        mindee.product.Extraction,
-        inputSource,
-        productParams
-    );
+        const response = await client.enqueueAndGetResult(
+            mindee.product.Extraction,
+            inputSource,
+            productParams
+        );
 
-    logger.info(`[Mindee OCR] Raw response keys:`, Object.keys(response || {}));
-    logger.info(`[Mindee OCR] Response structure:`, JSON.stringify({
-        hasInference: !!response?.inference,
-        hasResult: !!response?.inference?.result,
-        resultKeys: response?.inference?.result ? Object.keys(response.inference.result) : [],
-        fieldsCount: response?.inference?.result?.fields ? Object.keys(response.inference.result.fields).length : 0,
-    }));
+        const mapped = mapMindeeToCoreOps(response);
+        logger.info(`[Mindee OCR] Mapped data sample:`, {
+            invoiceNumber: mapped.invoiceNumber,
+            vendorName: mapped.vendorName,
+            totalAmount: mapped.totalAmount,
+            subtotal: mapped.subtotal,
+            taxAmount: mapped.taxAmount,
+            taxRate: mapped.taxRate,
+            lineItems: Array.isArray(mapped.lineItems) ? mapped.lineItems.length : 0,
+        });
 
-    const mapped = mapMindeeToCoreOps(response);
-    logger.info(`[Mindee OCR] Mapped data sample:`, {
-        invoiceNumber: mapped.invoiceNumber,
-        vendorName: mapped.vendorName,
-        totalAmount: mapped.totalAmount,
-        fieldsExtracted: Object.keys(mapped).filter(k => mapped[k] !== null && mapped[k] !== undefined),
-    });
-
-    return {
-        configured: true,
-        data: mapped,
-        response,
-    };
+        return {
+            configured: true,
+            data: mapped,
+            response,
+        };
+    } catch (error) {
+        logger.error(`[Mindee OCR] ${logLabel} extraction failed`, {
+            message: error?.message || null,
+            code: error?.code || null,
+            status: error?.status || error?.statusCode || null,
+            stack: error?.stack || null,
+            details: error?.details || null,
+            apiError: error?.response?.data || null,
+        });
+        return {
+            configured: false,
+            data: null,
+            response: null,
+            error: error?.message || 'Unknown Mindee error',
+        };
+    }
 }
 
 async function extractExpenseReceipt(filePath, options = {}) {
