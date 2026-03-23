@@ -426,9 +426,28 @@ exports.processInvoice = asyncHandler(async (req, res, next) => {
                 confidence: req.body.confidence !== undefined ? parseBooleanFlag(req.body.confidence, true) : undefined,
             });
 
+            logger.info('[OCR] Mindee invoice result:', {
+                configured: mindeeResult.configured,
+                hasData: !!mindeeResult.data,
+                dataKeys: mindeeResult.data ? Object.keys(mindeeResult.data) : [],
+            });
+
             if (mindeeResult.configured && mindeeResult.data) {
+                logger.info('[OCR] Mindee raw mapped data:', {
+                    invoiceNumber: mindeeResult.data.invoiceNumber,
+                    vendorName: mindeeResult.data.vendorName,
+                    totalAmount: mindeeResult.data.totalAmount,
+                    subtotal: mindeeResult.data.subtotal,
+                    taxAmount: mindeeResult.data.taxAmount,
+                    taxRate: mindeeResult.data.taxRate,
+                });
                 extractedData = normalizeExtractedData(mindeeResult.data);
                 aiSource = 'mindee-invoice';
+                logger.info('[OCR] After normalization:', {
+                    invoiceNumber: extractedData.invoiceNumber,
+                    vendorName: extractedData.vendorName,
+                    totalAmount: extractedData.totalAmount,
+                });
             } else {
                 logger.info('[OCR] Mindee invoice model not configured. Falling back to existing OCR pipeline.');
             }

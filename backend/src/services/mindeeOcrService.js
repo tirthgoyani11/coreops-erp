@@ -370,9 +370,25 @@ async function extractWithModel(filePath, modelId, logLabel, options = {}) {
         productParams
     );
 
+    logger.info(`[Mindee OCR] Raw response keys:`, Object.keys(response || {}));
+    logger.info(`[Mindee OCR] Response structure:`, JSON.stringify({
+        hasInference: !!response?.inference,
+        hasResult: !!response?.inference?.result,
+        resultKeys: response?.inference?.result ? Object.keys(response.inference.result) : [],
+        fieldsCount: response?.inference?.result?.fields ? Object.keys(response.inference.result.fields).length : 0,
+    }));
+
+    const mapped = mapMindeeToCoreOps(response);
+    logger.info(`[Mindee OCR] Mapped data sample:`, {
+        invoiceNumber: mapped.invoiceNumber,
+        vendorName: mapped.vendorName,
+        totalAmount: mapped.totalAmount,
+        fieldsExtracted: Object.keys(mapped).filter(k => mapped[k] !== null && mapped[k] !== undefined),
+    });
+
     return {
         configured: true,
-        data: mapMindeeToCoreOps(response),
+        data: mapped,
         response,
     };
 }
