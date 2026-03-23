@@ -22,6 +22,7 @@ export function InvoiceScanner() {
     const [dragActive, setDragActive] = useState(false);
     const [scanResult, setScanResult] = useState<any>(null);
     const [selectedInvoice, setSelectedInvoice] = useState<ScannedInvoice | null>(null);
+    const [loadingHistoryId, setLoadingHistoryId] = useState<string | null>(null);
     const [rowActionState, setRowActionState] = useState<Record<string, {
         addingAsset?: boolean;
         addingInventory?: boolean;
@@ -87,6 +88,56 @@ export function InvoiceScanner() {
     }, []);
 
     const handleDragLeave = useCallback(() => setDragActive(false), []);
+
+    const handleSelectInvoice = async (inv: ScannedInvoice) => {
+        if (selectedInvoice?.id === inv.id) {
+            setSelectedInvoice(null);
+            return;
+        }
+
+        setSelectedInvoice(inv);
+        setLoadingHistoryId(inv.id);
+
+        try {
+            const res = await api.get(`/ocr/${inv.id}`);
+            const raw = res?.data?.data || {};
+
+            let parsed = raw.ocrData;
+            if (!parsed && raw.ocrText) {
+                try {
+                    parsed = JSON.parse(raw.ocrText);
+                } catch {
+                    parsed = null;
+                }
+            }
+
+            const extracted = parsed?.extractedData || {};
+            if (Object.keys(extracted).length > 0) {
+                setScanResult({
+                    ...extracted,
+                    aiSource: parsed?.aiSource || 'history',
+                    documentId: raw.id,
+                    documentUrl: raw.url,
+                    matchedVendor: parsed?.matchedVendor || null,
+                    assetAutomation: parsed?.assetAutomation || null,
+                });
+            } else {
+                setScanResult({
+                    invoiceNumber: raw?.name || 'N/A',
+                    vendorName: raw?.description || 'N/A',
+                    date: raw?.createdAt || null,
+                    totalAmount: null,
+                    lineItems: [],
+                    aiSource: 'history',
+                    rawText: raw?.ocrText || null,
+                });
+            }
+        } catch (err) {
+            console.error('Failed to fetch invoice detail:', err);
+        } finally {
+            setLoadingHistoryId(null);
+        }
+    };
 
     const lineItems = Array.isArray(scanResult?.lineItems) ? scanResult.lineItems : [];
     const referenceNumbers = Array.isArray(scanResult?.referenceNumbers) ? scanResult.referenceNumbers : [];
@@ -512,7 +563,7 @@ export function InvoiceScanner() {
                                     {invoices.map(inv => (
                                         <button
                                             key={inv.id}
-                                            onClick={() => setSelectedInvoice(selectedInvoice?.id === inv.id ? null : inv)}
+                                            onClick={() => handleSelectInvoice(inv)}
                                             className={`w-full text-left p-4 hover:bg-[var(--bg-card-hover)] transition-colors ${
                                                 selectedInvoice?.id === inv.id ? 'bg-cyan-500/10' : ''
                                             }`}
@@ -529,6 +580,9 @@ export function InvoiceScanner() {
                                             <p className="text-xs text-[var(--text-muted)] mt-0.5">
                                                 Scanned by: {inv.uploadedBy?.name || inv.uploadedBy?.email || 'Unknown user'}
                                             </p>
+                                            {loadingHistoryId === inv.id && (
+                                                <p className="text-xs text-cyan-400 mt-1">Loading full details...</p>
+                                            )}
                                             {/* Expanded detail */}
                                             {selectedInvoice?.id === inv.id && inv.description && (
                                                 <div className="mt-3 bg-[var(--bg-overlay)] border border-[var(--border-color)] rounded-lg p-3 text-xs text-[var(--text-muted)] max-h-24 overflow-y-auto">

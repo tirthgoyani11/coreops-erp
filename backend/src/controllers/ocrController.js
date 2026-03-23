@@ -103,6 +103,14 @@ function parseBooleanFlag(value, defaultValue = false) {
     return defaultValue;
 }
 
+function safeJsonStringify(value) {
+    try {
+        return JSON.stringify(value);
+    } catch {
+        return null;
+    }
+}
+
 async function generateGUAI(officeId) {
     const office = await prisma.office.findUnique({
         where: { id: officeId },
@@ -594,6 +602,14 @@ exports.processInvoice = asyncHandler(async (req, res, next) => {
         warnings: [],
     };
 
+    const ocrPayloadForStorage = {
+        extractedData,
+        aiSource,
+        ocrMode: isHighCapabilityMode ? 'high' : 'fast',
+        matchedVendor: null,
+        assetAutomation,
+    };
+
     const allowedRoles = ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF'];
     const canAutoCreateAssets = allowedRoles.includes(String(req.user?.role || ''));
 
@@ -666,6 +682,24 @@ exports.processInvoice = asyncHandler(async (req, res, next) => {
         }
     }
 
+    ocrPayloadForStorage.matchedVendor = matchedVendor;
+    ocrPayloadForStorage.assetAutomation = assetAutomation;
+
+    if (savedDocument?.id) {
+        try {
+            await prisma.document.update({
+                where: { id: savedDocument.id },
+                data: {
+                    ocrText: safeJsonStringify(ocrPayloadForStorage),
+                },
+            });
+        } catch (updateErr) {
+            logger.warn('[OCR] Could not persist OCR payload into Document.ocrText', {
+                message: updateErr?.message || null,
+            });
+        }
+    }
+
     // Don't delete the file — it's stored as a document
     res.status(200).json({
         success: true,
@@ -707,7 +741,20 @@ exports.getInvoices = asyncHandler(async (req, res) => {
 // GET /api/ocr/invoices/:id  — legacy support
 // ─────────────────────────────────────────────────────────────────
 exports.getInvoice = asyncHandler(async (req, res, next) => {
-    const doc = await prisma.document.findUnique({ where: { id: req.params.id } });
+    const doc = await prisma.document.findUnique({
+        where: { id: req.params.id },
+        include: { uploadedBy: { select: { name: true, email: true } } },
+    });
     if (!doc) return next(new AppError('Document not found', 404));
-    res.json({ success: true, data: doc });
+
+    let ocrData = null;
+    if (doc.ocrText) {
+        try {
+            ocrData = JSON.parse(doc.ocrText);
+        } catch {
+            ocrData = null;
+        }
+    }
+
+    res.json({ success: true, data: { ...doc, ocrData } });
 });
