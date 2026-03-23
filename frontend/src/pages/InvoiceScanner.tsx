@@ -22,6 +22,12 @@ export function InvoiceScanner() {
     const [dragActive, setDragActive] = useState(false);
     const [scanResult, setScanResult] = useState<any>(null);
     const [selectedInvoice, setSelectedInvoice] = useState<ScannedInvoice | null>(null);
+    const [rowActionState, setRowActionState] = useState<Record<string, {
+        addingAsset?: boolean;
+        addingInventory?: boolean;
+        message?: string;
+        error?: boolean;
+    }>>({});
 
     useEffect(() => { fetchInvoices(); }, []);
 
@@ -96,6 +102,111 @@ export function InvoiceScanner() {
         const date = new Date(String(value));
         if (Number.isNaN(date.getTime())) return 'N/A';
         return date.toLocaleDateString('en-IN');
+    };
+
+    const withRowState = (key: string, patch: Partial<{ addingAsset?: boolean; addingInventory?: boolean; message?: string; error?: boolean }>) => {
+        setRowActionState((prev) => ({
+            ...prev,
+            [key]: {
+                ...(prev[key] || {}),
+                ...patch,
+            },
+        }));
+    };
+
+    const toSafeNumber = (value: unknown, fallback = 0) => {
+        const num = Number(value);
+        return Number.isFinite(num) ? num : fallback;
+    };
+
+    const mapItemCategoryToAsset = (description: string) => {
+        const text = String(description || '').toLowerCase();
+        if (/laptop|notebook|macbook/.test(text)) return 'LAPTOP';
+        if (/desktop|computer|pc|workstation/.test(text)) return 'COMPUTER';
+        if (/printer|scanner|plotter/.test(text)) return 'PRINTER';
+        if (/server|rack/.test(text)) return 'SERVER';
+        if (/router|switch|firewall|network/.test(text)) return 'NETWORK';
+        if (/phone|mobile|tablet|ipad/.test(text)) return 'PHONE';
+        if (/chair|table|desk|cabinet|furniture/.test(text)) return 'FURNITURE';
+        if (/vehicle|car|bike|truck/.test(text)) return 'VEHICLE';
+        if (/machine|machinery/.test(text)) return 'MACHINERY';
+        return 'EQUIPMENT';
+    };
+
+    const addLineItemToAsset = async (item: any, index: number) => {
+        const rowKey = `row-${index}`;
+        withRowState(rowKey, { addingAsset: true, message: undefined, error: false });
+
+        try {
+            const description = String(item?.description || `Invoice Item ${index + 1}`).slice(0, 200);
+            const unitPrice = toSafeNumber(item?.unitPrice, toSafeNumber(item?.total, 0));
+
+            const payload = {
+                name: description,
+                category: mapItemCategoryToAsset(description),
+                purchaseCost: unitPrice,
+                currency: String(scanResult?.currency || 'INR').toUpperCase(),
+                invoiceNumber: scanResult?.invoiceNumber || undefined,
+                purchaseDate: scanResult?.date || undefined,
+                vendor: scanResult?.matchedVendor?.id || undefined,
+                skipAutoExpenseEntry: false,
+            };
+
+            const res = await api.post('/assets', payload);
+            const assetName = res?.data?.data?.name || description;
+            withRowState(rowKey, {
+                addingAsset: false,
+                message: `Added to Asset: ${assetName}`,
+                error: false,
+            });
+        } catch (err: any) {
+            withRowState(rowKey, {
+                addingAsset: false,
+                message: err?.response?.data?.message || 'Failed to add as asset',
+                error: true,
+            });
+        }
+    };
+
+    const addLineItemToInventory = async (item: any, index: number) => {
+        const rowKey = `row-${index}`;
+        withRowState(rowKey, { addingInventory: true, message: undefined, error: false });
+
+        try {
+            const description = String(item?.description || `Invoice Item ${index + 1}`).slice(0, 200);
+            const quantity = Math.max(0, Math.round(toSafeNumber(item?.quantity, 1)));
+            const unitPrice = toSafeNumber(item?.unitPrice, toSafeNumber(item?.total, 0));
+
+            const payload = {
+                name: description,
+                type: 'PRODUCT',
+                category: 'General',
+                currentQuantity: quantity,
+                reorderPoint: 10,
+                reorderQuantity: 50,
+                minimumQuantity: 5,
+                unit: item?.unit || 'pieces',
+                unitCost: unitPrice,
+                costPrice: unitPrice,
+                pricingCurrency: String(scanResult?.currency || 'INR').toUpperCase(),
+                notes: `Imported from invoice ${scanResult?.invoiceNumber || 'N/A'}`,
+                skipAutoExpenseEntry: false,
+            };
+
+            const res = await api.post('/inventory', payload);
+            const inventoryName = res?.data?.data?.name || description;
+            withRowState(rowKey, {
+                addingInventory: false,
+                message: `Added to Inventory: ${inventoryName}`,
+                error: false,
+            });
+        } catch (err: any) {
+            withRowState(rowKey, {
+                addingInventory: false,
+                message: err?.response?.data?.message || 'Failed to add to inventory',
+                error: true,
+            });
+        }
     };
 
     return (
@@ -269,6 +380,7 @@ export function InvoiceScanner() {
                                                             <th className="text-right px-4 py-2 font-medium">Unit Price</th>
                                                             <th className="text-right px-4 py-2 font-medium">Tax</th>
                                                             <th className="text-right px-4 py-2 font-medium">Total</th>
+                                                            <th className="text-right px-4 py-2 font-medium">Actions</th>
                                                         </tr>
                                                     </thead>
                                                     <tbody>
@@ -279,6 +391,33 @@ export function InvoiceScanner() {
                                                                 <td className="px-4 py-2 text-right text-[var(--text-secondary)]">{formatOptionalCurrency(item.unitPrice)}</td>
                                                                 <td className="px-4 py-2 text-right text-[var(--text-secondary)]">{formatOptionalCurrency(item.taxAmount)}</td>
                                                                 <td className="px-4 py-2 text-right font-semibold text-[var(--text-primary)]">{formatOptionalCurrency(item.total)}</td>
+                                                                <td className="px-4 py-2 text-right">
+                                                                    <div className="inline-flex flex-col items-end gap-2">
+                                                                        <div className="flex items-center gap-2">
+                                                                            <button
+                                                                                type="button"
+                                                                                onClick={() => addLineItemToAsset(item, index)}
+                                                                                disabled={!!rowActionState[`row-${index}`]?.addingAsset || !!rowActionState[`row-${index}`]?.addingInventory}
+                                                                                className="px-2.5 py-1 text-xs rounded-md border border-cyan-500/40 text-cyan-300 hover:bg-cyan-500/10 disabled:opacity-50 disabled:cursor-not-allowed"
+                                                                            >
+                                                                                {rowActionState[`row-${index}`]?.addingAsset ? 'Adding...' : 'Add to Asset'}
+                                                                            </button>
+                                                                            <button
+                                                                                type="button"
+                                                                                onClick={() => addLineItemToInventory(item, index)}
+                                                                                disabled={!!rowActionState[`row-${index}`]?.addingInventory || !!rowActionState[`row-${index}`]?.addingAsset}
+                                                                                className="px-2.5 py-1 text-xs rounded-md border border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/10 disabled:opacity-50 disabled:cursor-not-allowed"
+                                                                            >
+                                                                                {rowActionState[`row-${index}`]?.addingInventory ? 'Adding...' : 'Add to Inventory'}
+                                                                            </button>
+                                                                        </div>
+                                                                        {rowActionState[`row-${index}`]?.message && (
+                                                                            <p className={`text-[11px] ${rowActionState[`row-${index}`]?.error ? 'text-red-400' : 'text-emerald-400'}`}>
+                                                                                {rowActionState[`row-${index}`]?.message}
+                                                                            </p>
+                                                                        )}
+                                                                    </div>
+                                                                </td>
                                                             </tr>
                                                         ))}
                                                     </tbody>
