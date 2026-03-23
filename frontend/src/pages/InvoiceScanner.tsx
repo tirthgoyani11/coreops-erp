@@ -82,6 +82,22 @@ export function InvoiceScanner() {
 
     const handleDragLeave = useCallback(() => setDragActive(false), []);
 
+    const lineItems = Array.isArray(scanResult?.lineItems) ? scanResult.lineItems : [];
+    const referenceNumbers = Array.isArray(scanResult?.referenceNumbers) ? scanResult.referenceNumbers : [];
+
+    const formatOptionalCurrency = (value: unknown) => {
+        const amount = Number(value);
+        if (!Number.isFinite(amount) || amount <= 0) return 'N/A';
+        return formatCurrency(amount);
+    };
+
+    const formatOptionalDate = (value: unknown) => {
+        if (!value) return 'N/A';
+        const date = new Date(String(value));
+        if (Number.isNaN(date.getTime())) return 'N/A';
+        return date.toLocaleDateString('en-IN');
+    };
+
     return (
         <div className="space-y-6 max-w-7xl mx-auto">
             {/* Header */}
@@ -146,6 +162,19 @@ export function InvoiceScanner() {
                                         <CheckCircle2 className="w-6 h-6 text-cyan-400" />
                                         <h3 className="text-lg font-bold text-[var(--text-primary)]">Scan Complete</h3>
                                     </div>
+                                    <div className="flex flex-wrap items-center justify-end gap-2">
+                                        <span className="px-2 py-1 rounded-md text-xs font-medium bg-[var(--bg-overlay)] border border-[var(--border-color)] text-[var(--text-secondary)]">
+                                            Source: {scanResult.aiSource || 'unknown'}
+                                        </span>
+                                        <span className="px-2 py-1 rounded-md text-xs font-medium bg-[var(--bg-overlay)] border border-[var(--border-color)] text-[var(--text-secondary)]">
+                                            Type: {scanResult.documentType || 'INVOICE'}
+                                        </span>
+                                        {Number.isFinite(Number(scanResult.confidenceScore)) && (
+                                            <span className="px-2 py-1 rounded-md text-xs font-medium bg-[var(--bg-overlay)] border border-[var(--border-color)] text-[var(--text-secondary)]">
+                                                Confidence: {(Number(scanResult.confidenceScore) * 100).toFixed(0)}%
+                                            </span>
+                                        )}
+                                    </div>
                                 </div>
                                 <div className="p-6">
                                     <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
@@ -166,10 +195,95 @@ export function InvoiceScanner() {
                                         <div className="bg-[var(--bg-overlay)] rounded-xl p-4 border border-[var(--border-color)]">
                                             <div className="text-xs text-[var(--text-muted)] mb-1 uppercase tracking-wider">Date</div>
                                             <div className="font-bold text-[var(--text-primary)]">
-                                                {scanResult.date ? new Date(scanResult.date).toLocaleDateString('en-IN') : 'N/A'}
+                                                {formatOptionalDate(scanResult.date)}
                                             </div>
                                         </div>
                                     </div>
+
+                                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+                                        <div className="bg-[var(--bg-overlay)] rounded-xl p-4 border border-[var(--border-color)]">
+                                            <div className="text-xs text-[var(--text-muted)] mb-1 uppercase tracking-wider">Subtotal</div>
+                                            <div className="font-semibold text-[var(--text-primary)]">{formatOptionalCurrency(scanResult.subtotal)}</div>
+                                        </div>
+                                        <div className="bg-[var(--bg-overlay)] rounded-xl p-4 border border-[var(--border-color)]">
+                                            <div className="text-xs text-[var(--text-muted)] mb-1 uppercase tracking-wider">Tax</div>
+                                            <div className="font-semibold text-[var(--text-primary)]">{formatOptionalCurrency(scanResult.taxAmount)}</div>
+                                        </div>
+                                        <div className="bg-[var(--bg-overlay)] rounded-xl p-4 border border-[var(--border-color)]">
+                                            <div className="text-xs text-[var(--text-muted)] mb-1 uppercase tracking-wider">Tax Rate</div>
+                                            <div className="font-semibold text-[var(--text-primary)]">
+                                                {Number.isFinite(Number(scanResult.taxRate)) ? `${scanResult.taxRate}%` : 'N/A'}
+                                            </div>
+                                        </div>
+                                        <div className="bg-[var(--bg-overlay)] rounded-xl p-4 border border-[var(--border-color)]">
+                                            <div className="text-xs text-[var(--text-muted)] mb-1 uppercase tracking-wider">Due Date</div>
+                                            <div className="font-semibold text-[var(--text-primary)]">{formatOptionalDate(scanResult.dueDate)}</div>
+                                        </div>
+                                    </div>
+
+                                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
+                                        <div className="bg-[var(--bg-overlay)] rounded-xl p-4 border border-[var(--border-color)]">
+                                            <p className="text-xs text-[var(--text-muted)] uppercase tracking-wider mb-2">Supplier Details</p>
+                                            <p className="text-sm text-[var(--text-primary)]">{scanResult.vendorName || 'Unknown Supplier'}</p>
+                                            {scanResult.vendorGST && <p className="text-xs text-[var(--text-secondary)] mt-1">GST/TIN: {scanResult.vendorGST}</p>}
+                                            {scanResult.vendorEmail && <p className="text-xs text-[var(--text-secondary)] mt-1">Email: {scanResult.vendorEmail}</p>}
+                                            {scanResult.vendorPhone && <p className="text-xs text-[var(--text-secondary)] mt-1">Phone: {scanResult.vendorPhone}</p>}
+                                            {scanResult.vendorAddress && <p className="text-xs text-[var(--text-secondary)] mt-2">Address: {scanResult.vendorAddress}</p>}
+                                        </div>
+                                        <div className="bg-[var(--bg-overlay)] rounded-xl p-4 border border-[var(--border-color)]">
+                                            <p className="text-xs text-[var(--text-muted)] uppercase tracking-wider mb-2">Buyer Details</p>
+                                            <p className="text-sm text-[var(--text-primary)]">{scanResult.buyerName || 'N/A'}</p>
+                                            {scanResult.buyerGST && <p className="text-xs text-[var(--text-secondary)] mt-1">GST: {scanResult.buyerGST}</p>}
+                                            {scanResult.buyerAddress && <p className="text-xs text-[var(--text-secondary)] mt-2">Address: {scanResult.buyerAddress}</p>}
+                                            {scanResult.shippingAddress && <p className="text-xs text-[var(--text-secondary)] mt-2">Shipping: {scanResult.shippingAddress}</p>}
+                                            {scanResult.billingAddress && <p className="text-xs text-[var(--text-secondary)] mt-2">Billing: {scanResult.billingAddress}</p>}
+                                        </div>
+                                    </div>
+
+                                    {referenceNumbers.length > 0 && (
+                                        <div className="mb-6 bg-[var(--bg-overlay)] rounded-xl p-4 border border-[var(--border-color)]">
+                                            <p className="text-xs text-[var(--text-muted)] uppercase tracking-wider mb-2">Reference Numbers</p>
+                                            <div className="flex flex-wrap gap-2">
+                                                {referenceNumbers.map((ref: string, index: number) => (
+                                                    <span key={`${ref}-${index}`} className="px-2 py-1 rounded-md text-xs font-mono bg-[var(--bg-card)] border border-[var(--border-color)] text-[var(--text-secondary)]">
+                                                        {ref}
+                                                    </span>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {lineItems.length > 0 && (
+                                        <div className="mb-6 bg-[var(--bg-overlay)] rounded-xl border border-[var(--border-color)] overflow-hidden">
+                                            <div className="px-4 py-3 border-b border-[var(--border-color)]">
+                                                <p className="text-sm font-semibold text-[var(--text-primary)]">Extracted Line Items ({lineItems.length})</p>
+                                            </div>
+                                            <div className="overflow-x-auto">
+                                                <table className="min-w-full text-sm">
+                                                    <thead className="bg-[var(--bg-card)] text-[var(--text-secondary)]">
+                                                        <tr>
+                                                            <th className="text-left px-4 py-2 font-medium">Description</th>
+                                                            <th className="text-right px-4 py-2 font-medium">Qty</th>
+                                                            <th className="text-right px-4 py-2 font-medium">Unit Price</th>
+                                                            <th className="text-right px-4 py-2 font-medium">Tax</th>
+                                                            <th className="text-right px-4 py-2 font-medium">Total</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                        {lineItems.slice(0, 20).map((item: any, index: number) => (
+                                                            <tr key={`${item.description || 'item'}-${index}`} className="border-t border-[var(--border-color)]/50">
+                                                                <td className="px-4 py-2 text-[var(--text-primary)]">{item.description || 'Item'}</td>
+                                                                <td className="px-4 py-2 text-right text-[var(--text-secondary)]">{Number(item.quantity || 0)}</td>
+                                                                <td className="px-4 py-2 text-right text-[var(--text-secondary)]">{formatOptionalCurrency(item.unitPrice)}</td>
+                                                                <td className="px-4 py-2 text-right text-[var(--text-secondary)]">{formatOptionalCurrency(item.taxAmount)}</td>
+                                                                <td className="px-4 py-2 text-right font-semibold text-[var(--text-primary)]">{formatOptionalCurrency(item.total)}</td>
+                                                            </tr>
+                                                        ))}
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        </div>
+                                    )}
 
                                     {scanResult.assetAutomation?.enabled && (
                                         <div className="mb-5 rounded-xl border border-cyan-500/25 bg-cyan-500/5 p-4">

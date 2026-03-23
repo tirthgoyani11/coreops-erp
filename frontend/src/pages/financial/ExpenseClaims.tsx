@@ -95,6 +95,15 @@ export function ExpenseClaims() {
         return total > 0 ? total : unitPrice;
     };
 
+    const inferExpenseCategory = (description: unknown): string => {
+        const text = String(description || '').toLowerCase();
+        if (text.includes('hotel') || text.includes('stay') || text.includes('lodging') || text.includes('accommodation')) return 'ACCOMMODATION';
+        if (text.includes('taxi') || text.includes('uber') || text.includes('ola') || text.includes('flight') || text.includes('train') || text.includes('travel')) return 'TRAVEL';
+        if (text.includes('meal') || text.includes('food') || text.includes('restaurant') || text.includes('snack') || text.includes('lunch') || text.includes('dinner')) return 'FOOD';
+        if (text.includes('tool') || text.includes('supply') || text.includes('kit') || text.includes('stationery') || text.includes('material')) return 'SUPPLIES';
+        return 'OTHER';
+    };
+
     const handleScanReceipt = async (event: React.ChangeEvent<HTMLInputElement>) => {
         const file = event.target.files?.[0];
         if (!file) return;
@@ -116,6 +125,8 @@ export function ExpenseClaims() {
             const extracted = res?.data?.data?.extractedData || {};
             const aiSource = res?.data?.data?.aiSource || 'unknown';
             const ocrMode = res?.data?.data?.ocrMode || 'high';
+            const confidence = Number(extracted.confidenceScore);
+            const confidenceLabel = Number.isFinite(confidence) ? ` Confidence ${(confidence * 100).toFixed(0)}%.` : '';
             const lineItems = Array.isArray(extracted.lineItems) ? extracted.lineItems : [];
             let correctedCount = 0;
 
@@ -136,7 +147,7 @@ export function ExpenseClaims() {
 
                     return {
                         date: extracted.date || new Date().toISOString().split('T')[0],
-                        category: 'SUPPLIES',
+                        category: inferExpenseCategory(line.description),
                         description: String(line.description || 'OCR Imported Item').slice(0, 200),
                         amount: normalized.amount,
                     };
@@ -145,7 +156,8 @@ export function ExpenseClaims() {
                 setOcrMessage(
                     `OCR (${ocrMode}, ${aiSource}) complete. Imported ${mappedItems.length} expense item(s).` +
                     ' Tax excluded from imported amounts when detected.' +
-                    (correctedCount > 0 ? ` Auto-corrected decimal in ${correctedCount} amount(s).` : '')
+                    (correctedCount > 0 ? ` Auto-corrected decimal in ${correctedCount} amount(s).` : '') +
+                    confidenceLabel
                 );
             } else if (extracted.totalAmount) {
                 const preTaxTotal = toNumber(extracted.subtotal) > 0
@@ -157,7 +169,7 @@ export function ExpenseClaims() {
                 setItems([
                     {
                         date: extracted.date || new Date().toISOString().split('T')[0],
-                        category: 'SUPPLIES',
+                        category: inferExpenseCategory(extracted.notes || extracted.vendorName),
                         description: extracted.vendorName ? `Receipt from ${extracted.vendorName}` : 'OCR imported receipt',
                         amount: normalized.amount,
                     },
@@ -165,10 +177,11 @@ export function ExpenseClaims() {
                 setOcrMessage(
                     `OCR (${ocrMode}, ${aiSource}) complete. Total amount imported as one expense item.` +
                     ' Tax excluded from imported amount when detected.' +
-                    (correctedCount > 0 ? ' Decimal point was auto-corrected.' : '')
+                    (correctedCount > 0 ? ' Decimal point was auto-corrected.' : '') +
+                    confidenceLabel
                 );
             } else {
-                setOcrMessage(`OCR (${ocrMode}, ${aiSource}) complete, but no amount was detected. Please fill values manually.`);
+                setOcrMessage(`OCR (${ocrMode}, ${aiSource}) complete, but no amount was detected. Please fill values manually.${confidenceLabel}`);
             }
         } catch (error: any) {
             console.error('OCR scan failed:', error);
