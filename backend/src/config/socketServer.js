@@ -22,9 +22,16 @@ let io = null;
  * @param {http.Server} httpServer - The HTTP server instance
  */
 function init(httpServer) {
-    const allowedOrigins = process.env.ALLOWED_ORIGINS
-        ? process.env.ALLOWED_ORIGINS.split(',')
-        : ['https://coreops.tirthgoyani.in'];
+    const envOrigins = process.env.ALLOWED_ORIGINS
+        ? process.env.ALLOWED_ORIGINS.split(',').map((origin) => origin.trim()).filter(Boolean)
+        : [];
+
+    const allowedOrigins = Array.from(new Set([
+        ...envOrigins,
+        'http://localhost:5173',
+        'http://localhost:3000',
+        'https://coreops.tirthgoyani.in',
+    ]));
 
     io = new Server(httpServer, {
         cors: {
