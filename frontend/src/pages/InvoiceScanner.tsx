@@ -41,6 +41,7 @@ export function InvoiceScanner() {
         try {
             const formData = new FormData();
             formData.append('invoice', file);
+            formData.append('ocrTarget', 'invoice');
             const res = await api.post('/ocr/upload', formData, {
                 headers: { 'Content-Type': 'multipart/form-data' }
             });

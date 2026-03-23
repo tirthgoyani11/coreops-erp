@@ -4,7 +4,7 @@ const path = require('path');
 const logger = require('../utils/logger');
 const kaggleService = require('../services/kaggleInferenceService');
 const kimiService = require('../services/kimiService');
-const { extractExpenseReceipt } = require('../services/mindeeOcrService');
+const { extractExpenseReceipt, extractInvoice } = require('../services/mindeeOcrService');
 const { asyncHandler, AppError } = require('../utils/errorHandler');
 
 // ─── Core OCR prompt ─────────────────────────────────────────────
@@ -398,11 +398,12 @@ exports.processInvoice = asyncHandler(async (req, res, next) => {
     const maxAssetsPerScan = 60;
     const ocrMode = String(req.body.ocrMode || 'high').trim().toLowerCase();
     const isHighCapabilityMode = ocrMode !== 'fast';
-    const ocrTarget = String(req.body.ocrTarget || '').trim().toLowerCase();
+    const ocrTarget = String(req.body.ocrTarget || 'invoice').trim().toLowerCase();
     const isExpenseReceiptScan = ocrTarget === 'expense_receipt';
+    const isInvoiceScan = ocrTarget === 'invoice';
 
     try {
-        // ── Tier 0: Mindee receipt OCR for expense claim scans ──
+        // ── Tier 0: Mindee OCR for target-specific scans ──
         if (isExpenseReceiptScan) {
             const mindeeResult = await extractExpenseReceipt(filePath, {
                 rag: req.body.rag !== undefined ? parseBooleanFlag(req.body.rag, false) : undefined,
@@ -413,9 +414,23 @@ exports.processInvoice = asyncHandler(async (req, res, next) => {
 
             if (mindeeResult.configured && mindeeResult.data) {
                 extractedData = normalizeExtractedData(mindeeResult.data);
-                aiSource = 'mindee';
+                aiSource = 'mindee-expense-receipt';
             } else {
-                logger.info('[OCR] Mindee not configured. Falling back to existing OCR pipeline.');
+                logger.info('[OCR] Mindee expense model not configured. Falling back to existing OCR pipeline.');
+            }
+        } else if (isInvoiceScan) {
+            const mindeeResult = await extractInvoice(filePath, {
+                rag: req.body.rag !== undefined ? parseBooleanFlag(req.body.rag, false) : undefined,
+                rawText: req.body.rawText !== undefined ? parseBooleanFlag(req.body.rawText, true) : undefined,
+                polygon: req.body.polygon !== undefined ? parseBooleanFlag(req.body.polygon, false) : undefined,
+                confidence: req.body.confidence !== undefined ? parseBooleanFlag(req.body.confidence, true) : undefined,
+            });
+
+            if (mindeeResult.configured && mindeeResult.data) {
+                extractedData = normalizeExtractedData(mindeeResult.data);
+                aiSource = 'mindee-invoice';
+            } else {
+                logger.info('[OCR] Mindee invoice model not configured. Falling back to existing OCR pipeline.');
             }
         }
 

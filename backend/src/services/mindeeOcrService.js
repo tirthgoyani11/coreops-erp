@@ -20,6 +20,11 @@ function lower(text) {
     return String(text || '').toLowerCase();
 }
 
+function toText(value) {
+    if (value === null || value === undefined) return null;
+    return String(value).trim() || null;
+}
+
 function findFieldValue(fields, keyCandidates = []) {
     if (!fields || typeof fields !== 'object') return null;
 
@@ -49,6 +54,22 @@ function findFieldValue(fields, keyCandidates = []) {
     return null;
 }
 
+function findArrayField(fields, keyCandidates = []) {
+    if (!fields || typeof fields !== 'object') return [];
+
+    for (const [fieldKey, fieldValue] of Object.entries(fields)) {
+        const key = lower(fieldKey);
+        const hit = keyCandidates.some((candidate) => key.includes(lower(candidate)));
+        if (!hit) continue;
+
+        if (Array.isArray(fieldValue?.values)) return fieldValue.values;
+        if (Array.isArray(fieldValue)) return fieldValue;
+        if (Array.isArray(fieldValue?.value)) return fieldValue.value;
+    }
+
+    return [];
+}
+
 function normalizeLineItems(fields) {
     if (!fields || typeof fields !== 'object') return [];
 
@@ -76,17 +97,61 @@ function normalizeLineItems(fields) {
                 'Receipt Item';
 
             const quantity = toFiniteNumber(data.quantity?.value ?? data.quantity) ?? 1;
-            const unitPrice = toFiniteNumber(data.unitPrice?.value ?? data.unitPrice ?? data.unit_amount?.value ?? data.unit_amount) ?? 0;
-            const total = toFiniteNumber(data.total?.value ?? data.total ?? data.amount?.value ?? data.amount) ?? unitPrice * quantity;
+            const unitPrice = toFiniteNumber(
+                data.unit_price?.value ??
+                data.unit_price ??
+                data.unitPrice?.value ??
+                data.unitPrice ??
+                data.unit_amount?.value ??
+                data.unit_amount
+            ) ?? 0;
+            const total = toFiniteNumber(
+                data.total_price?.value ??
+                data.total_price ??
+                data.total?.value ??
+                data.total ??
+                data.amount?.value ??
+                data.amount
+            ) ?? unitPrice * quantity;
 
             return {
                 description: String(description).slice(0, 200),
                 quantity,
                 unitPrice,
                 total,
+                unit: toText(data.unit_measure?.value ?? data.unit_measure),
+                taxAmount: toFiniteNumber(data.tax_amount?.value ?? data.tax_amount),
+                taxPercent: toFiniteNumber(data.tax_rate?.value ?? data.tax_rate),
+                hsn: toText(data.product_code?.value ?? data.product_code),
             };
         })
         .filter((row) => row.total > 0 || row.unitPrice > 0 || row.description);
+}
+
+function flattenAddress(value) {
+    if (!value) return null;
+    if (typeof value === 'string') return value;
+
+    const raw = value.address?.value || value.address;
+    if (raw) return String(raw);
+
+    const parts = [
+        value.street_number?.value || value.street_number,
+        value.street_name?.value || value.street_name,
+        value.address_complement?.value || value.address_complement,
+        value.city?.value || value.city,
+        value.state?.value || value.state,
+        value.postal_code?.value || value.postal_code,
+        value.country?.value || value.country,
+    ].filter(Boolean);
+
+    return parts.length ? parts.join(', ') : null;
+}
+
+function extractRegistrationNumber(regList) {
+    if (!Array.isArray(regList) || regList.length === 0) return null;
+    const first = regList[0]?.value || regList[0] || {};
+    return toText(first.number?.value ?? first.number);
 }
 
 function mapMindeeToCoreOps(response) {
@@ -102,44 +167,74 @@ function mapMindeeToCoreOps(response) {
 
     const invoiceNumber = findFieldValue(fields, ['invoice_number', 'invoice', 'receipt_number', 'receipt_no', 'document_number']);
     const vendorName = findFieldValue(fields, ['supplier_name', 'vendor_name', 'merchant_name', 'company_name', 'issuer', 'seller']);
+    const vendorPhone = findFieldValue(fields, ['supplier_phone_number', 'supplier_phone', 'vendor_phone']);
+    const vendorEmail = findFieldValue(fields, ['supplier_email', 'vendor_email']);
+    const vendorWebsite = findFieldValue(fields, ['supplier_website', 'vendor_website']);
+    const customerName = findFieldValue(fields, ['customer_name', 'buyer_name']);
+    const customerId = findFieldValue(fields, ['customer_id']);
+    const poNumber = findFieldValue(fields, ['po_number']);
+    const dueDate = findFieldValue(fields, ['due_date']);
+    const paymentDate = findFieldValue(fields, ['payment_date']);
     const dateValue = findFieldValue(fields, ['date', 'invoice_date', 'receipt_date', 'transaction_date']);
+    const subtotal = toFiniteNumber(findFieldValue(fields, ['total_net', 'subtotal', 'sub_total']));
+    const documentTypeRaw = findFieldValue(fields, ['document_type']);
     const currency = findFieldValue(fields, ['currency', 'currency_code']) || 'INR';
     const rawText = findFieldValue(fields, ['raw_text', 'text']) || null;
 
+    const locale = findFieldValue(fields, ['locale']);
+    const localeCurrency = locale?.currency?.value || locale?.currency;
+    const supplierAddressObj = findFieldValue(fields, ['supplier_address']);
+    const customerAddressObj = findFieldValue(fields, ['customer_address']);
+    const shippingAddressObj = findFieldValue(fields, ['shipping_address']);
+    const billingAddressObj = findFieldValue(fields, ['billing_address']);
+    const supplierRegistrations = findArrayField(fields, ['supplier_company_registration']);
+    const customerRegistrations = findArrayField(fields, ['customer_company_registration']);
+
     const lineItems = normalizeLineItems(fields);
 
+    const resolvedDocumentType = (() => {
+        const raw = lower(documentTypeRaw || 'invoice');
+        if (raw.includes('receipt')) return 'RECEIPT';
+        if (raw.includes('purchase_order')) return 'PURCHASE_ORDER';
+        return 'INVOICE';
+    })();
+
     return {
-        invoiceNumber: invoiceNumber ? String(invoiceNumber).trim() : null,
+        invoiceNumber: toText(invoiceNumber),
         date: toIsoDate(dateValue),
-        dueDate: null,
-        vendorName: vendorName ? String(vendorName).trim() : null,
-        vendorAddress: null,
-        vendorGST: null,
-        vendorPhone: null,
-        vendorEmail: null,
-        buyerName: null,
-        buyerAddress: null,
-        buyerGST: null,
-        subtotal: null,
+        dueDate: toIsoDate(dueDate),
+        vendorName: toText(vendorName),
+        vendorAddress: flattenAddress(supplierAddressObj),
+        vendorGST: extractRegistrationNumber(supplierRegistrations),
+        vendorPhone: toText(vendorPhone),
+        vendorEmail: toText(vendorEmail),
+        buyerName: toText(customerName),
+        buyerAddress: flattenAddress(customerAddressObj),
+        buyerGST: extractRegistrationNumber(customerRegistrations),
+        subtotal,
         taxAmount,
         taxRate: null,
         discountAmount: null,
         shippingAmount: null,
         totalAmount,
-        currency: String(currency || 'INR').toUpperCase(),
+        currency: String(localeCurrency || currency || 'INR').toUpperCase(),
         paymentTerms: null,
         paymentMethod: null,
-        notes: null,
-        documentType: 'RECEIPT',
+        notes: [toText(vendorWebsite), toText(customerId), toText(poNumber), toText(paymentDate)]
+            .filter(Boolean)
+            .join(' | ') || null,
+        documentType: resolvedDocumentType,
         lineItems,
         confidenceScore: 0.9,
         rawText,
+        shippingAddress: flattenAddress(shippingAddressObj),
+        billingAddress: flattenAddress(billingAddressObj),
+        referenceNumbers: findArrayField(fields, ['reference_numbers']).map((ref) => toText(ref?.value ?? ref)).filter(Boolean),
     };
 }
 
-async function extractExpenseReceipt(filePath, options = {}) {
+async function extractWithModel(filePath, modelId, logLabel, options = {}) {
     const apiKey = process.env.MINDEE_API_KEY;
-    const modelId = process.env.MINDEE_EXPENSE_RECEIPT_MODEL_ID;
 
     if (!apiKey || !modelId) {
         return { configured: false, data: null, response: null };
@@ -158,7 +253,7 @@ async function extractExpenseReceipt(filePath, options = {}) {
         confidence: options.confidence,
     };
 
-    logger.info('[Mindee OCR] Processing expense receipt with custom extraction model');
+    logger.info(`[Mindee OCR] Processing ${logLabel} with custom extraction model`);
 
     const response = await client.enqueueAndGetResult(
         mindee.product.Extraction,
@@ -173,6 +268,25 @@ async function extractExpenseReceipt(filePath, options = {}) {
     };
 }
 
+async function extractExpenseReceipt(filePath, options = {}) {
+    return extractWithModel(
+        filePath,
+        process.env.MINDEE_EXPENSE_RECEIPT_MODEL_ID,
+        'expense receipt',
+        options
+    );
+}
+
+async function extractInvoice(filePath, options = {}) {
+    return extractWithModel(
+        filePath,
+        process.env.MINDEE_INVOICE_MODEL_ID,
+        'invoice',
+        options
+    );
+}
+
 module.exports = {
     extractExpenseReceipt,
+    extractInvoice,
 };
