@@ -212,7 +212,9 @@ export function InvoiceScanner() {
                                         <div className="bg-[var(--bg-overlay)] rounded-xl p-4 border border-[var(--border-color)]">
                                             <div className="text-xs text-[var(--text-muted)] mb-1 uppercase tracking-wider">Tax Rate</div>
                                             <div className="font-semibold text-[var(--text-primary)]">
-                                                {Number.isFinite(Number(scanResult.taxRate)) ? `${scanResult.taxRate}%` : 'N/A'}
+                                                {scanResult.taxRate !== null && scanResult.taxRate !== undefined && Number.isFinite(Number(scanResult.taxRate))
+                                                    ? `${scanResult.taxRate}%`
+                                                    : 'N/A'}
                                             </div>
                                         </div>
                                         <div className="bg-[var(--bg-overlay)] rounded-xl p-4 border border-[var(--border-color)]">

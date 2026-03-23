@@ -2,6 +2,24 @@ const path = require('path');
 const mindee = require('mindee');
 const logger = require('../utils/logger');
 
+function toPlainObject(value) {
+    if (value === null || value === undefined) return value;
+    if (typeof value !== 'object') return value;
+
+    try {
+        return JSON.parse(JSON.stringify(value));
+    } catch {
+        if (typeof value.toJSON === 'function') {
+            try {
+                return value.toJSON();
+            } catch {
+                return value;
+            }
+        }
+        return value;
+    }
+}
+
 function toFiniteNumber(value) {
     if (value === null || value === undefined || value === '') return null;
     const normalized = String(value).replace(/[₹,\s]/g, '').trim();
@@ -26,9 +44,10 @@ function toText(value) {
 }
 
 function findFieldValue(fields, keyCandidates = []) {
-    if (!fields || typeof fields !== 'object') return null;
+    const normalizedFields = toPlainObject(fields);
+    if (!normalizedFields || typeof normalizedFields !== 'object') return null;
 
-    const entries = Object.entries(fields);
+    const entries = Object.entries(normalizedFields);
     for (const [fieldKey, fieldValue] of entries) {
         const key = lower(fieldKey);
         const hit = keyCandidates.some((candidate) => key.includes(lower(candidate)));
@@ -56,9 +75,10 @@ function findFieldValue(fields, keyCandidates = []) {
 }
 
 function findArrayField(fields, keyCandidates = []) {
-    if (!fields || typeof fields !== 'object') return [];
+    const normalizedFields = toPlainObject(fields);
+    if (!normalizedFields || typeof normalizedFields !== 'object') return [];
 
-    for (const [fieldKey, fieldValue] of Object.entries(fields)) {
+    for (const [fieldKey, fieldValue] of Object.entries(normalizedFields)) {
         const key = lower(fieldKey);
         const hit = keyCandidates.some((candidate) => key.includes(lower(candidate)));
         if (!hit) continue;
@@ -73,16 +93,17 @@ function findArrayField(fields, keyCandidates = []) {
 }
 
 function normalizeLineItems(fields) {
-    if (!fields || typeof fields !== 'object') return [];
+    const normalizedFields = toPlainObject(fields);
+    if (!normalizedFields || typeof normalizedFields !== 'object') return [];
 
-    const possibleListKey = Object.keys(fields).find((key) => {
+    const possibleListKey = Object.keys(normalizedFields).find((key) => {
         const normalized = lower(key);
         return normalized.includes('line') || normalized.includes('item') || normalized.includes('products');
     });
 
     if (!possibleListKey) return [];
 
-    const rawList = fields[possibleListKey];
+    const rawList = normalizedFields[possibleListKey];
     const values = rawList?.items || rawList?.values || rawList;
     if (!Array.isArray(values)) return [];
 
@@ -159,7 +180,17 @@ function extractRegistrationNumber(regList) {
 }
 
 function mapMindeeToCoreOps(response) {
-    const fields = response?.inference?.result?.fields || {};
+    const plainResponse = toPlainObject(response) || {};
+    const inferenceResult =
+        plainResponse?.inference?.result ||
+        plainResponse?.inference ||
+        plainResponse?.result ||
+        plainResponse;
+
+    const fields =
+        inferenceResult?.fields ||
+        plainResponse?.fields ||
+        {};
 
     const totalAmount = toFiniteNumber(
         findFieldValue(fields, ['total_amount', 'total', 'amount_due', 'grand_total'])
@@ -233,7 +264,7 @@ function mapMindeeToCoreOps(response) {
         documentType: resolvedDocumentType,
         lineItems,
         confidenceScore: 0.9,
-        rawText: response?.raw_text || rawText,
+        rawText: inferenceResult?.raw_text || plainResponse?.raw_text || rawText,
         shippingAddress: flattenAddress(shippingAddressObj),
         billingAddress: flattenAddress(billingAddressObj),
         referenceNumbers: findArrayField(fields, ['reference_numbers'])
