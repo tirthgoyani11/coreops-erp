@@ -12,7 +12,7 @@ interface ScannedInvoice {
     url: string;
     category: string;
     createdAt: string;
-    uploadedBy?: { name: string };
+    uploadedBy?: { name?: string; email?: string };
 }
 
 export function InvoiceScanner() {
@@ -525,6 +525,9 @@ export function InvoiceScanner() {
                                             </div>
                                             <p className="text-xs text-[var(--text-muted)] mt-1">
                                                 {new Date(inv.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                                            </p>
+                                            <p className="text-xs text-[var(--text-muted)] mt-0.5">
+                                                Scanned by: {inv.uploadedBy?.name || inv.uploadedBy?.email || 'Unknown user'}
                                             </p>
                                             {/* Expanded detail */}
                                             {selectedInvoice?.id === inv.id && inv.description && (

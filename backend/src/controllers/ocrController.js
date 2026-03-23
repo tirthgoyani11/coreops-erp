@@ -697,7 +697,7 @@ exports.getInvoices = asyncHandler(async (req, res) => {
         where,
         orderBy: { createdAt: 'desc' },
         take: 50,
-        include: { uploadedBy: { select: { name: true } } },
+        include: { uploadedBy: { select: { name: true, email: true } } },
     });
 
     res.json({ success: true, data: docs });
