@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { ScanLine, Upload, Loader2, FileText, CheckCircle2, AlertCircle, Eye } from 'lucide-react';
 import api from '../lib/api';
 import { formatCurrency } from '../lib/utils';
+import { useAuthStore } from '../stores/authStore';
 
 interface ScannedInvoice {
     id: string;
@@ -12,10 +13,12 @@ interface ScannedInvoice {
     url: string;
     category: string;
     createdAt: string;
+    officeId?: string;
     uploadedBy?: { name?: string; email?: string };
 }
 
 export function InvoiceScanner() {
+    const { user } = useAuthStore();
     const [invoices, setInvoices] = useState<ScannedInvoice[]>([]);
     const [loading, setLoading] = useState(true);
     const [uploading, setUploading] = useState(false);
@@ -184,11 +187,31 @@ export function InvoiceScanner() {
         return 'EQUIPMENT';
     };
 
+    const resolveOfficeId = () => {
+        const fromUserOffice = user?.office?.id;
+        const fromUserOfficeId = typeof user?.officeId === 'string'
+            ? user.officeId
+            : (user?.officeId as any)?.id;
+        const fromSelectedInvoice = selectedInvoice?.officeId;
+
+        return fromUserOffice || fromUserOfficeId || fromSelectedInvoice || null;
+    };
+
     const addLineItemToAsset = async (item: any, index: number) => {
         const rowKey = `row-${index}`;
         withRowState(rowKey, { addingAsset: true, message: undefined, error: false });
 
         try {
+            const officeId = resolveOfficeId();
+            if (!officeId) {
+                withRowState(rowKey, {
+                    addingAsset: false,
+                    message: 'Office is required. Please select/login with an office and try again.',
+                    error: true,
+                });
+                return;
+            }
+
             const description = String(item?.description || `Invoice Item ${index + 1}`).slice(0, 200);
             const unitPrice = toSafeNumber(item?.unitPrice, toSafeNumber(item?.total, 0));
 
@@ -197,6 +220,7 @@ export function InvoiceScanner() {
                 category: mapItemCategoryToAsset(description),
                 purchaseCost: unitPrice,
                 currency: String(scanResult?.currency || 'INR').toUpperCase(),
+                officeId,
                 invoiceNumber: scanResult?.invoiceNumber || undefined,
                 purchaseDate: scanResult?.date || undefined,
                 vendor: scanResult?.matchedVendor?.id || undefined,
@@ -224,6 +248,16 @@ export function InvoiceScanner() {
         withRowState(rowKey, { addingInventory: true, message: undefined, error: false });
 
         try {
+            const officeId = resolveOfficeId();
+            if (!officeId) {
+                withRowState(rowKey, {
+                    addingInventory: false,
+                    message: 'Office is required. Please select/login with an office and try again.',
+                    error: true,
+                });
+                return;
+            }
+
             const description = String(item?.description || `Invoice Item ${index + 1}`).slice(0, 200);
             const quantity = Math.max(0, Math.round(toSafeNumber(item?.quantity, 1)));
             const unitPrice = toSafeNumber(item?.unitPrice, toSafeNumber(item?.total, 0));
@@ -232,6 +266,7 @@ export function InvoiceScanner() {
                 name: description,
                 type: 'PRODUCT',
                 category: 'General',
+                officeId,
                 currentQuantity: quantity,
                 reorderPoint: 10,
                 reorderQuantity: 50,
