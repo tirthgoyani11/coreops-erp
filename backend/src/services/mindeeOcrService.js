@@ -37,6 +37,7 @@ function findFieldValue(fields, keyCandidates = []) {
         if (fieldValue && typeof fieldValue === 'object') {
             if (fieldValue.value !== undefined && fieldValue.value !== null && fieldValue.value !== '') return fieldValue.value;
             if (fieldValue.content !== undefined && fieldValue.content !== null && fieldValue.content !== '') return fieldValue.content;
+            if (fieldValue.fields && typeof fieldValue.fields === 'object') return fieldValue.fields;
             if (Array.isArray(fieldValue.values) && fieldValue.values.length > 0) {
                 const first = fieldValue.values[0];
                 if (first && typeof first === 'object') {
@@ -63,6 +64,7 @@ function findArrayField(fields, keyCandidates = []) {
         if (!hit) continue;
 
         if (Array.isArray(fieldValue?.values)) return fieldValue.values;
+        if (Array.isArray(fieldValue?.items)) return fieldValue.items;
         if (Array.isArray(fieldValue)) return fieldValue;
         if (Array.isArray(fieldValue?.value)) return fieldValue.value;
     }
@@ -81,12 +83,12 @@ function normalizeLineItems(fields) {
     if (!possibleListKey) return [];
 
     const rawList = fields[possibleListKey];
-    const values = rawList?.values || rawList;
+    const values = rawList?.items || rawList?.values || rawList;
     if (!Array.isArray(values)) return [];
 
     return values
         .map((row) => {
-            const data = row?.value || row || {};
+            const data = row?.fields || row?.value || row || {};
             const description =
                 data.description?.value ||
                 data.description ||
@@ -132,17 +134,19 @@ function flattenAddress(value) {
     if (!value) return null;
     if (typeof value === 'string') return value;
 
-    const raw = value.address?.value || value.address;
+    const source = value.fields && typeof value.fields === 'object' ? value.fields : value;
+
+    const raw = source.address?.value || source.address;
     if (raw) return String(raw);
 
     const parts = [
-        value.street_number?.value || value.street_number,
-        value.street_name?.value || value.street_name,
-        value.address_complement?.value || value.address_complement,
-        value.city?.value || value.city,
-        value.state?.value || value.state,
-        value.postal_code?.value || value.postal_code,
-        value.country?.value || value.country,
+        source.street_number?.value || source.street_number,
+        source.street_name?.value || source.street_name,
+        source.address_complement?.value || source.address_complement,
+        source.city?.value || source.city,
+        source.state?.value || source.state,
+        source.postal_code?.value || source.postal_code,
+        source.country?.value || source.country,
     ].filter(Boolean);
 
     return parts.length ? parts.join(', ') : null;
@@ -150,7 +154,7 @@ function flattenAddress(value) {
 
 function extractRegistrationNumber(regList) {
     if (!Array.isArray(regList) || regList.length === 0) return null;
-    const first = regList[0]?.value || regList[0] || {};
+    const first = regList[0]?.fields || regList[0]?.value || regList[0] || {};
     return toText(first.number?.value ?? first.number);
 }
 
@@ -162,7 +166,7 @@ function mapMindeeToCoreOps(response) {
     );
 
     const taxAmount = toFiniteNumber(
-        findFieldValue(fields, ['tax_amount', 'tax', 'vat', 'gst'])
+        findFieldValue(fields, ['total_tax', 'tax_amount', 'tax', 'vat', 'gst'])
     );
 
     const invoiceNumber = findFieldValue(fields, ['invoice_number', 'invoice', 'receipt_number', 'receipt_no', 'document_number']);
@@ -191,6 +195,9 @@ function mapMindeeToCoreOps(response) {
     const customerRegistrations = findArrayField(fields, ['customer_company_registration']);
 
     const lineItems = normalizeLineItems(fields);
+    const taxes = findArrayField(fields, ['taxes']);
+    const firstTax = taxes[0]?.fields || taxes[0]?.value || taxes[0] || {};
+    const taxRate = toFiniteNumber(firstTax.rate?.value ?? firstTax.rate);
 
     const resolvedDocumentType = (() => {
         const raw = lower(documentTypeRaw || 'invoice');
@@ -213,7 +220,7 @@ function mapMindeeToCoreOps(response) {
         buyerGST: extractRegistrationNumber(customerRegistrations),
         subtotal,
         taxAmount,
-        taxRate: null,
+        taxRate,
         discountAmount: null,
         shippingAmount: null,
         totalAmount,
@@ -226,10 +233,12 @@ function mapMindeeToCoreOps(response) {
         documentType: resolvedDocumentType,
         lineItems,
         confidenceScore: 0.9,
-        rawText,
+        rawText: response?.raw_text || rawText,
         shippingAddress: flattenAddress(shippingAddressObj),
         billingAddress: flattenAddress(billingAddressObj),
-        referenceNumbers: findArrayField(fields, ['reference_numbers']).map((ref) => toText(ref?.value ?? ref)).filter(Boolean),
+        referenceNumbers: findArrayField(fields, ['reference_numbers'])
+            .map((ref) => toText(ref?.value ?? ref))
+            .filter(Boolean),
     };
 }
 
